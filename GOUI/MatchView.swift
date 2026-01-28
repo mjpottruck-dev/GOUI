@@ -209,7 +209,11 @@ struct MatchView: View {
                     }
                     .font(.system(size: 16, weight: .semibold))
                 }
-                .buttonStyle(GlassPillButtonStyle(fill: Color(uiColor: .systemGray5)))
+                .buttonStyle(
+                    GlassPillButtonStyle(
+                        fill: Color(red: 0.35, green: 0.48, blue: 0.57) // #5A7B91
+                    )
+                )
                 .disabled(!store.canUndo)
 
                 Spacer()
