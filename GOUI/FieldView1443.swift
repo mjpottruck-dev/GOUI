@@ -153,7 +153,12 @@ struct FieldView1443: View {
         .foregroundStyle(.primary)
         .frame(width: 48, height: 48)
         .background(
-            Circle().fill(.thinMaterial)
+            Circle()
+                .fill(.thinMaterial)
+                .overlay(
+                    Circle()
+                        .fill(GoStatsTheme.teal.opacity(0.22))
+                )
         )
         .overlay(
             Circle().stroke(Color.primary.opacity(0.14), lineWidth: 1)
