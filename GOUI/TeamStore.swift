@@ -9,9 +9,18 @@ final class TeamStore {
         didSet { save() }
     }
 
+    var seasons: [Season] = [] {
+        didSet { save() }
+    }
+
+    var activeSeasonID: UUID? {
+        didSet { save() }
+    }
+
     // MARK: - Init
     init() {
         load()
+        ensureDefaultSeason()
     }
 
     // MARK: - CRUD (Teams)
@@ -27,6 +36,23 @@ final class TeamStore {
         if let idx = teams.firstIndex(where: { $0.id == team.id }) {
             teams[idx] = team
         }
+    }
+
+    // MARK: - Seasons
+    func addSeason(_ season: Season) {
+        seasons.append(season)
+        if activeSeasonID == nil {
+            activeSeasonID = season.id
+        }
+    }
+
+    func setActiveSeason(_ seasonID: UUID) {
+        activeSeasonID = seasonID
+    }
+
+    func activeSeason() -> Season? {
+        guard let id = activeSeasonID else { return nil }
+        return seasons.first(where: { $0.id == id })
     }
 
     // MARK: - Matches (Archive)
@@ -55,7 +81,7 @@ final class TeamStore {
     private func save() {
         do {
             let encoder = JSONEncoder()
-            let data = try encoder.encode(teams)
+            let data = try encoder.encode(AppData(teams: teams, seasons: seasons, activeSeasonID: activeSeasonID))
             try data.write(to: fileURL, options: [.atomic])
         } catch {
             print("❌ TeamStore save failed:", error)
@@ -67,34 +93,67 @@ final class TeamStore {
             let url = fileURL
             guard FileManager.default.fileExists(atPath: url.path) else {
                 teams = []
+                seasons = []
+                activeSeasonID = nil
                 return
             }
 
             let data = try Data(contentsOf: url)
 
-            // 1) Try current decode first
+            if let decoded = try? JSONDecoder().decode(AppData.self, from: data) {
+                teams = decoded.teams
+                seasons = decoded.seasons
+                activeSeasonID = decoded.activeSeasonID
+                migrateIfNeeded()
+                return
+            }
+
             if let decoded = try? JSONDecoder().decode([Team].self, from: data) {
                 teams = decoded
+                seasons = []
+                activeSeasonID = nil
                 migrateIfNeeded()
+                save()
                 return
             }
 
-            // 2) Fallback: legacy decode (tolerant of shape changes)
             if let legacy = try? JSONDecoder().decode([LegacyTeam].self, from: data) {
                 teams = legacy.map { $0.toTeam() }
+                seasons = []
+                activeSeasonID = nil
                 migrateIfNeeded()
-                save() // write back in new format
+                save()
                 return
             }
 
-            // If both fail, wipe (last resort)
             print("❌ TeamStore load failed: could not decode teams.json (current or legacy). Resetting.")
             teams = []
+            seasons = []
+            activeSeasonID = nil
 
         } catch {
             print("❌ TeamStore load failed:", error)
             teams = []
+            seasons = []
+            activeSeasonID = nil
         }
+    }
+
+    private func ensureDefaultSeason() {
+        guard seasons.isEmpty else { return }
+        let now = Date()
+        let calendar = Calendar.current
+        let year = calendar.component(.year, from: now)
+        let month = calendar.component(.month, from: now)
+        let isFall = month >= 8
+        let name = "\(isFall ? "Fall" : "Spring") \(year)"
+        let startMonth = isFall ? 8 : 1
+        let startDate = calendar.date(from: DateComponents(year: year, month: startMonth, day: 1)) ?? now
+        let endMonth = isFall ? 12 : 6
+        let endDate = calendar.date(from: DateComponents(year: year, month: endMonth, day: 28)) ?? now
+        let season = Season(name: name, startDate: startDate, endDate: endDate)
+        seasons = [season]
+        activeSeasonID = season.id
     }
 
     // MARK: - Migration
@@ -119,6 +178,11 @@ final class TeamStore {
                         changed = true
                     }
                 }
+
+                if teams[ti].matches[mi].seasonID == nil {
+                    teams[ti].matches[mi].seasonID = activeSeasonID
+                    changed = true
+                }
             }
         }
 
@@ -126,6 +190,12 @@ final class TeamStore {
             save()
         }
     }
+}
+
+private struct AppData: Codable {
+    var teams: [Team]
+    var seasons: [Season]
+    var activeSeasonID: UUID?
 }
 
 private struct LegacyTeam: Codable {
@@ -143,6 +213,7 @@ private struct LegacyTeam: Codable {
             players: players,
             fieldSize: fieldSize,
             startingOnFieldIDs: startingOnFieldIDs,
+            primaryFormation: .f433,
             matches: (matches ?? []).map { $0.toMatchRecord() }
         )
     }
@@ -175,9 +246,9 @@ private struct LegacyMatchRecord: Codable {
             goalsAgainst: goalsAgainst ?? 0,
             secondsElapsed: secondsElapsed ?? 0,
             fieldSize: fieldSize ?? 7,
+            seasonID: nil,
             playerSeconds: playerSeconds ?? [:],
             playerStats: playerStats ?? [:]
         )
     }
 }
-

@@ -9,6 +9,7 @@ struct CreateTeamView: View {
 
     @State private var name: String = ""
     @State private var fieldSize: Int = 11
+    @State private var primaryFormation: Formation = .f433
 
     var body: some View {
         NavigationStack {
@@ -19,6 +20,12 @@ struct CreateTeamView: View {
                         Text("7v7").tag(7)
                         Text("9v9").tag(9)
                         Text("11v11").tag(11)
+                    }
+
+                    Picker("Primary Formation", selection: $primaryFormation) {
+                        ForEach(Formation.allCases) { formation in
+                            Text(formation.rawValue).tag(formation)
+                        }
                     }
                 }
 
@@ -51,6 +58,7 @@ struct CreateTeamView: View {
             players: [],
             fieldSize: fieldSize,
             startingOnFieldIDs: [],
+            primaryFormation: primaryFormation,
             matches: []
         )
 
@@ -59,4 +67,3 @@ struct CreateTeamView: View {
         dismiss()
     }
 }
-

@@ -4,7 +4,6 @@ struct GoStatsRootView: View {
 
     @StateObject private var store = MatchStore()
 
-    // TeamStore is @Observable (Observation), so keep it as plain @State
     @State private var teamStore = TeamStore()
 
     @State private var selectedTeamID: UUID? = nil
@@ -18,6 +17,13 @@ struct GoStatsRootView: View {
                 selectedTeamID: $selectedTeamID,
                 onStartMatch: { teamID in
                     selectedTeamID = teamID
+                    if let team = teamStore.teams.first(where: { $0.id == teamID }) {
+                        store.resetForNewMatch(
+                            team: team,
+                            formation: team.primaryFormation,
+                            seasonID: teamStore.activeSeasonID
+                        )
+                    }
                     goToTabs = true
                 }
             )
@@ -35,4 +41,3 @@ struct GoStatsRootView: View {
         }
     }
 }
-

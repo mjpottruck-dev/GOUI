@@ -18,7 +18,6 @@ struct HomePreMatchView: View {
                 Text("Select a team, then jump into Match View.")
                     .foregroundStyle(.secondary)
 
-                // TEAM PICKER CARD
                 VStack(alignment: .leading, spacing: 10) {
                     Text("TEAM")
                         .font(.system(size: 12, weight: .semibold))
@@ -40,18 +39,9 @@ struct HomePreMatchView: View {
                         .fill(Color(uiColor: .secondarySystemGroupedBackground))
                 )
 
-                // START MATCH
                 Button {
                     guard let tid = selectedTeamID ?? teamStore.teams.first?.id else { return }
-
-                    // IMPORTANT: set selected team and let Tabs open
                     selectedTeamID = tid
-
-                    // (Optional) you can reset match here if your MatchStore supports it
-                    // if let team = teamStore.teams.first(where: { $0.id == tid }) {
-                    //     store.resetForNewMatch(team: team, formation: ???)
-                    // }
-
                     onStartMatch(tid)
                 } label: {
                     Text("Start Match")
@@ -67,7 +57,6 @@ struct HomePreMatchView: View {
                 .buttonStyle(.plain)
                 .disabled(teamStore.teams.isEmpty)
 
-                // QUICK ACTIONS
                 VStack(spacing: 10) {
                     NavigationLink {
                         RosterHomeView(teamStore: teamStore)
@@ -76,14 +65,21 @@ struct HomePreMatchView: View {
                     }
 
                     NavigationLink {
-                        // Swap this to your archive view name
-                        MatchArchiveView(teamStore: teamStore)
+                        if let teamID = selectedTeamID ?? teamStore.teams.first?.id {
+                            TeamArchiveView(teamStore: teamStore, teamID: teamID)
+                        } else {
+                            Text("Select a team")
+                        }
                     } label: {
                         rowButton(title: "Match Archive", systemImage: "clock.arrow.circlepath")
                     }
 
                     NavigationLink {
-                        StatsView(store: store)
+                        if let teamID = selectedTeamID ?? teamStore.teams.first?.id {
+                            StatsView(teamStore: teamStore, teamID: teamID)
+                        } else {
+                            Text("Select a team")
+                        }
                     } label: {
                         rowButton(title: "Season Stats", systemImage: "chart.bar")
                     }
@@ -125,4 +121,3 @@ struct HomePreMatchView: View {
         .foregroundStyle(Color.primary)
     }
 }
-

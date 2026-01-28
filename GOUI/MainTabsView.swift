@@ -8,7 +8,6 @@ struct MainTabsView: View {
 
     var body: some View {
         TabView {
-            // ✅ MATCH TAB FIRST
             MatchView(
                 store: store,
                 teamStore: teamStore,
@@ -16,13 +15,10 @@ struct MainTabsView: View {
             )
             .tabItem { Label("Match", systemImage: "soccerball") }
 
-            // ✅ ROSTER TAB (team roster / players)
-            // If you already have a better roster view for a single team, swap it here.
             TeamRosterView(teamStore: teamStore, teamID: teamID)
                 .tabItem { Label("Roster", systemImage: "person.3") }
 
-            // ✅ STATS TAB (your StatsView requires store:)
-            StatsView(store: store)
+            StatsView(teamStore: teamStore, teamID: teamID)
                 .tabItem { Label("Stats", systemImage: "chart.bar") }
 
             SettingsView()
@@ -30,4 +26,3 @@ struct MainTabsView: View {
         }
     }
 }
-
