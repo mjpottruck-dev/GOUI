@@ -56,11 +56,11 @@ struct MatchFieldView: View {
         let fws  = onField.filter { $0.position == .fw }
 
         // Lanes (top to bottom)
-        let yTop: CGFloat = padding + 34
-        let yFw: CGFloat  = yTop + 20
-        let yMid: CGFloat = size.height * 0.42
-        let yDef: CGFloat = size.height * 0.62
-        let yGk: CGFloat  = size.height * 0.86 // inside goal box at bottom
+        let yTop: CGFloat = padding + 28
+        let yFw: CGFloat  = yTop + 26
+        let yMid: CGFloat = size.height * 0.44
+        let yDef: CGFloat = size.height * 0.64
+        let yGk: CGFloat  = size.height * 0.84 // inside goal box at bottom
 
         // GK
         if let gk {
@@ -69,9 +69,9 @@ struct MatchFieldView: View {
         }
 
         // DEF/MID/FW distributed across width
-        distributedRow(defs, y: yDef, width: size.width, sidePadding: 28)
-        distributedRow(mids, y: yMid, width: size.width, sidePadding: 28)
-        distributedRow(fws,  y: yFw,  width: size.width, sidePadding: 28)
+        distributedRow(defs, y: yDef, width: size.width, sidePadding: 20)
+        distributedRow(mids, y: yMid, width: size.width, sidePadding: 20)
+        distributedRow(fws,  y: yFw,  width: size.width, sidePadding: 20)
     }
 
     private func distributedRow(_ players: [Player], y: CGFloat, width: CGFloat, sidePadding: CGFloat) -> some View {
@@ -133,4 +133,3 @@ struct MatchFieldView: View {
         : Color.black.opacity(0.08)
     }
 }
-

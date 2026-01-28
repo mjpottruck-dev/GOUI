@@ -35,10 +35,10 @@ struct MatchView: View {
             ScrollView {
                 VStack(spacing: 16) {
                     scoreCard
+                    controlRow
                     quickEventsTeam
                     quickEventsKeeper
                     fieldCard
-                    controlRow
 
                     Spacer(minLength: 140)
                 }
@@ -90,6 +90,7 @@ struct MatchView: View {
                 title: "Assist",
                 subtitle: "Select assist or choose none",
                 players: store.onFieldPlayers,
+                fieldStore: store,
                 allowNone: true,
                 noneTitle: "No Assist",
                 onPickPlayer: { player in
@@ -250,6 +251,8 @@ struct MatchView: View {
                     HStack(spacing: 8) {
                         Image(systemName: "stop.circle")
                         Text("End Game")
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.75)
                     }
                     .font(.system(size: 16, weight: .semibold))
                 }
@@ -337,13 +340,13 @@ struct MatchView: View {
 
                     VStack(spacing: 16) {
                         LiquidGlassContainer(cornerRadius: 22) {
-                            VStack(alignment: .leading, spacing: 8) {
+                            VStack(alignment: .leading, spacing: 6) {
                                 Text("SELECT PLAYER")
                                     .font(.system(size: 12, weight: .semibold))
                                     .foregroundStyle(GoStatsTheme.text2)
 
-                                Text(currentQuickEvent.rawValue)
-                                    .font(.system(size: 18, weight: .semibold))
+                                Text("Tap a player on the field.")
+                                    .font(.system(size: 14, weight: .medium))
                                     .foregroundStyle(GoStatsTheme.text)
                             }
                         }
@@ -354,12 +357,28 @@ struct MatchView: View {
                         })
                         .padding(.horizontal, 16)
 
-                        Button("Cancel") {
+                        Button {
                             showFieldOverlay = false
                             activeQuickEvent = nil
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "xmark.circle.fill")
+                                Text("Cancel")
+                            }
+                            .frame(maxWidth: 180)
                         }
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(GoStatsTheme.text2)
+                        .foregroundStyle(GoStatsTheme.text)
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 10)
+                        .background(
+                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                .fill(Color(uiColor: .secondarySystemGroupedBackground).opacity(0.95))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                .stroke(Color.primary.opacity(0.12), lineWidth: 1)
+                        )
                     }
                     .padding(.bottom, 24)
                 }
@@ -544,6 +563,7 @@ private struct SplitHalfSheet: View {
     let onKeepPaused: () -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         NavigationStack {
@@ -573,7 +593,18 @@ private struct SplitHalfSheet: View {
                         Text("Keep Paused")
                             .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(GlassPillButtonStyle(fill: Color(uiColor: .secondarySystemGroupedBackground).opacity(0.8)))
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(GoStatsTheme.text)
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .fill(scheme == .dark ? Color.white.opacity(0.18) : Color.black.opacity(0.12))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .stroke(Color.primary.opacity(0.12), lineWidth: 1)
+                    )
                 }
             }
             .padding(24)
