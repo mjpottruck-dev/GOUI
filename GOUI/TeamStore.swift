@@ -21,6 +21,7 @@ final class TeamStore {
     init() {
         load()
         ensureDefaultSeason()
+        seedDemoTeamIfNeeded()
     }
 
     // MARK: - CRUD (Teams)
@@ -154,6 +155,42 @@ final class TeamStore {
         let season = Season(name: name, startDate: startDate, endDate: endDate)
         seasons = [season]
         activeSeasonID = season.id
+    }
+
+    private func seedDemoTeamIfNeeded() {
+        guard teams.isEmpty else { return }
+
+        let players: [Player] = [
+            Player(name: "Mateo Reyes", number: 1, position: .gk),
+            Player(name: "Liam Foster", number: 2, position: .rb),
+            Player(name: "Diego Navarro", number: 3, position: .cb),
+            Player(name: "Noah Blake", number: 4, position: .cb),
+            Player(name: "Ethan Park", number: 5, position: .lb),
+            Player(name: "Marco Silva", number: 6, position: .cdm),
+            Player(name: "Jonas Keller", number: 7, position: .cm),
+            Player(name: "Aiden Brooks", number: 8, position: .cm),
+            Player(name: "Rafael Costa", number: 9, position: .cam),
+            Player(name: "Owen Hart", number: 10, position: .rm),
+            Player(name: "Kai Novak", number: 11, position: .lm),
+            Player(name: "Lucas Moretti", number: 12, position: .rw),
+            Player(name: "Mason Reed", number: 13, position: .lw),
+            Player(name: "Hugo Moreno", number: 14, position: .st),
+            Player(name: "Santiago Ortiz", number: 15, position: .st),
+            Player(name: "Felix Grant", number: 16, position: .rwb),
+            Player(name: "Tariq Hussain", number: 17, position: .lwb),
+            Player(name: "Nico Alvarez", number: 18, position: .cf)
+        ]
+
+        let starterIDs = Array(players.prefix(7)).map(\.id)
+        let team = Team(
+            name: "Demo Eleven",
+            players: players,
+            fieldSize: 7,
+            startingOnFieldIDs: starterIDs,
+            primaryFormation: .f433
+        )
+
+        teams = [team]
     }
 
     // MARK: - Migration
