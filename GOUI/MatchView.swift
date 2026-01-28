@@ -11,7 +11,6 @@ struct MatchView: View {
     @State private var showingEndSheet = false
     @State private var showHaptics = true
     @State private var showFormationPicker = false
-    @State private var showTranscript = true
     @State private var showSplitSheet = false
 
     @State private var activeQuickEvent: MatchActionKind? = nil
@@ -39,6 +38,7 @@ struct MatchView: View {
                     quickEventsTeam
                     quickEventsKeeper
                     fieldCard
+                    MatchTimelineView(events: store.events)
 
                     Spacer(minLength: 140)
                 }
@@ -84,34 +84,6 @@ struct MatchView: View {
             FormationPickerSheet { formation in
                 store.formation = formation
             }
-        }
-        .sheet(isPresented: $showAssistPicker) {
-            FieldPlayerPickerView(
-                title: "Assist",
-                subtitle: "Select assist or choose none",
-                players: store.onFieldPlayers,
-                fieldStore: store,
-                allowNone: true,
-                noneTitle: "No Assist",
-                onPickPlayer: { player in
-                    if let scorer = pendingScorer {
-                        store.recordGoal(scorer: scorer, assist: player)
-                    }
-                    pendingScorer = nil
-                    showAssistPicker = false
-                },
-                onPickNone: {
-                    if let scorer = pendingScorer {
-                        store.recordGoal(scorer: scorer, assist: nil)
-                    }
-                    pendingScorer = nil
-                    showAssistPicker = false
-                },
-                onCancel: {
-                    pendingScorer = nil
-                    showAssistPicker = false
-                }
-            )
         }
         .confirmationDialog("Shot Result", isPresented: $showShotDialog, titleVisibility: .visible) {
             Button("On Target") { confirmShot(onTarget: true) }
@@ -193,13 +165,6 @@ struct MatchView: View {
                         .foregroundStyle(GoStatsTheme.text)
                 }
 
-                DisclosureGroup(isExpanded: $showTranscript) {
-                    MatchTimelineView(events: store.events)
-                } label: {
-                    Text("Transcript")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(GoStatsTheme.text2)
-                }
             }
         }
     }
@@ -231,8 +196,12 @@ struct MatchView: View {
         LiquidGlassContainer {
             HStack {
                 Button {
-                    haptic(.medium)
-                    store.undoLast()
+                    if store.canUndo {
+                        haptic(.medium)
+                        store.undoLast()
+                    } else {
+                        Haptics.undoEmpty()
+                    }
                 } label: {
                     HStack(spacing: 8) {
                         Image(systemName: "arrow.uturn.backward")
@@ -240,23 +209,8 @@ struct MatchView: View {
                     }
                     .font(.system(size: 16, weight: .semibold))
                 }
-                .buttonStyle(GlassPillButtonStyle(fill: Color(uiColor: .secondarySystemGroupedBackground).opacity(0.65)))
-
-                Spacer()
-
-                Button {
-                    haptic(.medium)
-                    showingEndSheet = true
-                } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: "stop.circle")
-                        Text("End Game")
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.75)
-                    }
-                    .font(.system(size: 16, weight: .semibold))
-                }
-                .buttonStyle(GlassPillButtonStyle(fill: Color.red.opacity(0.18)))
+                .buttonStyle(GlassPillButtonStyle(fill: Color(uiColor: .systemGray5)))
+                .disabled(!store.canUndo)
 
                 Spacer()
 
@@ -366,6 +320,55 @@ struct MatchView: View {
                                 Text("Cancel")
                             }
                             .frame(maxWidth: 180)
+                        }
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(GoStatsTheme.text)
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 10)
+                        .background(
+                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                .fill(Color(uiColor: .secondarySystemGroupedBackground).opacity(0.95))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                .stroke(Color.primary.opacity(0.12), lineWidth: 1)
+                        )
+                    }
+                    .padding(.bottom, 24)
+                }
+            }
+            if showAssistPicker, let scorer = pendingScorer {
+                ZStack {
+                    Color.black.opacity(0.35).ignoresSafeArea()
+
+                    VStack(spacing: 16) {
+                        LiquidGlassContainer(cornerRadius: 22) {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("SELECT PLAYER")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundStyle(GoStatsTheme.text2)
+
+                                Text("Tap a player on the field.")
+                                    .font(.system(size: 14, weight: .medium))
+                                    .foregroundStyle(GoStatsTheme.text)
+                            }
+                        }
+                        .padding(.horizontal, 16)
+
+                        FieldView1443(store: store, onSelectPlayer: { player in
+                            store.recordGoal(scorer: scorer, assist: player)
+                            pendingScorer = nil
+                            showAssistPicker = false
+                        })
+                        .padding(.horizontal, 16)
+
+                        Button {
+                            store.recordGoal(scorer: scorer, assist: nil)
+                            pendingScorer = nil
+                            showAssistPicker = false
+                        } label: {
+                            Text("No Assist")
+                                .frame(maxWidth: 180)
                         }
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(GoStatsTheme.text)

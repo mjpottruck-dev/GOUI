@@ -37,6 +37,10 @@ final class MatchStore: ObservableObject {
     private var undoStack: [Snapshot] = []
 
     struct Snapshot {
+        let goalsFor: Int
+        let goalsAgainst: Int
+        let events: [MatchEvent]
+        let players: [Player]
         let onFieldIDs: Set<UUID>
         let formation: Formation?
         let fieldSize: Int
@@ -52,6 +56,10 @@ final class MatchStore: ObservableObject {
     var onFieldPlayers: [Player] {
         let set = onFieldIDs
         return players.filter { set.contains($0.id) }
+    }
+
+    var canUndo: Bool {
+        !undoStack.isEmpty
     }
 
     // MARK: - Controls
@@ -140,6 +148,10 @@ final class MatchStore: ObservableObject {
     func pushUndo() {
         undoStack.append(
             Snapshot(
+                goalsFor: goalsFor,
+                goalsAgainst: goalsAgainst,
+                events: events,
+                players: players,
                 onFieldIDs: onFieldIDs,
                 formation: formation,
                 fieldSize: fieldSize
@@ -149,6 +161,10 @@ final class MatchStore: ObservableObject {
 
     func undoLast() {
         guard let snap = undoStack.popLast() else { return }
+        goalsFor = snap.goalsFor
+        goalsAgainst = snap.goalsAgainst
+        events = snap.events
+        players = snap.players
         onFieldIDs = snap.onFieldIDs
         formation = snap.formation
         fieldSize = snap.fieldSize
@@ -156,6 +172,7 @@ final class MatchStore: ObservableObject {
 
     // MARK: - Events + Stats
     func recordGoal(scorer: Player, assist: Player?) {
+        pushUndo()
         goalsFor += 1
         updatePlayerStats(id: scorer.id) { p in
             p.goals += 1
@@ -175,6 +192,7 @@ final class MatchStore: ObservableObject {
     }
 
     func recordShot(shooter: Player, onTarget: Bool, isPenalty: Bool = false) {
+        pushUndo()
         updatePlayerStats(id: shooter.id) { p in
             p.shots += 1
             if onTarget { p.shotsOnTarget += 1 }
@@ -188,6 +206,7 @@ final class MatchStore: ObservableObject {
     }
 
     func recordPKMade(shooter: Player) {
+        pushUndo()
         goalsFor += 1
         updatePlayerStats(id: shooter.id) { p in
             p.goals += 1
@@ -202,6 +221,7 @@ final class MatchStore: ObservableObject {
     }
 
     func recordOwnGoal(player: Player) {
+        pushUndo()
         goalsAgainst += 1
         addEvent(
             kind: .ownGoal,
@@ -211,6 +231,7 @@ final class MatchStore: ObservableObject {
     }
 
     func recordCard(player: Player, card: CardType) {
+        pushUndo()
         updatePlayerStats(id: player.id) { p in
             switch card {
             case .yellow:
@@ -228,6 +249,7 @@ final class MatchStore: ObservableObject {
 
     func recordKeeperSave() {
         guard let keeper = activeGoalkeeper() else { return }
+        pushUndo()
         updatePlayerStats(id: keeper.id) { p in
             p.saves += 1
         }
@@ -236,6 +258,7 @@ final class MatchStore: ObservableObject {
 
     func recordKeeperConceded(isPenalty: Bool = false) {
         guard let keeper = activeGoalkeeper() else { return }
+        pushUndo()
         goalsAgainst += 1
         updatePlayerStats(id: keeper.id) { p in
             p.goalsConceded += 1
@@ -253,6 +276,7 @@ final class MatchStore: ObservableObject {
 
     func recordKeeperPKSaved() {
         guard let keeper = activeGoalkeeper() else { return }
+        pushUndo()
         updatePlayerStats(id: keeper.id) { p in
             p.pkSaved += 1
             p.pkFaced += 1
