@@ -4,6 +4,7 @@ struct FieldPlayerPickerView: View {
     let title: String
     let subtitle: String
     let players: [Player]
+    let fieldStore: MatchStore?
     let allowNone: Bool
     let noneTitle: String
     let onPickPlayer: (Player) -> Void
@@ -13,6 +14,16 @@ struct FieldPlayerPickerView: View {
     var body: some View {
         NavigationView {
             List {
+                if let fieldStore {
+                    FieldView1443(store: fieldStore, onSelectPlayer: { player in
+                        onPickPlayer(player)
+                    })
+                    .frame(height: 300)
+                    .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 12, trailing: 0))
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+                }
+
                 if allowNone {
                     Button(noneTitle.isEmpty ? "None" : noneTitle) { onPickNone() }
                 }
@@ -57,4 +68,3 @@ struct FieldPlayerPickerView: View {
         }
     }
 }
-
