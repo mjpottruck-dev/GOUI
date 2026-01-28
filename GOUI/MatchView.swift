@@ -447,7 +447,6 @@ struct MatchView: View {
         let currentOnField = store.onFieldPlayers
         let updated = currentOnField.filter { $0.id != fieldPlayer.id } + [benchPlayer]
         guard updated.contains(where: { $0.position == .gk }) else { return false }
-        guard store.lineupFitsFormation(updated) else { return false }
         store.pushUndo()
         store.onFieldIDs.remove(fieldPlayer.id)
         store.onFieldIDs.insert(benchPlayer.id)
@@ -511,7 +510,7 @@ private struct SubstitutionSheet: View {
                         SelectablePlayerChip(
                             player: player,
                             isSelected: selectedPlayer?.id == player.id,
-                            subtitle: "On Field"
+                            subtitle: positionSubtitle(for: player)
                         )
                         .onTapGesture {
                             handleTap(player: player, isField: true)
@@ -524,7 +523,7 @@ private struct SubstitutionSheet: View {
                         SelectablePlayerChip(
                             player: player,
                             isSelected: selectedPlayer?.id == player.id,
-                            subtitle: "Bench"
+                            subtitle: positionSubtitle(for: player)
                         )
                         .onTapGesture {
                             handleTap(player: player, isField: false)
@@ -541,7 +540,7 @@ private struct SubstitutionSheet: View {
             .alert("Invalid Substitution", isPresented: $showInvalidAlert) {
                 Button("OK", role: .cancel) { }
             } message: {
-                Text("This swap would break the formation or remove the goalkeeper.")
+                Text("This swap would leave you without a primary goalkeeper.")
             }
         }
     }
@@ -562,6 +561,13 @@ private struct SubstitutionSheet: View {
 
         selectedPlayer = player
         selectedIsField = isField
+    }
+
+    private func positionSubtitle(for player: Player) -> String {
+        if let secondary = player.secondaryPosition {
+            return "\(player.position.rawValue) / \(secondary.rawValue)"
+        }
+        return player.position.rawValue
     }
 }
 
