@@ -13,6 +13,7 @@ extension MatchStore {
         rec.goalsAgainst = goalsAgainst
         rec.secondsElapsed = elapsedSeconds
         rec.fieldSize = fieldSize
+        rec.seasonID = currentSeasonID
 
         rec.playerSeconds = Dictionary(uniqueKeysWithValues: players.map { ($0.id, $0.secondsPlayed) })
 
@@ -37,4 +38,3 @@ extension MatchStore {
         return rec
     }
 }
-

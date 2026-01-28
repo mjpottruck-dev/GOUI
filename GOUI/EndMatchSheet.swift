@@ -7,7 +7,6 @@ struct EndMatchSheet: View {
     let teamStore: TeamStore
     let teamID: UUID
 
-    // Your resetForNewMatch requires these
     let team: Team
     let formation: Formation
 
@@ -20,6 +19,23 @@ struct EndMatchSheet: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section("Summary") {
+                    HStack {
+                        Text("Score")
+                        Spacer()
+                        Text("\(store.goalsFor)–\(store.goalsAgainst)")
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary)
+                    }
+                    HStack {
+                        Text("Time")
+                        Spacer()
+                        Text(store.timeString)
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
                 Section("Match Info") {
                     TextField("Opponent", text: $opponent)
                     TextField("Title (optional)", text: $title)
@@ -30,6 +46,10 @@ struct EndMatchSheet: View {
                 Section {
                     Button("Save Match") { saveMatch() }
                         .disabled(opponent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+                    Button("Discard Match", role: .destructive) {
+                        discardMatch()
+                    }
                 }
             }
             .navigationTitle("End Match")
@@ -43,28 +63,21 @@ struct EndMatchSheet: View {
     }
 
     private func saveMatch() {
-        let record = MatchRecord(
-            id: UUID(),
-            date: Date(),
+        let record = store.buildMatchRecord(
             opponent: opponent,
             title: title,
-            notes: notes,
-            goalsFor: store.goalsFor,
-            goalsAgainst: store.goalsAgainst,
-            secondsElapsed: store.secondsElapsed,
-            fieldSize: store.fieldSize,
-
-            // ✅ IMPORTANT: your MatchStore doesn’t expose these
-            // so we save empty dictionaries to compile.
-            playerSeconds: [:],                // [UUID : Int]
-            playerStats: [:]                   // [UUID : PlayerStatLine]
+            notes: notes
         )
 
         teamStore.addMatchRecord(teamID: teamID, record: record)
 
-        store.resetForNewMatch(team: team, formation: formation)
+        store.resetForNewMatch(team: team, formation: formation, seasonID: teamStore.activeSeasonID)
 
         dismiss()
     }
-}
 
+    private func discardMatch() {
+        store.resetForNewMatch(team: team, formation: formation, seasonID: teamStore.activeSeasonID)
+        dismiss()
+    }
+}

@@ -1,93 +1,178 @@
 import SwiftUI
 
 struct TeamRosterView: View {
-    @State private var teamStore = TeamStore()
+    @Bindable var teamStore: TeamStore
+    let teamID: UUID
+
+    @State private var showingAddPlayer = false
+    @State private var editingPlayer: Player? = nil
+
+    private var teamIndex: Int? {
+        teamStore.teams.firstIndex(where: { $0.id == teamID })
+    }
+
+    private var team: Team? {
+        guard let idx = teamIndex else { return nil }
+        return teamStore.teams[idx]
+    }
 
     var body: some View {
         NavigationStack {
             List {
-                ForEach(teamStore.teams) { team in
-                    NavigationLink {
-                        TeamDetailSimpleView(teamID: team.id, teamStore: teamStore)
+                Section {
+                    Button {
+                        showingAddPlayer = true
                     } label: {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(team.name).font(.headline)
-                            Text("\(team.players.count) players • \(team.matches.count) matches")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
+                        HStack(spacing: 10) {
+                            Image(systemName: "plus.circle.fill")
+                                .foregroundStyle(GoStatsTheme.teal)
+                            Text("Add Player")
+                                .font(.system(size: 16, weight: .semibold))
+                            Spacer()
                         }
+                        .padding(.vertical, 6)
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                Section("Players") {
+                    if let team, team.players.isEmpty {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("No players yet").font(.headline)
+                            Text("Tap Add Player to build your roster.")
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.vertical, 8)
+                    } else if let team {
+                        ForEach(team.players.sorted(by: sortPlayers)) { player in
+                            HStack {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("\(player.number) • \(player.name)")
+                                        .font(.headline)
+                                    Text(primarySecondaryText(for: player))
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                            }
+                            .padding(.vertical, 4)
+                            .onLongPressGesture {
+                                editingPlayer = player
+                            }
+                        }
+                        .onDelete(perform: deletePlayers)
                     }
                 }
             }
-            .navigationTitle("Team Roster")
+            .navigationTitle(team?.name ?? "Roster")
+            .sheet(isPresented: $showingAddPlayer) {
+                AddPlayerView { newPlayer in
+                    addPlayer(newPlayer)
+                }
+            }
+            .sheet(item: $editingPlayer) { player in
+                EditPlayerSheet(player: player) { updated in
+                    updatePlayer(updated)
+                }
+            }
         }
+    }
+
+    private func addPlayer(_ player: Player) {
+        guard let idx = teamIndex else { return }
+        teamStore.teams[idx].players.append(player)
+    }
+
+    private func updatePlayer(_ player: Player) {
+        guard let idx = teamIndex else { return }
+        if let playerIndex = teamStore.teams[idx].players.firstIndex(where: { $0.id == player.id }) {
+            teamStore.teams[idx].players[playerIndex] = player
+        }
+    }
+
+    private func deletePlayers(at offsets: IndexSet) {
+        guard let idx = teamIndex else { return }
+        teamStore.teams[idx].players.remove(atOffsets: offsets)
+    }
+
+    private func sortPlayers(_ a: Player, _ b: Player) -> Bool {
+        let order: [Position: Int] = [.gk: 0, .cb: 1, .rb: 2, .lb: 3, .rwb: 4, .lwb: 5, .cdm: 6, .cm: 7, .cam: 8, .rm: 9, .lm: 10, .rw: 11, .lw: 12, .st: 13, .cf: 14]
+        let pa = order[a.position] ?? 99
+        let pb = order[b.position] ?? 99
+        if pa != pb { return pa < pb }
+        return a.number < b.number
+    }
+
+    private func primarySecondaryText(for player: Player) -> String {
+        if let secondary = player.secondaryPosition {
+            return "\(player.position.rawValue) • \(secondary.rawValue)"
+        }
+        return player.position.rawValue
     }
 }
 
-private struct TeamDetailSimpleView: View {
-    let teamID: UUID
-    @State var teamStore: TeamStore
+private struct EditPlayerSheet: View {
+    @Environment(\.dismiss) private var dismiss
 
-    @State private var editingTeam: Team? = nil
+    @State private var name: String
+    @State private var numberText: String
+    @State private var position: Position
+    @State private var secondaryPosition: Position?
 
-    private var team: Team? {
-        teamStore.teams.first(where: { $0.id == teamID })
+    let playerID: UUID
+    let onSave: (Player) -> Void
+
+    init(player: Player, onSave: @escaping (Player) -> Void) {
+        self._name = State(initialValue: player.name)
+        self._numberText = State(initialValue: "\(player.number)")
+        self._position = State(initialValue: player.position)
+        self._secondaryPosition = State(initialValue: player.secondaryPosition)
+        self.playerID = player.id
+        self.onSave = onSave
     }
 
     var body: some View {
-        Group {
-            if let team = team {
-                List {
-                    Section("Players") {
-                        ForEach(team.players) { p in
-                            HStack {
-                                Text("#\(p.number) \(p.name)")
-                                Spacer()
-                                Text(p.position.rawValue)
-                                    .foregroundColor(.secondary)
-                            }
+        NavigationStack {
+            Form {
+                Section("Player") {
+                    TextField("Name", text: $name)
+                    TextField("Number", text: $numberText)
+                        .keyboardType(.numberPad)
+
+                    Picker("Primary Position", selection: $position) {
+                        ForEach(Position.rosterPositions) { pos in
+                            Text(pos.rawValue).tag(pos)
                         }
                     }
 
-                    Section("Archive") {
-                        if team.matches.isEmpty {
-                            Text("No matches saved yet.")
-                                .foregroundColor(.secondary)
-                        } else {
-                            ForEach(team.matches) { m in
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("\(m.goalsFor) - \(m.goalsAgainst) vs \(m.opponent)")
-                                        .font(.headline)
-                                    Text(m.date.formatted(date: .abbreviated, time: .shortened))
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                }
-                            }
+                    Picker("Secondary Position", selection: $secondaryPosition) {
+                        Text("None").tag(Position?.none)
+                        ForEach(Position.rosterPositions) { pos in
+                            Text(pos.rawValue).tag(Optional(pos))
                         }
                     }
                 }
-                .navigationTitle(team.name)
-                .toolbar {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button("Edit") {
-                            editingTeam = team
-                        }
-                    }
+            }
+            .navigationTitle("Edit Player")
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Cancel") { dismiss() }
                 }
-                .sheet(item: $editingTeam) { teamToEdit in
-                    EditRosterView(team: teamToEdit) { updated in
-                        // Preserve matches
-                        var merged = updated
-                        merged.matches = teamToEdit.matches
-                        teamStore.updateTeam(merged)
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Save") {
+                        let number = Int(numberText.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0
+                        let updated = Player(
+                            id: playerID,
+                            name: name.trimmingCharacters(in: .whitespacesAndNewlines),
+                            number: number,
+                            position: position,
+                            secondaryPosition: secondaryPosition
+                        )
+                        onSave(updated)
+                        dismiss()
                     }
+                    .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
-
-            } else {
-                Text("Team not found.")
-                    .foregroundColor(.secondary)
             }
         }
     }
 }
-

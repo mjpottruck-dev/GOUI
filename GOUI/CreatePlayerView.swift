@@ -7,7 +7,8 @@ struct CreatePlayerView: View {
 
     @State private var name: String = ""
     @State private var numberText: String = ""
-    @State private var position: Position = .mid
+    @State private var position: Position = .cm
+    @State private var secondaryPosition: Position? = nil
 
     var body: some View {
         NavigationStack {
@@ -18,9 +19,16 @@ struct CreatePlayerView: View {
                     TextField("Number", text: $numberText)
                         .keyboardType(.numberPad)
 
-                    Picker("Position", selection: $position) {
-                        ForEach(Position.allCases) { pos in
+                    Picker("Primary Position", selection: $position) {
+                        ForEach(Position.rosterPositions) { pos in
                             Text(pos.rawValue).tag(pos)
+                        }
+                    }
+
+                    Picker("Secondary Position", selection: $secondaryPosition) {
+                        Text("None").tag(Position?.none)
+                        ForEach(Position.rosterPositions) { pos in
+                            Text(pos.rawValue).tag(Optional(pos))
                         }
                     }
                 }
@@ -31,7 +39,8 @@ struct CreatePlayerView: View {
                         let newPlayer = Player(
                             name: name.trimmingCharacters(in: .whitespacesAndNewlines),
                             number: number,
-                            position: position
+                            position: position,
+                            secondaryPosition: secondaryPosition
                         )
                         onCreate(newPlayer)
                         dismiss()
@@ -48,4 +57,3 @@ struct CreatePlayerView: View {
         }
     }
 }
-

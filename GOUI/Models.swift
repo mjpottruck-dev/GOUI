@@ -34,6 +34,10 @@ enum Position: String, CaseIterable, Identifiable, Codable {
     case fw  = "FW"
 
     var id: String { rawValue }
+
+    static var rosterPositions: [Position] {
+        [.gk, .rb, .lb, .cb, .rwb, .lwb, .cdm, .cm, .cam, .rm, .lm, .rw, .lw, .st, .cf]
+    }
 }
 
 // MARK: - Formation
@@ -78,6 +82,73 @@ enum Formation: String, CaseIterable, Identifiable, Codable {
             return "Five-at-the-back"
         }
     }
+
+    var lineLayout: [[Position]] {
+        switch self {
+        case .f433:
+            return [[.rb, .cb, .cb, .lb], [.cm, .cm, .cm], [.rw, .st, .lw]]
+        case .f442_flat:
+            return [[.rb, .cb, .cb, .lb], [.rm, .cm, .cm, .lm], [.st, .st]]
+        case .f442_diamond:
+            return [[.rb, .cb, .cb, .lb], [.cdm, .cm, .cm, .cam], [.st, .st]]
+        case .f4231:
+            return [[.rb, .cb, .cb, .lb], [.cdm, .cdm], [.rm, .cam, .lm], [.st]]
+        case .f4141:
+            return [[.rb, .cb, .cb, .lb], [.cdm], [.rm, .cm, .cm, .lm], [.st]]
+        case .f4312:
+            return [[.rb, .cb, .cb, .lb], [.cm, .cm, .cm], [.cam], [.st, .st]]
+        case .f451:
+            return [[.rb, .cb, .cb, .lb], [.rm, .cm, .cm, .cm, .lm], [.st]]
+        case .f424:
+            return [[.rb, .cb, .cb, .lb], [.cm, .cm], [.rw, .st, .st, .lw]]
+        case .f41212:
+            return [[.rb, .cb, .cb, .lb], [.cdm], [.cm, .cm], [.cam], [.st, .st]]
+        case .f4321:
+            return [[.rb, .cb, .cb, .lb], [.cm, .cm, .cm], [.rw, .lw], [.st]]
+        case .f4222:
+            return [[.rb, .cb, .cb, .lb], [.cdm, .cdm], [.cam, .cam], [.st, .st]]
+        case .f4311:
+            return [[.rb, .cb, .cb, .lb], [.cm, .cm, .cm], [.cam], [.st]]
+        case .f352:
+            return [[.cb, .cb, .cb], [.rwb, .cm, .cm, .cm, .lwb], [.st, .st]]
+        case .f343:
+            return [[.cb, .cb, .cb], [.rm, .cm, .cm, .lm], [.rw, .st, .lw]]
+        case .f3412:
+            return [[.cb, .cb, .cb], [.rm, .cm, .cm, .lm], [.cam], [.st, .st]]
+        case .f3421:
+            return [[.cb, .cb, .cb], [.rwb, .cm, .cm, .lwb], [.rw, .lw], [.st]]
+        case .f361:
+            return [[.cb, .cb, .cb], [.rwb, .cm, .cm, .cm, .cm, .lwb], [.st]]
+        case .f3241:
+            return [[.cb, .cb, .cb], [.cdm, .cdm], [.rm, .cam, .cam, .lm], [.st]]
+        case .f532:
+            return [[.rwb, .cb, .cb, .cb, .lwb], [.cm, .cm, .cm], [.st, .st]]
+        case .f523:
+            return [[.rwb, .cb, .cb, .cb, .lwb], [.cm, .cm], [.rw, .st, .lw]]
+        case .f541:
+            return [[.rwb, .cb, .cb, .cb, .lwb], [.rm, .cm, .cm, .lm], [.st]]
+        }
+    }
+
+    var slotPositions: [Position] {
+        ([.gk] + lineLayout.flatMap { $0 })
+    }
+}
+
+// MARK: - Season
+
+struct Season: Identifiable, Codable, Hashable {
+    var id: UUID = UUID()
+    var name: String
+    var startDate: Date
+    var endDate: Date
+
+    init(id: UUID = UUID(), name: String, startDate: Date = Date(), endDate: Date = Date()) {
+        self.id = id
+        self.name = name
+        self.startDate = startDate
+        self.endDate = endDate
+    }
 }
 
 // MARK: - Player
@@ -87,6 +158,7 @@ struct Player: Identifiable, Codable, Hashable {
     var name: String
     var number: Int
     var position: Position
+    var secondaryPosition: Position? = nil
 
     var secondsPlayed: Int = 0
 
@@ -144,6 +216,7 @@ struct MatchRecord: Identifiable, Codable, Hashable {
 
     var secondsElapsed: Int = 0
     var fieldSize: Int = 7
+    var seasonID: UUID? = nil
 
     var playerSeconds: [UUID: Int] = [:]
     var playerStats: [UUID: PlayerStatLine] = [:]
@@ -158,7 +231,7 @@ struct Team: Identifiable, Codable, Hashable {
 
     var fieldSize: Int = 7
     var startingOnFieldIDs: [UUID] = []
+    var primaryFormation: Formation = .f433
 
     var matches: [MatchRecord] = []
 }
-

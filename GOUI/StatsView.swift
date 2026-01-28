@@ -1,164 +1,228 @@
 import SwiftUI
 
 struct StatsView: View {
-    let store: MatchStore
+    @Bindable var teamStore: TeamStore
+    let teamID: UUID
 
-    @State private var filters = GSMatchFilters()
+    @State private var selectedSeasonID: UUID? = nil
 
-    private var filtered: [MatchRecord] {
-        filters.apply(to: store.archive)
+    private var team: Team? {
+        teamStore.teams.first(where: { $0.id == teamID })
+    }
+
+    private var seasons: [Season] {
+        teamStore.seasons
+    }
+
+    private var matches: [MatchRecord] {
+        guard let team else { return [] }
+        guard let selectedSeasonID else { return team.matches }
+        return team.matches.filter { $0.seasonID == selectedSeasonID }
+    }
+
+    private var leaderboard: [(player: Player, goals: Int)] {
+        guard let team else { return [] }
+        var totals: [UUID: Int] = [:]
+        for match in matches {
+            for (pid, line) in match.playerStats {
+                totals[pid, default: 0] += line.goals
+            }
+        }
+        let players = team.players.compactMap { player -> (Player, Int)? in
+            guard let goals = totals[player.id], goals > 0 else { return nil }
+            return (player, goals)
+        }
+        return players.sorted { $0.1 > $1.1 }
+    }
+
+    private var podium: [(player: Player, goals: Int)] {
+        Array(leaderboard.prefix(3))
     }
 
     var body: some View {
-        List {
-            Section {
-                filtersUI
-            }
+        ZStack {
+            GoStatsTheme.bg.ignoresSafeArea()
 
-            Section("Summary") {
-                summaryRow(title: "Matches", value: "\(filtered.count)")
-                summaryRow(title: "Goals For", value: "\(filtered.reduce(0) { $0 + $1.goalsFor })")
-                summaryRow(title: "Goals Against", value: "\(filtered.reduce(0) { $0 + $1.goalsAgainst })")
-            }
-
-            Section("Matches") {
-                if filtered.isEmpty {
-                    Text("No matches found.")
-                        .foregroundStyle(.secondary)
-                } else {
-                    ForEach(filtered) { match in
-                        VStack(alignment: .leading, spacing: 6) {
-                            HStack {
-                                Text(match.opponent.isEmpty ? "Opponent" : match.opponent)
-                                    .font(.headline)
-                                Spacer()
-                                Text("\(match.goalsFor) - \(match.goalsAgainst)")
-                                    .font(.headline)
-                                    .monospacedDigit()
-                            }
-
-                            HStack(spacing: 10) {
-                                Text(dateText(match.date))
-                                    .foregroundStyle(.secondary)
-
-                                Text(timeText(match.secondsElapsed))
-                                    .foregroundStyle(.secondary)
-                            }
-                            .font(.subheadline)
-                        }
-                        .padding(.vertical, 4)
-                    }
+            ScrollView {
+                VStack(spacing: 16) {
+                    seasonCard
+                    podiumCard
+                    leaderboardCard
+                    summaryCard
+                    Spacer(minLength: 16)
                 }
+                .padding(.horizontal, 16)
+                .padding(.top, 16)
+                .padding(.bottom, 140)
             }
         }
         .navigationTitle("Stats")
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            if selectedSeasonID == nil {
+                selectedSeasonID = teamStore.activeSeasonID ?? seasons.first?.id
+            }
+        }
     }
 
-    // MARK: - Filters UI
+    private var seasonCard: some View {
+        LiquidGlassContainer {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("SEASON")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(GoStatsTheme.text2)
 
-    private var filtersUI: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            TextField("Search opponent…", text: $filters.searchText)
-                .textInputAutocapitalization(.words)
-                .disableAutocorrection(true)
-
-            Picker("Range", selection: $filters.range) {
-                ForEach(GSMatchRangeFilter.allCases, id: \.self) { r in
-                    Text(r.title).tag(r)
+                if seasons.isEmpty {
+                    Text("No seasons available")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(GoStatsTheme.text2)
+                } else {
+                    Picker("Season", selection: Binding(
+                        get: { selectedSeasonID ?? seasons.first?.id },
+                        set: { newValue in
+                            selectedSeasonID = newValue
+                            if let newValue {
+                                teamStore.setActiveSeason(newValue)
+                            }
+                        }
+                    )) {
+                        ForEach(seasons) { season in
+                            Text(season.name).tag(Optional(season.id))
+                        }
+                    }
+                    .pickerStyle(.menu)
                 }
             }
-            .pickerStyle(.segmented)
+        }
+    }
 
-            Toggle("Use date range", isOn: $filters.useDateRange)
+    private var podiumCard: some View {
+        LiquidGlassContainer(cornerRadius: 22) {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("TOP SCORERS")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(GoStatsTheme.text2)
 
-            if filters.useDateRange {
-                DatePicker("Start", selection: $filters.startDate, displayedComponents: .date)
-                DatePicker("End", selection: $filters.endDate, displayedComponents: .date)
+                if podium.isEmpty {
+                    Text("No goals yet this season.")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(GoStatsTheme.text2)
+                } else {
+                    HStack(spacing: 10) {
+                        ForEach(Array(podium.enumerated()), id: \.offset) { index, entry in
+                            podiumChip(rank: index + 1, player: entry.player, goals: entry.goals)
+                        }
+                    }
+                }
             }
         }
-        .padding(.vertical, 6)
     }
 
-    private func summaryRow(title: String, value: String) -> some View {
+    private var leaderboardCard: some View {
+        LiquidGlassContainer(cornerRadius: 22) {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("LEADERBOARD")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(GoStatsTheme.text2)
+
+                if leaderboard.isEmpty {
+                    Text("No scorers yet. Save a match to populate stats.")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(GoStatsTheme.text2)
+                } else {
+                    VStack(spacing: 8) {
+                        ForEach(Array(leaderboard.enumerated()), id: \.offset) { index, entry in
+                            leaderboardRow(rank: index + 1, player: entry.player, goals: entry.goals)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private var summaryCard: some View {
+        LiquidGlassContainer(cornerRadius: 22) {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("SUMMARY")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(GoStatsTheme.text2)
+
+                HStack(spacing: 10) {
+                    statChip("Matches", "\(matches.count)")
+                    statChip("Goals For", "\(matches.reduce(0) { $0 + $1.goalsFor })")
+                    statChip("Goals Against", "\(matches.reduce(0) { $0 + $1.goalsAgainst })")
+                }
+            }
+        }
+    }
+
+    private func podiumChip(rank: Int, player: Player, goals: Int) -> some View {
+        VStack(spacing: 6) {
+            Text("#\(rank)")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(GoStatsTheme.text2)
+            Text(player.name)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(GoStatsTheme.text)
+                .lineLimit(1)
+            Text("\(goals)")
+                .font(.system(size: 18, weight: .semibold, design: .monospaced))
+                .foregroundStyle(GoStatsTheme.text)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color(uiColor: .secondarySystemGroupedBackground).opacity(0.55))
+        )
+    }
+
+    private func leaderboardRow(rank: Int, player: Player, goals: Int) -> some View {
         HStack {
-            Text(title)
+            Text("#\(rank)")
+                .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                .foregroundStyle(GoStatsTheme.text2)
+                .frame(width: 32, alignment: .leading)
+
+            Text(player.name)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(GoStatsTheme.text)
+
             Spacer()
+
+            Text("\(goals)")
+                .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                .foregroundStyle(GoStatsTheme.text)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Color(uiColor: .secondarySystemGroupedBackground).opacity(0.55))
+                )
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color(uiColor: .secondarySystemGroupedBackground).opacity(0.50))
+        )
+    }
+
+    private func statChip(_ title: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(GoStatsTheme.text2)
             Text(value)
-                .foregroundStyle(.secondary)
-                .monospacedDigit()
+                .font(.system(size: 16, weight: .semibold, design: .monospaced))
+                .foregroundStyle(GoStatsTheme.text)
         }
-    }
-
-    // MARK: - Helpers
-
-    private func dateText(_ d: Date) -> String {
-        let f = DateFormatter()
-        f.dateStyle = .medium
-        f.timeStyle = .none
-        return f.string(from: d)
-    }
-
-    private func timeText(_ seconds: Int) -> String {
-        let m = seconds / 60
-        let s = seconds % 60
-        return String(format: "%02d:%02d", m, s)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color(uiColor: .secondarySystemGroupedBackground).opacity(0.55))
+        )
     }
 }
-
-// MARK: - Collision-proof filter types (prefixed with GS)
-
-enum GSMatchRangeFilter: CaseIterable, Hashable {
-    case all
-    case last5
-    case last10
-
-    var title: String {
-        switch self {
-        case .all: return "All"
-        case .last5: return "Last 5"
-        case .last10: return "Last 10"
-        }
-    }
-}
-
-struct GSMatchFilters {
-    var searchText: String = ""
-    var range: GSMatchRangeFilter = .all
-
-    var useDateRange: Bool = false
-    var startDate: Date = Calendar.current.date(byAdding: .month, value: -3, to: Date()) ?? Date()
-    var endDate: Date = Date()
-
-    func apply(to matches: [MatchRecord]) -> [MatchRecord] {
-        var out = matches
-
-        // Search
-        let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !trimmed.isEmpty {
-            let q = trimmed.lowercased()
-            out = out.filter { $0.opponent.lowercased().contains(q) }
-        }
-
-        // Date range
-        if useDateRange {
-            let start = Calendar.current.startOfDay(for: startDate)
-            let endStart = Calendar.current.startOfDay(for: endDate)
-            let endExclusive = Calendar.current.date(byAdding: .day, value: 1, to: endStart) ?? endDate
-            out = out.filter { $0.date >= start && $0.date < endExclusive }
-        }
-
-        // Range (count-based)
-        switch range {
-        case .all:
-            break
-        case .last5:
-            out = out.safePrefix(5)
-        case .last10:
-            out = out.safePrefix(10)
-        }
-
-        return out
-    }
-}
-

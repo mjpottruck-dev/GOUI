@@ -7,6 +7,7 @@ struct EditRosterView: View {
     @State private var fieldSize: Int
     @State private var players: [Player]
     @State private var startingOnFieldIDs: Set<UUID>
+    @State private var primaryFormation: Formation
 
     let onSave: (Team) -> Void
     let existingTeamID: UUID
@@ -16,6 +17,7 @@ struct EditRosterView: View {
         self._fieldSize = State(initialValue: team.fieldSize)
         self._players = State(initialValue: team.players)
         self._startingOnFieldIDs = State(initialValue: Set(team.startingOnFieldIDs))
+        self._primaryFormation = State(initialValue: team.primaryFormation)
         self.onSave = onSave
         self.existingTeamID = team.id
     }
@@ -29,6 +31,12 @@ struct EditRosterView: View {
                     Stepper(value: $fieldSize, in: 5...11) {
                         Text("Field Size: \(fieldSize)")
                     }
+
+                    Picker("Primary Formation", selection: $primaryFormation) {
+                        ForEach(Formation.allCases) { formation in
+                            Text(formation.rawValue).tag(formation)
+                        }
+                    }
                 }
 
                 Section("Starting On Field") {
@@ -36,7 +44,6 @@ struct EditRosterView: View {
                         .font(.footnote)
                         .foregroundColor(.secondary)
 
-                    // Keep the list simple so compiler doesn't choke
                     ForEach(players) { p in
                         Button {
                             toggleStarter(p.id)
@@ -70,7 +77,6 @@ struct EditRosterView: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Save") {
-                        // Clamp starters to fieldSize (keep first N)
                         let clamped = Array(startingOnFieldIDs).prefix(fieldSize)
                         let team = Team(
                             id: existingTeamID,
@@ -78,7 +84,8 @@ struct EditRosterView: View {
                             players: players,
                             fieldSize: fieldSize,
                             startingOnFieldIDs: Array(clamped),
-                            matches: [] // keep archive elsewhere; TeamStore holds current data
+                            primaryFormation: primaryFormation,
+                            matches: []
                         )
                         onSave(team)
                         dismiss()
@@ -97,11 +104,9 @@ struct EditRosterView: View {
         if startingOnFieldIDs.contains(id) {
             startingOnFieldIDs.remove(id)
         } else {
-            // Don't exceed field size
             if startingOnFieldIDs.count < fieldSize {
                 startingOnFieldIDs.insert(id)
             }
         }
     }
 }
-
