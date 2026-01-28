@@ -12,7 +12,7 @@ struct MatchView: View {
     @State private var showHaptics = true
     @State private var showFormationPicker = false
     @State private var showTranscript = true
-    @State private var showSplitAlert = false
+    @State private var showSplitSheet = false
 
     @State private var activeQuickEvent: MatchActionKind? = nil
     @State private var showFieldOverlay = false
@@ -35,10 +35,10 @@ struct MatchView: View {
             ScrollView {
                 VStack(spacing: 16) {
                     scoreCard
-                    fieldCard
-                    controlRow
                     quickEventsTeam
                     quickEventsKeeper
+                    fieldCard
+                    controlRow
 
                     Spacer(minLength: 140)
                 }
@@ -132,13 +132,13 @@ struct MatchView: View {
         .sheet(isPresented: $showSubSheet) {
             SubstitutionSheet(store: store, onSwap: attemptSwap)
         }
-        .alert("Split half?", isPresented: $showSplitAlert) {
-            Button("Split Half") {
-                store.splitHalfAndResume()
-            }
-            Button("Keep Paused", role: .cancel) {}
-        } message: {
-            Text("End the first half and start the second half.")
+        .sheet(isPresented: $showSplitSheet) {
+            SplitHalfSheet(
+                onSplit: {
+                    store.splitHalfAndResume()
+                },
+                onKeepPaused: {}
+            )
         }
         .onAppear { store.loadSampleIfEmpty() }
         .onChange(of: scenePhase) { _, newValue in
@@ -221,6 +221,7 @@ struct MatchView: View {
                 }
 
                 FieldView1443(store: store)
+                    .frame(maxWidth: .infinity, alignment: .center)
             }
         }
     }
@@ -239,6 +240,20 @@ struct MatchView: View {
                     .font(.system(size: 16, weight: .semibold))
                 }
                 .buttonStyle(GlassPillButtonStyle(fill: Color(uiColor: .secondarySystemGroupedBackground).opacity(0.65)))
+
+                Spacer()
+
+                Button {
+                    haptic(.medium)
+                    showingEndSheet = true
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "stop.circle")
+                        Text("End Game")
+                    }
+                    .font(.system(size: 16, weight: .semibold))
+                }
+                .buttonStyle(GlassPillButtonStyle(fill: Color.red.opacity(0.18)))
 
                 Spacer()
 
@@ -316,7 +331,7 @@ struct MatchView: View {
 
     private var fieldOverlay: some View {
         Group {
-            if showFieldOverlay, let activeQuickEvent {
+            if showFieldOverlay, let currentQuickEvent = activeQuickEvent {
                 ZStack {
                     Color.black.opacity(0.35).ignoresSafeArea()
 
@@ -327,7 +342,7 @@ struct MatchView: View {
                                     .font(.system(size: 12, weight: .semibold))
                                     .foregroundStyle(GoStatsTheme.text2)
 
-                                Text(activeQuickEvent.rawValue)
+                                Text(currentQuickEvent.rawValue)
                                     .font(.system(size: 18, weight: .semibold))
                                     .foregroundStyle(GoStatsTheme.text)
                             }
@@ -335,7 +350,7 @@ struct MatchView: View {
                         .padding(.horizontal, 16)
 
                         FieldView1443(store: store, onSelectPlayer: { player in
-                            handleFieldSelection(player, for: activeQuickEvent)
+                            handleFieldSelection(player, for: currentQuickEvent)
                         })
                         .padding(.horizontal, 16)
 
@@ -430,7 +445,7 @@ struct MatchView: View {
         }
         if store.isRunning {
             store.pauseGame()
-            showSplitAlert = true
+            showSplitSheet = true
         } else {
             store.startGame()
         }
@@ -521,5 +536,55 @@ private struct SubstitutionSheet: View {
 
         selectedPlayer = player
         selectedIsField = isField
+    }
+}
+
+private struct SplitHalfSheet: View {
+    let onSplit: () -> Void
+    let onKeepPaused: () -> Void
+
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 16) {
+                Text("Start the second half?")
+                    .font(.title2.weight(.semibold))
+
+                Text("End the first half and resume play in the second half.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+
+                VStack(spacing: 12) {
+                    Button {
+                        onSplit()
+                        dismiss()
+                    } label: {
+                        Text("Start 2nd Half")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(GlassPillButtonStyle(fill: GoStatsTheme.primary.opacity(0.95)))
+
+                    Button {
+                        onKeepPaused()
+                        dismiss()
+                    } label: {
+                        Text("Keep Paused")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(GlassPillButtonStyle(fill: Color(uiColor: .secondarySystemGroupedBackground).opacity(0.8)))
+                }
+            }
+            .padding(24)
+            .navigationTitle("Half-Time")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Close") { dismiss() }
+                }
+            }
+        }
+        .presentationDetents([.medium])
     }
 }

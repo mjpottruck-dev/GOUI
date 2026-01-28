@@ -10,6 +10,17 @@ struct CreateTeamView: View {
     @State private var name: String = ""
     @State private var fieldSize: Int = 11
     @State private var primaryFormation: Formation = .f433
+    @State private var players: [Player] = []
+    @State private var showAddPlayer = false
+
+    private var sortedPlayers: [Player] {
+        players.sorted { lhs, rhs in
+            if lhs.number == rhs.number {
+                return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+            }
+            return lhs.number < rhs.number
+        }
+    }
 
     var body: some View {
         NavigationStack {
@@ -26,6 +37,40 @@ struct CreateTeamView: View {
                         ForEach(Formation.allCases) { formation in
                             Text(formation.rawValue).tag(formation)
                         }
+                    }
+                }
+
+                Section("PLAYERS") {
+                    if sortedPlayers.isEmpty {
+                        Text("Add your players during setup to build the roster.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(sortedPlayers) { player in
+                            HStack {
+                                Text("#\(player.number)")
+                                    .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                                    .foregroundStyle(GoStatsTheme.text)
+                                    .frame(width: 48, alignment: .leading)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(player.name)
+                                        .font(.system(size: 15, weight: .semibold))
+                                    Text(player.position.rawValue)
+                                        .font(.system(size: 12))
+                                        .foregroundStyle(GoStatsTheme.text2)
+                                }
+                                Spacer()
+                            }
+                        }
+                        .onDelete { offsets in
+                            players.remove(atOffsets: offsets)
+                        }
+                    }
+
+                    Button {
+                        showAddPlayer = true
+                    } label: {
+                        Label("Add Player", systemImage: "plus.circle.fill")
                     }
                 }
 
@@ -46,18 +91,24 @@ struct CreateTeamView: View {
                 }
             }
         }
+        .sheet(isPresented: $showAddPlayer) {
+            CreatePlayerView { player in
+                players.append(player)
+            }
+        }
     }
 
     private func create() {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
+        let starterIDs = sortedPlayers.prefix(fieldSize).map(\.id)
         let team = Team(
             id: UUID(),
             name: trimmed,
-            players: [],
+            players: sortedPlayers,
             fieldSize: fieldSize,
-            startingOnFieldIDs: [],
+            startingOnFieldIDs: starterIDs,
             primaryFormation: primaryFormation,
             matches: []
         )
