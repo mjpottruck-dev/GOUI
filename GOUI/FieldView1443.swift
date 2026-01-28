@@ -11,6 +11,8 @@ struct FieldView1443: View {
         GeometryReader { geo in
             let w = geo.size.width
             let h = geo.size.height
+            let inset: CGFloat = 14
+            let fieldSize = CGSize(width: w - (inset * 2), height: h - (inset * 2))
 
             ZStack {
                 RoundedRectangle(cornerRadius: 22, style: .continuous)
@@ -18,13 +20,15 @@ struct FieldView1443: View {
 
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
                     .fill(Color(uiColor: .secondarySystemGroupedBackground).opacity(0.55))
-                    .padding(10)
+                    .padding(inset)
 
-                fieldLines(size: CGSize(width: w, height: h))
-                    .padding(10)
+                fieldLines(size: fieldSize)
+                    .frame(width: fieldSize.width, height: fieldSize.height)
+                    .position(x: w * 0.5, y: h * 0.5)
 
-                playersOverlay(players: onFieldPlayers, formation: formation, size: CGSize(width: w, height: h))
-                    .padding(10)
+                playersOverlay(players: onFieldPlayers, formation: formation, size: fieldSize)
+                    .frame(width: fieldSize.width, height: fieldSize.height)
+                    .position(x: w * 0.5, y: h * 0.5)
             }
         }
         .frame(height: 360)
@@ -84,8 +88,8 @@ struct FieldView1443: View {
         }
 
         let lineCount = slots.count
-        let startY: CGFloat = 0.72
-        let endY: CGFloat = 0.26
+        let startY: CGFloat = 0.74
+        let endY: CGFloat = 0.22
         let step = lineCount > 1 ? (startY - endY) / CGFloat(lineCount - 1) : 0
 
         for (lineIndex, line) in slots.enumerated() {
@@ -135,9 +139,11 @@ struct FieldView1443: View {
         if count == 1 {
             return [CGPoint(x: width * 0.50, y: y)]
         }
+        let sidePadding = max(18, width * 0.10)
+        let usableWidth = width - (sidePadding * 2)
+        let step = usableWidth / CGFloat(count - 1)
         return (0..<count).map { i in
-            let t = CGFloat(i + 1) / CGFloat(count + 1)
-            return CGPoint(x: width * (0.06 + 0.88 * t), y: y)
+            CGPoint(x: sidePadding + (CGFloat(i) * step), y: y)
         }
     }
 
