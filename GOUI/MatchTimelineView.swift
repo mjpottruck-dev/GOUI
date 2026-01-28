@@ -12,7 +12,7 @@ struct MatchTimelineView: View {
         LiquidGlassContainer(cornerRadius: 22) {
             VStack(alignment: .leading, spacing: 12) {
 
-                Text("TIMELINE")
+                Text("PLAY-BY-PLAY")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(GoStatsTheme.text2)
 
@@ -83,4 +83,3 @@ struct MatchTimelineView: View {
         return String(format: "%02d:%02d", m, sec)
     }
 }
-
