@@ -57,7 +57,10 @@ struct HomeView: View {
                         HomePreMatchView(
                             store: store,
                             teamStore: teamStore,
-                            selectedTeamID: $selectedTeamID
+                            selectedTeamID: $selectedTeamID,
+                            onStartMatch: { teamID in
+                                selectedTeamID = teamID
+                            }
                         )
                     } label: {
                         primaryCard(
@@ -217,5 +220,3 @@ struct HomeView: View {
         }
     }
 }
-
-
