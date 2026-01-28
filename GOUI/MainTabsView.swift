@@ -1,3 +1,4 @@
+// CODEX SYNC TEST
 import SwiftUI
 
 struct MainTabsView: View {
@@ -30,4 +31,3 @@ struct MainTabsView: View {
         }
     }
 }
-
