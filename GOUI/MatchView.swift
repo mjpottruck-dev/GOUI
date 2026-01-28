@@ -331,7 +331,7 @@ struct MatchView: View {
 
     private var fieldOverlay: some View {
         Group {
-            if showFieldOverlay, let activeQuickEvent {
+            if showFieldOverlay, let currentQuickEvent = activeQuickEvent {
                 ZStack {
                     Color.black.opacity(0.35).ignoresSafeArea()
 
@@ -342,7 +342,7 @@ struct MatchView: View {
                                     .font(.system(size: 12, weight: .semibold))
                                     .foregroundStyle(GoStatsTheme.text2)
 
-                                Text(activeQuickEvent.rawValue)
+                                Text(currentQuickEvent.rawValue)
                                     .font(.system(size: 18, weight: .semibold))
                                     .foregroundStyle(GoStatsTheme.text)
                             }
@@ -350,7 +350,7 @@ struct MatchView: View {
                         .padding(.horizontal, 16)
 
                         FieldView1443(store: store, onSelectPlayer: { player in
-                            handleFieldSelection(player, for: activeQuickEvent)
+                            handleFieldSelection(player, for: currentQuickEvent)
                         })
                         .padding(.horizontal, 16)
 
