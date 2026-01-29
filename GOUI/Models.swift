@@ -157,6 +157,7 @@ struct Player: Identifiable, Codable, Hashable {
     var id: UUID = UUID()
     var name: String
     var number: Int
+    var jersey: String = ""
     var position: Position
     var secondaryPosition: Position? = nil
 

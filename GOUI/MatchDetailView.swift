@@ -4,6 +4,8 @@ struct MatchDetailView: View {
     let match: MatchRecord
     let team: Team
     @State private var selectedPlayerDetail: PlayerDetail? = nil
+    @State private var shareSheetPayload: ShareSheetPayload? = nil
+    @State private var exportError: String? = nil
 
     var body: some View {
         ZStack {
@@ -74,6 +76,21 @@ struct MatchDetailView: View {
                     }
                     .padding(.horizontal, 16)
 
+                    LiquidGlassContainer(cornerRadius: 22) {
+                        Button(action: exportMaxPreps) {
+                            HStack(spacing: 10) {
+                                Image(systemName: "square.and.arrow.up")
+                                Text("Export → MaxPreps (.txt)")
+                                    .font(.system(size: 15, weight: .semibold))
+                                Spacer()
+                            }
+                            .foregroundStyle(GoStatsTheme.text)
+                            .padding(.vertical, 6)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(.horizontal, 16)
+
                     Spacer(minLength: 20)
                 }
                 .padding(.bottom, 140)
@@ -134,6 +151,14 @@ struct MatchDetailView: View {
                 .navigationTitle("Player Stats")
                 .navigationBarTitleDisplayMode(.inline)
             }
+        }
+        .sheet(item: $shareSheetPayload) { payload in
+            ShareSheet(activityItems: payload.items)
+        }
+        .alert("Export Failed", isPresented: Binding(get: { exportError != nil }, set: { _ in exportError = nil })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(exportError ?? "")
         }
     }
 
@@ -243,6 +268,46 @@ struct MatchDetailView: View {
         }
     }
 
+    private func exportMaxPreps() {
+        let roster = team.players.filter { match.playerSeconds.keys.contains($0.id) }
+        let matchName = match.title.isEmpty ? match.opponent : match.title
+        let safeName = MaxPrepsExport.sanitizedFilename(matchName.isEmpty ? "Match" : matchName)
+
+        let teamRows = MaxPrepsExport.teamRows(
+            players: roster,
+            stats: match.playerStats,
+            seconds: match.playerSeconds
+        )
+        let teamText = MaxPrepsExport.text(fields: MaxPrepsExport.teamFields, rows: teamRows)
+
+        do {
+            var urls: [URL] = []
+            let teamURL = try MaxPrepsExport.writeTempTXT(
+                filename: "MaxPreps_\(safeName)_Team",
+                contents: teamText
+            )
+            urls.append(teamURL)
+
+            let keeperRows = MaxPrepsExport.keeperRows(
+                players: roster,
+                stats: match.playerStats,
+                seconds: match.playerSeconds
+            )
+            if !keeperRows.isEmpty {
+                let keeperText = MaxPrepsExport.text(fields: MaxPrepsExport.keeperFields, rows: keeperRows)
+                let keeperURL = try MaxPrepsExport.writeTempTXT(
+                    filename: "MaxPreps_\(safeName)_Keeper",
+                    contents: keeperText
+                )
+                urls.append(keeperURL)
+            }
+
+            shareSheetPayload = ShareSheetPayload(items: urls)
+        } catch {
+            exportError = error.localizedDescription
+        }
+    }
+
     private struct PlayerDetail: Identifiable {
         let id: UUID
         let player: Player
@@ -255,5 +320,10 @@ struct MatchDetailView: View {
             self.line = line
             self.seconds = seconds
         }
+    }
+
+    private struct ShareSheetPayload: Identifiable {
+        let id = UUID()
+        let items: [URL]
     }
 }
