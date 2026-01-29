@@ -449,6 +449,11 @@ struct MatchView: View {
         guard updated.contains(where: { $0.position == .gk }) else { return false }
         store.refreshElapsedFromClock()
         store.pushUndo()
+        if let index = store.onFieldLineupIDs.firstIndex(of: fieldPlayer.id) {
+            store.onFieldLineupIDs[index] = benchPlayer.id
+        } else {
+            store.onFieldLineupIDs.append(benchPlayer.id)
+        }
         store.onFieldIDs.remove(fieldPlayer.id)
         store.onFieldIDs.insert(benchPlayer.id)
         store.markPlayerSecondsBaseline()
@@ -564,7 +569,7 @@ private struct SubstitutionSheet: View {
             .alert("Invalid Substitution", isPresented: $showInvalidAlert) {
                 Button("OK", role: .cancel) { }
             } message: {
-                Text("This swap would leave you without a primary goalkeeper.")
+                Text("This swap would leave you without a goalkeeper.")
             }
         }
     }
@@ -582,7 +587,8 @@ private struct SubstitutionSheet: View {
             let benchPlayer = selectedIsField ? player : selectedPlayer
             let success = onSwap(fieldPlayer, benchPlayer)
             if success {
-                dismiss()
+                self.selectedPlayer = nil
+                self.selectedIsField = false
             } else {
                 showInvalidAlert = true
                 self.selectedPlayer = nil

@@ -182,14 +182,16 @@ final class TeamStore {
         ]
 
         let starterIDs = Array(players.prefix(7)).map(\.id)
-        let primaryGoalkeeperID = Team.primaryGoalkeeperID(from: players)
+        let goalkeeperDepth = Team.goalkeeperDepthIDs(from: players)
         let team = Team(
             name: "Demo Eleven",
             players: players,
             fieldSize: 7,
             startingOnFieldIDs: starterIDs,
             primaryFormation: .f433,
-            primaryGoalkeeperID: primaryGoalkeeperID
+            primaryGoalkeeperID: goalkeeperDepth.primary,
+            secondaryGoalkeeperID: goalkeeperDepth.secondary,
+            thirdGoalkeeperID: goalkeeperDepth.third
         )
 
         teams = [team]
@@ -200,7 +202,24 @@ final class TeamStore {
         var changed = false
 
         for ti in teams.indices {
-            if teams[ti].primaryGoalkeeperID == nil {
+            let resolvedDepth = Team.goalkeeperDepthIDs(
+                from: teams[ti].players,
+                currentPrimary: teams[ti].primaryGoalkeeperID,
+                currentSecondary: teams[ti].secondaryGoalkeeperID,
+                currentThird: teams[ti].thirdGoalkeeperID
+            )
+            if teams[ti].primaryGoalkeeperID != resolvedDepth.primary
+                || teams[ti].secondaryGoalkeeperID != resolvedDepth.secondary
+                || teams[ti].thirdGoalkeeperID != resolvedDepth.third {
+                teams[ti].primaryGoalkeeperID = resolvedDepth.primary
+                teams[ti].secondaryGoalkeeperID = resolvedDepth.secondary
+                teams[ti].thirdGoalkeeperID = resolvedDepth.third
+                changed = true
+            }
+
+            if teams[ti].primaryGoalkeeperID == nil
+                && teams[ti].secondaryGoalkeeperID == nil
+                && teams[ti].thirdGoalkeeperID == nil {
                 let resolved = Team.primaryGoalkeeperID(from: teams[ti].players)
                 if resolved != nil {
                     teams[ti].primaryGoalkeeperID = resolved
@@ -253,6 +272,7 @@ private struct LegacyTeam: Codable {
     var matches: [LegacyMatchRecord]?
 
     func toTeam() -> Team {
+        let goalkeeperDepth = Team.goalkeeperDepthIDs(from: players)
         Team(
             id: id,
             name: name,
@@ -260,7 +280,9 @@ private struct LegacyTeam: Codable {
             fieldSize: fieldSize,
             startingOnFieldIDs: startingOnFieldIDs,
             primaryFormation: .f433,
-            primaryGoalkeeperID: Team.primaryGoalkeeperID(from: players),
+            primaryGoalkeeperID: goalkeeperDepth.primary,
+            secondaryGoalkeeperID: goalkeeperDepth.secondary,
+            thirdGoalkeeperID: goalkeeperDepth.third,
             matches: (matches ?? []).map { $0.toMatchRecord() }
         )
     }
