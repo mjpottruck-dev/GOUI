@@ -74,7 +74,7 @@ struct FieldView1443: View {
         let h = size.height
         let slots = formation.lineLayout
 
-        let gk = players.first(where: { $0.position == .gk })
+        let gk = store.activeGoalkeeper()
         let fieldPlayers = players.filter { $0.id != gk?.id }
 
         let lineCount = slots.count
