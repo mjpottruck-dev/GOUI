@@ -19,13 +19,14 @@ struct GoStatsRootView: View {
                     store: store,
                     teamStore: teamStore,
                     selectedTeamID: $selectedTeamID,
-                    onStartMatch: { teamID in
+                    onStartMatch: { teamID, template in
                         selectedTeamID = teamID
                         if let team = teamStore.teams.first(where: { $0.id == teamID }) {
                             store.resetForNewMatch(
                                 team: team,
                                 formation: team.primaryFormation,
-                                seasonID: teamStore.activeSeasonID
+                                seasonID: teamStore.activeSeasonID,
+                                template: template
                             )
                         }
                         goToTabs = true

@@ -110,6 +110,8 @@ struct FieldView1443: View {
                     .stroke(Color.primary.opacity(0.10), lineWidth: 1)
                     .frame(width: w * 0.36, height: h * 0.18)
                     .position(x: w * 0.50, y: h * 0.20)
+            case .none:
+                EmptyView()
             }
         }
     }

@@ -6,7 +6,9 @@ struct HomePreMatchView: View {
     @Bindable var teamStore: TeamStore
 
     @Binding var selectedTeamID: UUID?
-    var onStartMatch: (UUID) -> Void
+    var onStartMatch: (UUID, GameTemplate?) -> Void
+
+    @State private var selectedTemplateID: String? = nil
 
     var body: some View {
         ZStack {
@@ -35,10 +37,41 @@ struct HomePreMatchView: View {
                             .fill(Color(uiColor: .secondarySystemGroupedBackground))
                     )
 
+                    if let team = selectedTeam {
+                        LiquidGlassContainer(cornerRadius: 22) {
+                            VStack(alignment: .leading, spacing: 10) {
+                                Text("GAME TEMPLATE")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundStyle(.secondary)
+
+                                if templates.isEmpty {
+                                    Text("Default match settings")
+                                        .font(.system(size: 14, weight: .medium))
+                                        .foregroundStyle(GoStatsTheme.text2)
+                                } else {
+                                    Picker("Template", selection: Binding(
+                                        get: { selectedTemplateID ?? templates.first?.id },
+                                        set: { selectedTemplateID = $0 }
+                                    )) {
+                                        ForEach(templates) { template in
+                                            Text(template.name).tag(Optional(template.id))
+                                        }
+                                    }
+                                    .pickerStyle(.menu)
+                                }
+                            }
+                        }
+                    }
+
                     Button {
                         guard let tid = selectedTeamID ?? teamStore.teams.first?.id else { return }
                         selectedTeamID = tid
-                        onStartMatch(tid)
+                        let template = GameTemplateCatalog.template(for: selectedTeam?.sportID ?? SportCatalog.defaultSportID, templateID: selectedTemplateID)
+                        if var team = selectedTeam {
+                            team.lastTemplateID = template?.id
+                            teamStore.updateTeam(team)
+                        }
+                        onStartMatch(tid, template)
                     } label: {
                         Text("Start Match")
                             .font(.system(size: 18, weight: .semibold))
@@ -105,7 +138,29 @@ struct HomePreMatchView: View {
             if selectedTeamID == nil {
                 selectedTeamID = teamStore.teams.first?.id
             }
+            syncTemplateSelection()
         }
+        .onChange(of: selectedTeamID) { _, _ in
+            syncTemplateSelection()
+        }
+    }
+
+    private var selectedTeam: Team? {
+        guard let id = selectedTeamID ?? teamStore.teams.first?.id else { return nil }
+        return teamStore.teams.first(where: { $0.id == id })
+    }
+
+    private var templates: [GameTemplate] {
+        guard let team = selectedTeam else { return [] }
+        return GameTemplateCatalog.templates(for: team.sportID)
+    }
+
+    private func syncTemplateSelection() {
+        guard let team = selectedTeam else {
+            selectedTemplateID = nil
+            return
+        }
+        selectedTemplateID = team.lastTemplateID ?? GameTemplateCatalog.defaultTemplate(for: team.sportID)?.id
     }
 
     private func rowButton(title: String, systemImage: String) -> some View {

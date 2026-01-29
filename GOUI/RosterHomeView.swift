@@ -6,10 +6,24 @@ struct RosterHomeView: View {
 
     @State private var showingCreateTeam = false
     @State private var editingTeam: Team? = nil
+    @State private var selectedSportFilter: String = "all"
+
+    private var filteredTeams: [Team] {
+        if selectedSportFilter == "all" { return teamStore.teams }
+        return teamStore.teams.filter { $0.sportID == selectedSportFilter }
+    }
 
     var body: some View {
         NavigationStack {
             List {
+                Section {
+                    Picker("Sport Filter", selection: $selectedSportFilter) {
+                        Text("All Sports").tag("all")
+                        ForEach(SportCatalog.all, id: \.id) { sport in
+                            Text(sport.displayName).tag(sport.id)
+                        }
+                    }
+                }
                 if teamStore.teams.isEmpty {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("No Teams Yet")
@@ -19,8 +33,17 @@ struct RosterHomeView: View {
                             .foregroundStyle(.secondary)
                     }
                     .padding(.vertical, 8)
+                } else if filteredTeams.isEmpty {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("No Teams Found")
+                            .font(.headline)
+                        Text("Try a different sport filter.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.vertical, 8)
                 } else {
-                    ForEach(teamStore.teams) { team in
+                    ForEach(filteredTeams) { team in
                         Button {
                             editingTeam = team
                         } label: {
@@ -28,6 +51,9 @@ struct RosterHomeView: View {
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text(team.name)
                                         .font(.headline)
+                                    Text(SportCatalog.sport(for: team.sportID).displayName)
+                                        .font(.caption)
+                                        .foregroundStyle(GoStatsTheme.text2)
                                     Text("\(team.players.count) players")
                                         .font(.subheadline)
                                         .foregroundStyle(.secondary)
@@ -41,7 +67,7 @@ struct RosterHomeView: View {
                     }
                     .onDelete { indexSet in
                         for idx in indexSet {
-                            let team = teamStore.teams[idx]
+                            let team = filteredTeams[idx]
                             teamStore.deleteTeam(team)
                         }
                     }
@@ -73,4 +99,3 @@ struct RosterHomeView: View {
         }
     }
 }
-

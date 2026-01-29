@@ -4,8 +4,15 @@ struct BasketballSport: SportDefinition {
     let id = "basketball"
     let displayName = "Basketball"
     let season: SportSeason = .winter
+    let supportsTimer = true
     let supportsGoalie = false
     let supportsPositions = false
+    let supportsCourtOverlay = true
+    let supportsTeamScore = true
+    let supportsPeriods = true
+    let supportsHoles = false
+    let defaultHoleCount = 0
+    let scoringMode: ScoringMode = .teamVsTeam
 
     let periods: [PeriodDefinition] = [
         PeriodDefinition(name: "Q1", duration: 12 * 60, maxCount: 1),
@@ -212,7 +219,9 @@ struct BasketballSport: SportDefinition {
             "opponentTwoPoint": 2,
             "opponentThreePoint": 3,
             "opponentFreeThrow": 1
-        ]
+        ],
+        periodEventPoints: [:],
+        opponentPeriodEventPoints: [:]
     )
 }
 

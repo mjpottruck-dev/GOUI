@@ -24,6 +24,12 @@ struct CreateTeamView: View {
             return [5]
         case SportCatalog.waterPoloID:
             return [7]
+        case SportCatalog.volleyballID:
+            return [6]
+        case SportCatalog.tennisID:
+            return [2, 4]
+        case SportCatalog.golfID:
+            return [1, 2, 4]
         default:
             return [7, 9, 11]
         }
@@ -43,14 +49,22 @@ struct CreateTeamView: View {
             Form {
                 Section("TEAM") {
                     TextField("Team name", text: $name)
-                    Picker("Sport", selection: $sportID) {
-                        ForEach(SportCatalog.all, id: \.id) { sport in
-                            Text(sport.displayName).tag(sport.id)
+                    NavigationLink {
+                        SportPickerView(selectedSportID: $sportID)
+                    } label: {
+                        HStack {
+                            Text("Sport")
+                            Spacer()
+                            Text(sport.displayName)
+                                .foregroundStyle(.secondary)
                         }
                     }
-                    Picker("Field size", selection: $fieldSize) {
-                        ForEach(fieldSizeOptions, id: \.self) { value in
-                            Text("\(value)v\(value)").tag(value)
+
+                    if sport.supportsTeamScore {
+                        Picker("Field size", selection: $fieldSize) {
+                            ForEach(fieldSizeOptions, id: \.self) { value in
+                                Text("\(value)v\(value)").tag(value)
+                            }
                         }
                     }
 

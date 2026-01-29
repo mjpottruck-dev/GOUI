@@ -10,8 +10,15 @@ protocol SportDefinition {
     var id: String { get }
     var displayName: String { get }
     var season: SportSeason { get }
+    var supportsTimer: Bool { get }
     var supportsGoalie: Bool { get }
     var supportsPositions: Bool { get }
+    var supportsCourtOverlay: Bool { get }
+    var supportsTeamScore: Bool { get }
+    var supportsPeriods: Bool { get }
+    var supportsHoles: Bool { get }
+    var defaultHoleCount: Int { get }
+    var scoringMode: ScoringMode { get }
     var periods: [PeriodDefinition] { get }
     var statSchema: [StatType] { get }
     var eventTypes: [EventType] { get }
@@ -39,6 +46,7 @@ enum EventUIAction: String {
     case shot
     case shotPenalty
     case card
+    case holeEntry
 }
 
 struct ShotOutcomeStats {
@@ -65,6 +73,7 @@ enum CourtLayoutKind {
     case soccer
     case waterPolo
     case basketball
+    case none
 }
 
 struct CourtLayoutDefinition {
@@ -76,6 +85,8 @@ struct ScoringRules {
     let primaryStatID: String
     let teamEventPoints: [String: Int]
     let opponentEventPoints: [String: Int]
+    let periodEventPoints: [String: Int]
+    let opponentPeriodEventPoints: [String: Int]
 
     func points(for eventID: String, isOpponent: Bool) -> Int? {
         if isOpponent {
@@ -83,12 +94,28 @@ struct ScoringRules {
         }
         return teamEventPoints[eventID]
     }
+
+    func periodPoints(for eventID: String, isOpponent: Bool) -> Int? {
+        if isOpponent {
+            return opponentPeriodEventPoints[eventID]
+        }
+        return periodEventPoints[eventID]
+    }
+}
+
+enum ScoringMode {
+    case teamVsTeam
+    case individual
+    case dualIndividual
 }
 
 enum SportCatalog {
     static let soccerID = "soccer"
     static let waterPoloID = "water_polo"
     static let basketballID = "basketball"
+    static let volleyballID = "volleyball"
+    static let tennisID = "tennis"
+    static let golfID = "golf"
     static let defaultSportID = soccerID
     private static var registry: [String: any SportDefinition] = [:]
 

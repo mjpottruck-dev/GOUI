@@ -357,9 +357,25 @@ struct MatchRecord: Identifiable, Codable, Hashable {
     var fieldSize: Int = 7
     var seasonID: UUID? = nil
     var sportID: String = SportCatalog.defaultSportID
+    var templateID: String? = nil
+    var templateName: String? = nil
+    var periodScores: [PeriodScore] = []
+    var playerHoleScores: [UUID: [Int]] = [:]
+    var playerHolePutts: [UUID: [Int]] = [:]
 
     var playerSeconds: [UUID: Int] = [:]
     var playerStats: [UUID: PlayerStatLine] = [:]
+}
+
+struct PeriodScore: Identifiable, Codable, Hashable {
+    var id: UUID = UUID()
+    var teamScore: Int
+    var opponentScore: Int
+
+    init(teamScore: Int = 0, opponentScore: Int = 0) {
+        self.teamScore = teamScore
+        self.opponentScore = opponentScore
+    }
 }
 
 // MARK: - Team
@@ -379,6 +395,7 @@ struct Team: Identifiable, Codable, Hashable {
     var secondaryGoalkeeperID: UUID? = nil
     var thirdGoalkeeperID: UUID? = nil
     var sportID: String = SportCatalog.defaultSportID
+    var lastTemplateID: String? = nil
 
     var matches: [MatchRecord] = []
 }

@@ -9,6 +9,7 @@ struct HomeView: View {
 
     @State private var showingCreateTeam = false
     @State private var newTeamName: String = ""
+    @State private var newTeamSportID: String = SportCatalog.defaultSportID
 
     private var resolvedTeamID: UUID? {
         if let id = selectedTeamID { return id }
@@ -60,7 +61,7 @@ struct HomeView: View {
                             store: store,
                             teamStore: teamStore,
                             selectedTeamID: $selectedTeamID,
-                            onStartMatch: { teamID in
+                            onStartMatch: { teamID, _ in
                                 selectedTeamID = teamID
                             }
                         )
@@ -100,6 +101,7 @@ struct HomeView: View {
                     // ✅ ONLY ONE Create New Team button (big one)
                     Button {
                         newTeamName = ""
+                        newTeamSportID = SportCatalog.defaultSportID
                         showingCreateTeam = true
                     } label: {
                         Text("Create New Team")
@@ -157,6 +159,27 @@ struct HomeView: View {
                         }
                     }
 
+                    LiquidGlassContainer(material: .thinMaterial) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("SPORT")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(GoStatsTheme.text2)
+
+                            NavigationLink {
+                                SportPickerView(selectedSportID: $newTeamSportID)
+                            } label: {
+                                HStack {
+                                    Text(SportCatalog.sport(for: newTeamSportID).displayName)
+                                        .foregroundStyle(GoStatsTheme.text)
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .foregroundStyle(GoStatsTheme.text2)
+                                }
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+
                     Spacer()
 
                     Button {
@@ -164,7 +187,11 @@ struct HomeView: View {
                         guard !name.isEmpty else { return }
 
                         // Create + select the team
-                        let team = Team(name: name)
+                        let team = Team(
+                            name: name,
+                            fieldSize: defaultFieldSize(for: newTeamSportID),
+                            sportID: newTeamSportID
+                        )
                         teamStore.addTeam(team)
                         selectedTeamID = team.id
 
@@ -219,6 +246,23 @@ struct HomeView: View {
                     .foregroundStyle(GoStatsTheme.text2)
             }
             .padding(.vertical, 8)
+        }
+    }
+
+    private func defaultFieldSize(for sportID: String) -> Int {
+        switch sportID {
+        case SportCatalog.basketballID:
+            return 5
+        case SportCatalog.waterPoloID:
+            return 7
+        case SportCatalog.volleyballID:
+            return 6
+        case SportCatalog.tennisID:
+            return 2
+        case SportCatalog.golfID:
+            return 1
+        default:
+            return 7
         }
     }
 }

@@ -9,6 +9,8 @@ enum CSVExporter {
         var lines: [String] = []
         let resolvedSport = sport ?? SportCatalog.sport(for: match.sportID)
         let statColumns = resolvedSport.statSchema.filter { $0.countsForPlayer }
+        let periodColumns = periodScoreColumns(for: resolvedSport, match: match)
+        let holeColumns = holeScoreColumns(for: resolvedSport, match: match)
 
         // Header row
         lines.append((
@@ -17,6 +19,8 @@ enum CSVExporter {
             "MatchDate",
             "Title",
             "Opponent",
+            "Sport",
+            "Template",
             "GoalsFor",
             "GoalsAgainst",
             "SecondsElapsed",
@@ -26,6 +30,8 @@ enum CSVExporter {
             "Position",
             "MinutesPlayed"
             ]
+            + periodColumns
+            + holeColumns
             + statColumns.map(\.id)
         ).joined(separator: ","))
 
@@ -43,6 +49,8 @@ enum CSVExporter {
                 esc(dateString),
                 esc(match.title),
                 esc(match.opponent),
+                esc(resolvedSport.displayName),
+                esc(match.templateName ?? ""),
                 "\(match.goalsFor)",
                 "\(match.goalsAgainst)",
                 "\(match.secondsElapsed)",
@@ -51,7 +59,7 @@ enum CSVExporter {
                 esc(p.name),
                 esc(positionLabel),
                 "\(mins)"
-            ] + statColumns.map { stat in
+            ] + periodScoresRow(for: match, sport: resolvedSport) + holeScoresRow(for: match, sport: resolvedSport, player: p) + statColumns.map { stat in
                 "\(st.value(for: stat.id))"
             }
 
@@ -83,5 +91,55 @@ enum CSVExporter {
             return "\"\(doubled)\""
         }
         return s
+    }
+
+    private static func periodScoreColumns(for sport: any SportDefinition, match: MatchRecord) -> [String] {
+        guard sport.supportsPeriods else { return [] }
+        let count = match.periodScores.isEmpty ? sport.periods.count : match.periodScores.count
+        let prefix = sport.id == SportCatalog.volleyballID || sport.id == SportCatalog.tennisID ? "Set" : "Period"
+        return (1...max(count, 0)).flatMap { index in
+            ["\(prefix)\(index)For", "\(prefix)\(index)Against"]
+        }
+    }
+
+    private static func periodScoresRow(for match: MatchRecord, sport: any SportDefinition) -> [String] {
+        guard sport.supportsPeriods else { return [] }
+        let scores = match.periodScores
+        let count = max(scores.count, sport.periods.count)
+        return (0..<count).flatMap { index in
+            if scores.indices.contains(index) {
+                return ["\(scores[index].teamScore)", "\(scores[index].opponentScore)"]
+            }
+            return ["0", "0"]
+        }
+    }
+
+    private static func holeScoreColumns(for sport: any SportDefinition, match: MatchRecord) -> [String] {
+        guard sport.supportsHoles else { return [] }
+        let count = holeCount(for: match, sport: sport)
+        let holes = (1...count).map { "Hole\($0)" }
+        return holes + ["TotalStrokes", "TotalPutts"]
+    }
+
+    private static func holeScoresRow(for match: MatchRecord, sport: any SportDefinition, player: Player) -> [String] {
+        guard sport.supportsHoles else { return [] }
+        let count = holeCount(for: match, sport: sport)
+        let scores = match.playerHoleScores[player.id] ?? Array(repeating: 0, count: count)
+        let putts = match.playerHolePutts[player.id] ?? Array(repeating: 0, count: count)
+        let paddedScores = Array(scores.prefix(count)) + Array(repeating: 0, count: max(0, count - scores.count))
+        let paddedPutts = Array(putts.prefix(count)) + Array(repeating: 0, count: max(0, count - putts.count))
+        let totalStrokes = paddedScores.reduce(0, +)
+        let totalPutts = paddedPutts.reduce(0, +)
+        return paddedScores.map { "\($0)" } + ["\(totalStrokes)", "\(totalPutts)"]
+    }
+
+    private static func holeCount(for match: MatchRecord, sport: any SportDefinition) -> Int {
+        if let count = match.playerHoleScores.values.first?.count {
+            return count
+        }
+        if sport.supportsHoles {
+            return sport.defaultHoleCount
+        }
+        return 0
     }
 }

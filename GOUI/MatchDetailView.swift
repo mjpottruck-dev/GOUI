@@ -30,14 +30,28 @@ struct MatchDetailView: View {
 
                                 Spacer()
 
-                                Text("\(match.goalsFor)–\(match.goalsAgainst)")
-                                    .font(.system(size: 22, weight: .semibold, design: .monospaced))
-                                    .foregroundStyle(GoStatsTheme.text)
+                                if sport.supportsTeamScore {
+                                    Text("\(match.goalsFor)–\(match.goalsAgainst)")
+                                        .font(.system(size: 22, weight: .semibold, design: .monospaced))
+                                        .foregroundStyle(GoStatsTheme.text)
+                                } else {
+                                    Text("Individual")
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundStyle(GoStatsTheme.text2)
+                                }
                             }
 
                             HStack(spacing: 10) {
-                                chip("Time", secondsToTime(match.secondsElapsed))
-                                chip("Field", "\(match.fieldSize)v\(match.fieldSize)")
+                                if sport.supportsTimer {
+                                    chip("Time", secondsToTime(match.secondsElapsed))
+                                }
+                                if sport.supportsTeamScore {
+                                    chip("Field", "\(match.fieldSize)v\(match.fieldSize)")
+                                }
+                                chip("Sport", sport.displayName)
+                                if let templateName = match.templateName, !templateName.isEmpty {
+                                    chip("Template", templateName)
+                                }
                             }
 
                             if !match.title.isEmpty || !match.notes.isEmpty {

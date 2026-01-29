@@ -22,6 +22,10 @@ struct MatchView: View {
     @State private var showShotDialog = false
     @State private var showCardDialog = false
     @State private var showSubSheet = false
+    @State private var showPlayerPicker = false
+    @State private var showAssistPickerSheet = false
+    @State private var showHoleEntrySheet = false
+    @State private var pendingHolePlayer: Player? = nil
 
     private var resolvedFormation: Formation {
         store.formation ?? Formation.allCases.first!
@@ -116,6 +120,36 @@ struct MatchView: View {
                 onKeepPaused: {}
             )
         }
+        .sheet(isPresented: $showPlayerPicker) {
+            if let eventType = pendingEventType {
+                PlayerPickerSheet(eventType: eventType, store: store) { player in
+                    handlePlayerSelection(player, for: eventType)
+                }
+            }
+        }
+        .sheet(isPresented: $showAssistPickerSheet, onDismiss: {
+            if pendingScorer != nil {
+                pendingScorer = nil
+                pendingEventType = nil
+            }
+        }) {
+            if let eventType = pendingEventType, let scorer = pendingScorer {
+                PlayerFieldPicker(store: store, title: "Assist • \(eventType.label)") { player in
+                    store.recordEvent(eventType: eventType, primaryPlayer: scorer, secondaryPlayer: player)
+                    pendingScorer = nil
+                    pendingEventType = nil
+                    showAssistPickerSheet = false
+                }
+            }
+        }
+        .sheet(isPresented: $showHoleEntrySheet) {
+            if let player = pendingHolePlayer {
+                GolfHoleEntrySheet(store: store, player: player) {
+                    pendingHolePlayer = nil
+                    pendingEventType = nil
+                }
+            }
+        }
         .onAppear { store.loadSampleIfEmpty() }
         .onChange(of: scenePhase) { _, newValue in
             if newValue == .active {
@@ -130,69 +164,98 @@ struct MatchView: View {
         LiquidGlassContainer(material: .thinMaterial) {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
-                    Button(action: handleStartPause) {
-                        Text(primaryControlTitle)
-                            .font(.system(size: 14, weight: .semibold))
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 8)
-                            .background(
-                                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    .fill(GoStatsTheme.primary.opacity(0.95))
-                            )
-                            .foregroundStyle(.white)
+                    if store.sport.supportsTimer {
+                        Button(action: handleStartPause) {
+                            Text(primaryControlTitle)
+                                .font(.system(size: 14, weight: .semibold))
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 8)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                        .fill(GoStatsTheme.primary.opacity(0.95))
+                                )
+                                .foregroundStyle(.white)
+                        }
+                        .buttonStyle(.plain)
+                    } else if store.sport.supportsPeriods {
+                        Button(action: handleAdvancePeriod) {
+                            Text("Next Set")
+                                .font(.system(size: 14, weight: .semibold))
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 8)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                        .fill(GoStatsTheme.primary.opacity(0.95))
+                                )
+                                .foregroundStyle(.white)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(!store.hasNextPeriod())
                     }
-                    .buttonStyle(.plain)
 
                     Spacer()
 
-                    Text(store.currentPeriodLabel())
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(GoStatsTheme.text2)
+                    if store.sport.supportsPeriods || store.sport.supportsHoles {
+                        Text(currentSegmentLabel)
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(GoStatsTheme.text2)
+                    }
                 }
 
                 HStack(alignment: .center) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(store.timeString)
-                            .font(.system(size: 26, weight: .semibold, design: .monospaced))
-                            .foregroundStyle(GoStatsTheme.text)
+                    if store.sport.supportsTimer {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(store.timeString)
+                                .font(.system(size: 26, weight: .semibold, design: .monospaced))
+                                .foregroundStyle(GoStatsTheme.text)
 
-                        Text("TIME")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(GoStatsTheme.text2)
+                            Text("TIME")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(GoStatsTheme.text2)
+                        }
                     }
 
-                    Spacer()
+                    if store.sport.supportsTeamScore {
+                        Spacer()
 
-                    Text("\(store.goalsFor)–\(store.goalsAgainst)")
-                        .font(.system(size: 30, weight: .semibold, design: .monospaced))
-                        .foregroundStyle(GoStatsTheme.text)
+                        Text("\(store.goalsFor)–\(store.goalsAgainst)")
+                            .font(.system(size: 30, weight: .semibold, design: .monospaced))
+                            .foregroundStyle(GoStatsTheme.text)
+                    }
                 }
 
+                if !store.sport.supportsTeamScore {
+                    individualScoreTable
+                }
             }
         }
     }
 
     private var fieldCard: some View {
-        LiquidGlassContainer {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    Text("FIELD")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(GoStatsTheme.text2)
+        Group {
+            if store.sport.supportsCourtOverlay {
+                LiquidGlassContainer {
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Text("FIELD")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(GoStatsTheme.text2)
 
-                    Spacer()
+                            Spacer()
 
-                    if store.sport.supportsPositions {
-                        Button(resolvedFormation.rawValue) {
-                            showFormationPicker = true
+                            if store.sport.supportsPositions {
+                                Button(resolvedFormation.rawValue) {
+                                    showFormationPicker = true
+                                }
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(GoStatsTheme.text2)
+                            }
                         }
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(GoStatsTheme.text2)
+
+                        FieldView1443(store: store)
+                            .frame(maxWidth: .infinity, alignment: .center)
                     }
                 }
-
-                FieldView1443(store: store)
-                    .frame(maxWidth: .infinity, alignment: .center)
             }
         }
     }
@@ -222,18 +285,19 @@ struct MatchView: View {
                 .disabled(!store.canUndo)
 
                 Spacer()
-
-                Button {
-                    haptic(.light)
-                    showSubSheet = true
-                } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: "arrow.triangle.2.circlepath")
-                        Text("Sub")
+                if store.sport.supportsTeamScore, store.sport.supportsCourtOverlay {
+                    Button {
+                        haptic(.light)
+                        showSubSheet = true
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "arrow.triangle.2.circlepath")
+                            Text("Sub")
+                        }
+                        .font(.system(size: 16, weight: .semibold))
                     }
-                    .font(.system(size: 16, weight: .semibold))
+                    .buttonStyle(GlassPillButtonStyle(fill: GoStatsTheme.primary.opacity(0.95)))
                 }
-                .buttonStyle(GlassPillButtonStyle(fill: GoStatsTheme.primary.opacity(0.95)))
             }
         }
     }
@@ -306,7 +370,7 @@ struct MatchView: View {
 
     private var fieldOverlay: some View {
         Group {
-            if showFieldOverlay, let currentQuickEvent = activeQuickEvent {
+            if showFieldOverlay, let currentQuickEvent = activeQuickEvent, store.sport.supportsCourtOverlay {
                 ZStack {
                     Color.black.opacity(0.35).ignoresSafeArea()
 
@@ -356,7 +420,7 @@ struct MatchView: View {
                     .padding(.bottom, 24)
                 }
             }
-            if showAssistPicker, let scorer = pendingScorer {
+            if showAssistPicker, let scorer = pendingScorer, store.sport.supportsCourtOverlay {
                 ZStack {
                     Color.black.opacity(0.35).ignoresSafeArea()
 
@@ -419,8 +483,12 @@ struct MatchView: View {
     private func startQuickEvent(_ eventType: EventType) {
         pendingEventType = eventType
         if eventType.requiresPlayer {
-            activeQuickEvent = eventType
-            showFieldOverlay = true
+            if store.sport.supportsCourtOverlay {
+                activeQuickEvent = eventType
+                showFieldOverlay = true
+            } else {
+                showPlayerPicker = true
+            }
         } else {
             store.recordEvent(eventType: eventType)
             pendingEventType = nil
@@ -429,11 +497,19 @@ struct MatchView: View {
 
     private func handleFieldSelection(_ player: Player, for eventType: EventType) {
         showFieldOverlay = false
+        handlePlayerSelection(player, for: eventType)
+    }
+
+    private func handlePlayerSelection(_ player: Player, for eventType: EventType) {
         pendingEventType = eventType
         switch eventType.uiAction {
         case .assist:
             pendingScorer = player
-            showAssistPicker = true
+            if store.sport.supportsCourtOverlay {
+                showAssistPicker = true
+            } else {
+                showAssistPickerSheet = true
+            }
         case .shot:
             pendingPlayer = player
             showShotDialog = true
@@ -443,6 +519,9 @@ struct MatchView: View {
         case .card:
             pendingPlayer = player
             showCardDialog = true
+        case .holeEntry:
+            pendingHolePlayer = player
+            showHoleEntrySheet = true
         case .direct:
             store.recordEvent(eventType: eventType, primaryPlayer: player)
             pendingEventType = nil
@@ -511,11 +590,51 @@ struct MatchView: View {
         }
     }
 
+    private func handleAdvancePeriod() {
+        haptic(.light)
+        store.advancePeriodAndResume()
+    }
+
     // MARK: - Haptics
 
     private func haptic(_ style: UIImpactFeedbackGenerator.FeedbackStyle) {
         guard showHaptics else { return }
         UIImpactFeedbackGenerator(style: style).impactOccurred()
+    }
+
+    private var currentSegmentLabel: String {
+        if store.sport.supportsHoles {
+            return "Hole \(store.currentPeriodIndex + 1)"
+        }
+        return store.currentPeriodLabel()
+    }
+
+    private var individualScoreTable: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("INDIVIDUAL \(store.sport.scoringRules.scoreLabel.uppercased())")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(GoStatsTheme.text2)
+
+            ForEach(sortedPlayers) { player in
+                HStack {
+                    Text(store.displayName(for: player))
+                        .font(.system(size: 14, weight: .semibold))
+                    Spacer()
+                    Text(individualScoreValue(for: player))
+                        .font(.system(size: 16, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(GoStatsTheme.text)
+                }
+            }
+        }
+    }
+
+    private func individualScoreValue(for player: Player) -> String {
+        let statID = store.sport.scoringRules.primaryStatID
+        return "\(player.statValue(for: statID))"
+    }
+
+    private var sortedPlayers: [Player] {
+        store.players.sorted { ($0.number, $0.name) < ($1.number, $1.name) }
     }
 }
 
