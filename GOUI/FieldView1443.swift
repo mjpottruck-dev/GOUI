@@ -128,6 +128,7 @@ struct FieldView1443: View {
     private func playerCircle(_ player: Player) -> some View {
         let name = store.displayName(for: player)
         let isSelected = selectedPlayerID == player.id
+        let isGoalkeeper = store.activeGoalkeeper()?.id == player.id
         return VStack(spacing: 2) {
             Text("\(player.number)")
                 .font(.system(size: 14, weight: .semibold, design: .monospaced))
@@ -151,6 +152,10 @@ struct FieldView1443: View {
         .overlay(
             Circle()
                 .stroke(isSelected ? GoStatsTheme.teal : Color.clear, lineWidth: 2)
+        )
+        .overlay(
+            Circle()
+                .stroke(isGoalkeeper ? Color.red : Color.clear, lineWidth: 2)
         )
         .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 4)
         .accessibilityLabel("\(player.name) number \(player.number)")
