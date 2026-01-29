@@ -44,6 +44,7 @@ struct TeamRosterView: View {
                                     isStarter: team?.startingOnFieldIDs.contains(player.id) == true,
                                     sport: sport
                                 )
+                                .equatable()
                                 .onTapGesture {
                                     editingPlayer = player
                                 }
@@ -269,7 +270,6 @@ private struct PlayerRowView: View, Equatable {
                 }
             }
         }
-        .equatable()
     }
 }
 
@@ -294,7 +294,7 @@ private struct EditPlayerSheet: View {
         self._position = State(initialValue: player.position)
         self._secondaryPosition = State(initialValue: player.secondaryPosition)
         self._positionName = State(initialValue: player.positionName ?? player.position.rawValue)
-        self._isGoalie = State(initialValue: player.isGoalie ?? player.position == .gk)
+        self._isGoalie = State(initialValue: player.isGoalie ?? (player.position == .gk))
         self._notes = State(initialValue: player.notes ?? "")
         self.playerID = player.id
         self.sport = sport
