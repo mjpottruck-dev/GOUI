@@ -58,11 +58,12 @@ final class CloudSyncManager {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             let operation = CKModifyRecordsOperation(recordsToSave: recordsToSave, recordIDsToDelete: recordIDsToDelete)
             operation.savePolicy = .allKeys
-            operation.modifyRecordsCompletionBlock = { _, _, error in
-                if let error {
-                    continuation.resume(throwing: error)
-                } else {
+            operation.modifyRecordsResultBlock = { result in
+                switch result {
+                case .success:
                     continuation.resume()
+                case .failure(let error):
+                    continuation.resume(throwing: error)
                 }
             }
             database.add(operation)
@@ -133,10 +134,12 @@ final class CloudSyncManager {
         localMatches: [UUID: [MatchRecord]]
     ) -> [Team] {
         let localByID = Dictionary(uniqueKeysWithValues: localTeams.map { ($0.id, $0) })
-        let remoteTeamsByID = Dictionary(uniqueKeysWithValues: remoteTeams.compactMap { record in
-            guard let id = UUID(uuidString: record.recordID.recordName) else { return nil }
-            return (id, record)
-        })
+        let remoteTeamsByID: [UUID: CKRecord] = Dictionary(
+            uniqueKeysWithValues: remoteTeams.compactMap { record -> (UUID, CKRecord)? in
+                guard let id = UUID(uuidString: record.recordID.recordName) else { return nil }
+                return (id, record)
+            }
+        )
 
         var playersByTeam: [UUID: [Player]] = [:]
         for record in remotePlayers {
