@@ -506,32 +506,54 @@ private struct SubstitutionSheet: View {
 
     var body: some View {
         NavigationStack {
-            List {
-                Section("On Field") {
-                    ForEach(onField) { player in
-                        SelectablePlayerChip(
-                            player: player,
-                            isSelected: selectedPlayer?.id == player.id,
-                            subtitle: positionSubtitle(for: player)
-                        )
-                        .onTapGesture {
-                            handleTap(player: player, isField: true)
-                        }
-                    }
-                }
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("On Field")
+                            .font(.headline)
+                            .padding(.horizontal)
 
-                Section("Bench") {
-                    ForEach(bench) { player in
-                        SelectablePlayerChip(
-                            player: player,
-                            isSelected: selectedPlayer?.id == player.id,
-                            subtitle: positionSubtitle(for: player)
+                        FieldView1443(
+                            store: store,
+                            selectedPlayerID: selectedIsField ? selectedPlayer?.id : nil,
+                            onSelectPlayer: { player in
+                                handleTap(player: player, isField: true)
+                            }
                         )
-                        .onTapGesture {
-                            handleTap(player: player, isField: false)
+                        .frame(height: 320)
+                        .padding(.horizontal)
+                    }
+
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Bench")
+                            .font(.headline)
+                            .padding(.horizontal)
+
+                        if bench.isEmpty {
+                            Text("No bench players available.")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal)
+                        } else {
+                            LazyVGrid(columns: benchColumns, spacing: 12) {
+                                ForEach(bench) { player in
+                                    Button {
+                                        handleTap(player: player, isField: false)
+                                    } label: {
+                                        BenchPlayerTile(
+                                            player: player,
+                                            isSelected: selectedPlayer?.id == player.id,
+                                            subtitle: positionSubtitle(for: player)
+                                        )
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                            .padding(.horizontal)
                         }
                     }
                 }
+                .padding(.vertical, 12)
             }
             .navigationTitle("Substitution")
             .toolbar {
@@ -545,6 +567,13 @@ private struct SubstitutionSheet: View {
                 Text("This swap would leave you without a primary goalkeeper.")
             }
         }
+    }
+
+    private var benchColumns: [GridItem] {
+        [
+            GridItem(.flexible(), spacing: 12),
+            GridItem(.flexible(), spacing: 12)
+        ]
     }
 
     private func handleTap(player: Player, isField: Bool) {
@@ -570,6 +599,55 @@ private struct SubstitutionSheet: View {
             return "\(player.position.rawValue) / \(secondary.rawValue)"
         }
         return player.position.rawValue
+    }
+}
+
+private struct BenchPlayerTile: View {
+    let player: Player
+    let isSelected: Bool
+    let subtitle: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .center, spacing: 8) {
+                ZStack {
+                    Circle()
+                        .fill(GoStatsTheme.teal.opacity(0.18))
+                        .overlay(
+                            Circle().stroke(GoStatsTheme.teal.opacity(0.32), lineWidth: 1)
+                        )
+
+                    Text("\(player.number)")
+                        .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(GoStatsTheme.text)
+                }
+                .frame(width: 34, height: 34)
+
+                Spacer(minLength: 0)
+
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(isSelected ? GoStatsTheme.teal : GoStatsTheme.text2.opacity(0.6))
+            }
+
+            Text(player.name)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(GoStatsTheme.text)
+
+            Text(subtitle)
+                .font(.system(size: 12, weight: .regular))
+                .foregroundStyle(GoStatsTheme.text2)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color(uiColor: .secondarySystemGroupedBackground).opacity(0.65))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(isSelected ? GoStatsTheme.teal.opacity(0.4) : GoStatsTheme.stroke.opacity(0.25), lineWidth: 1)
+        )
     }
 }
 
