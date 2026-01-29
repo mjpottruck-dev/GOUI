@@ -8,22 +8,26 @@ struct MainTabsView: View {
     let teamID: UUID
 
     var body: some View {
-        TabView {
-            MatchView(
-                store: store,
-                teamStore: teamStore,
-                teamID: teamID
-            )
-            .tabItem { Label("Match", systemImage: "soccerball") }
+        ZStack {
+            GoStatsTheme.bg.ignoresSafeArea()
 
-            TeamRosterView(teamStore: teamStore, teamID: teamID)
-                .tabItem { Label("Roster", systemImage: "person.3") }
+            TabView {
+                MatchView(
+                    store: store,
+                    teamStore: teamStore,
+                    teamID: teamID
+                )
+                .tabItem { Label("Match", systemImage: "soccerball") }
 
-            StatsView(teamStore: teamStore, teamID: teamID)
-                .tabItem { Label("Stats", systemImage: "chart.bar") }
+                TeamRosterView(teamStore: teamStore, teamID: teamID)
+                    .tabItem { Label("Roster", systemImage: "person.3") }
 
-            SettingsView()
-                .tabItem { Label("Settings", systemImage: "gearshape") }
+                StatsView(teamStore: teamStore, teamID: teamID)
+                    .tabItem { Label("Stats", systemImage: "chart.bar") }
+
+                SettingsView()
+                    .tabItem { Label("Settings", systemImage: "gearshape") }
+            }
         }
     }
 }

@@ -95,7 +95,7 @@ public struct ScoreCapsule: View {
                 }
 
                 Divider()
-                    .overlay(GoStatsTheme.uiGray.opacity(0.7))
+                    .overlay(GoStatsTheme.stroke.opacity(0.7))
 
                 HStack(spacing: GoStatsTheme.s16) {
                     kpi(title: kpiLeftTitle, value: kpiLeftValue)
@@ -117,4 +117,3 @@ public struct ScoreCapsule: View {
         }
     }
 }
-
