@@ -688,8 +688,8 @@ final class MatchStore: ObservableObject {
 
     private func holeDetail(strokes: Int, putts: Int?) -> String {
         if let putts {
-            return \"Strokes: \\(strokes) • Putts: \\(putts)\"
+            return "Strokes: \(strokes) • Putts: \(putts)"
         }
-        return \"Strokes: \\(strokes)\"
+        return "Strokes: \(strokes)"
     }
 }
