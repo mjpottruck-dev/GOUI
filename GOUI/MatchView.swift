@@ -444,9 +444,6 @@ struct MatchView: View {
     // MARK: - Substitution
 
     private func attemptSwap(fieldPlayer: Player, benchPlayer: Player) -> Bool {
-        let currentOnField = store.onFieldPlayers
-        let updated = currentOnField.filter { $0.id != fieldPlayer.id } + [benchPlayer]
-        guard updated.contains(where: { $0.position == .gk }) else { return false }
         store.refreshElapsedFromClock()
         store.pushUndo()
         if let index = store.onFieldLineupIDs.firstIndex(of: fieldPlayer.id) {
@@ -501,7 +498,6 @@ private struct SubstitutionSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var selectedPlayer: Player? = nil
     @State private var selectedIsField: Bool = false
-    @State private var showInvalidAlert = false
 
     private var onField: [Player] {
         store.onFieldPlayers
@@ -569,11 +565,6 @@ private struct SubstitutionSheet: View {
                     Button("Close") { dismiss() }
                 }
             }
-            .alert("Invalid Substitution", isPresented: $showInvalidAlert) {
-                Button("OK", role: .cancel) { }
-            } message: {
-                Text("This swap would leave you without a goalkeeper.")
-            }
         }
     }
 
@@ -592,9 +583,6 @@ private struct SubstitutionSheet: View {
             if success {
                 self.selectedPlayer = nil
                 self.selectedIsField = false
-            } else {
-                showInvalidAlert = true
-                self.selectedPlayer = nil
             }
             return
         }
