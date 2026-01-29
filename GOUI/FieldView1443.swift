@@ -31,7 +31,7 @@ struct FieldView1443: View {
                     .position(x: w * 0.5, y: h * 0.5)
             }
         }
-        .frame(height: 360)
+        .frame(height: 390)
         .accessibilityLabel("Field view")
     }
 
@@ -88,8 +88,8 @@ struct FieldView1443: View {
         }
 
         let lineCount = slots.count
-        let startY: CGFloat = 0.74
-        let endY: CGFloat = 0.22
+        let startY: CGFloat = 0.70
+        let endY: CGFloat = 0.20
         let step = lineCount > 1 ? (startY - endY) / CGFloat(lineCount - 1) : 0
 
         for (lineIndex, line) in slots.enumerated() {
@@ -124,7 +124,7 @@ struct FieldView1443: View {
         return ZStack {
             if let gk {
                 playerCircle(gk)
-                    .position(CGPoint(x: w * 0.50, y: h * 0.79))
+                    .position(CGPoint(x: w * 0.50, y: h * 0.86))
             }
 
             ForEach(Array(assigned.enumerated()), id: \.offset) { _, item in
