@@ -55,7 +55,7 @@ final class CloudSyncManager {
     }
 
     private func modifyRecords(recordsToSave: [CKRecord], recordIDsToDelete: [CKRecord.ID]) async throws {
-        try await withCheckedThrowingContinuation { continuation in
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             let operation = CKModifyRecordsOperation(recordsToSave: recordsToSave, recordIDsToDelete: recordIDsToDelete)
             operation.savePolicy = .allKeys
             operation.modifyRecordsCompletionBlock = { _, _, error in
@@ -70,14 +70,24 @@ final class CloudSyncManager {
     }
 
     private func fetchRecords(ofType type: String) async throws -> [CKRecord] {
-        try await withCheckedThrowingContinuation { continuation in
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<[CKRecord], Error>) in
             var records: [CKRecord] = []
+            var recordError: Error?
             let query = CKQuery(recordType: type, predicate: NSPredicate(value: true))
             let operation = CKQueryOperation(query: query)
-            operation.recordFetchedBlock = { record in
-                records.append(record)
+            operation.recordMatchedBlock = { _, result in
+                switch result {
+                case .success(let record):
+                    records.append(record)
+                case .failure(let error):
+                    recordError = error
+                }
             }
             operation.queryResultBlock = { result in
+                if let recordError {
+                    continuation.resume(throwing: recordError)
+                    return
+                }
                 switch result {
                 case .success:
                     continuation.resume(returning: records)
