@@ -8,6 +8,7 @@ struct FieldView1443: View {
     var body: some View {
         let onFieldPlayers = store.onFieldPlayers
         let formation = store.formation ?? .f433
+        let sport = store.sport
 
         GeometryReader { geo in
             let w = geo.size.width
@@ -23,7 +24,7 @@ struct FieldView1443: View {
                     .fill(Color(uiColor: .secondarySystemGroupedBackground).opacity(0.55))
                     .padding(inset)
 
-                fieldLines(size: fieldSize)
+                fieldLines(size: fieldSize, layout: sport.courtLayout)
                     .frame(width: fieldSize.width, height: fieldSize.height)
                     .position(x: w * 0.5, y: h * 0.5)
 
@@ -37,7 +38,7 @@ struct FieldView1443: View {
     }
 
     // MARK: - Field Lines
-    private func fieldLines(size: CGSize) -> some View {
+    private func fieldLines(size: CGSize, layout: CourtLayoutDefinition) -> some View {
         let w = size.width
         let h = size.height
 
@@ -45,26 +46,71 @@ struct FieldView1443: View {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .stroke(Color.primary.opacity(0.10), lineWidth: 1)
 
-            Path { p in
-                p.move(to: CGPoint(x: w * 0.10, y: h * 0.50))
-                p.addLine(to: CGPoint(x: w * 0.90, y: h * 0.50))
+            switch layout.kind {
+            case .soccer:
+                Path { p in
+                    p.move(to: CGPoint(x: w * 0.10, y: h * 0.50))
+                    p.addLine(to: CGPoint(x: w * 0.90, y: h * 0.50))
+                }
+                .stroke(Color.primary.opacity(0.10), lineWidth: 1)
+
+                Circle()
+                    .stroke(Color.primary.opacity(0.10), lineWidth: 1)
+                    .frame(width: min(w, h) * 0.22, height: min(w, h) * 0.22)
+                    .position(x: w * 0.50, y: h * 0.50)
+
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(Color.primary.opacity(0.10), lineWidth: 1)
+                    .frame(width: w * 0.42, height: h * 0.18)
+                    .position(x: w * 0.50, y: h * 0.82)
+
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(Color.primary.opacity(0.10), lineWidth: 1)
+                    .frame(width: w * 0.42, height: h * 0.18)
+                    .position(x: w * 0.50, y: h * 0.18)
+            case .waterPolo:
+                Path { p in
+                    p.move(to: CGPoint(x: w * 0.10, y: h * 0.50))
+                    p.addLine(to: CGPoint(x: w * 0.90, y: h * 0.50))
+                }
+                .stroke(Color.primary.opacity(0.10), lineWidth: 1)
+
+                Circle()
+                    .stroke(Color.primary.opacity(0.10), lineWidth: 1)
+                    .frame(width: min(w, h) * 0.18, height: min(w, h) * 0.18)
+                    .position(x: w * 0.50, y: h * 0.50)
+
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(Color.primary.opacity(0.10), lineWidth: 1)
+                    .frame(width: w * 0.55, height: h * 0.14)
+                    .position(x: w * 0.50, y: h * 0.86)
+
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(Color.primary.opacity(0.10), lineWidth: 1)
+                    .frame(width: w * 0.55, height: h * 0.14)
+                    .position(x: w * 0.50, y: h * 0.14)
+            case .basketball:
+                Path { p in
+                    p.move(to: CGPoint(x: w * 0.10, y: h * 0.50))
+                    p.addLine(to: CGPoint(x: w * 0.90, y: h * 0.50))
+                }
+                .stroke(Color.primary.opacity(0.10), lineWidth: 1)
+
+                Circle()
+                    .stroke(Color.primary.opacity(0.10), lineWidth: 1)
+                    .frame(width: min(w, h) * 0.20, height: min(w, h) * 0.20)
+                    .position(x: w * 0.50, y: h * 0.50)
+
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .stroke(Color.primary.opacity(0.10), lineWidth: 1)
+                    .frame(width: w * 0.36, height: h * 0.18)
+                    .position(x: w * 0.50, y: h * 0.80)
+
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .stroke(Color.primary.opacity(0.10), lineWidth: 1)
+                    .frame(width: w * 0.36, height: h * 0.18)
+                    .position(x: w * 0.50, y: h * 0.20)
             }
-            .stroke(Color.primary.opacity(0.10), lineWidth: 1)
-
-            Circle()
-                .stroke(Color.primary.opacity(0.10), lineWidth: 1)
-                .frame(width: min(w, h) * 0.22, height: min(w, h) * 0.22)
-                .position(x: w * 0.50, y: h * 0.50)
-
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .stroke(Color.primary.opacity(0.10), lineWidth: 1)
-                .frame(width: w * 0.42, height: h * 0.18)
-                .position(x: w * 0.50, y: h * 0.82)
-
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .stroke(Color.primary.opacity(0.10), lineWidth: 1)
-                .frame(width: w * 0.42, height: h * 0.18)
-                .position(x: w * 0.50, y: h * 0.18)
         }
     }
 

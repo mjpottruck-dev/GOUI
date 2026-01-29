@@ -46,8 +46,10 @@ struct EndMatchSheet: View {
                 }
 
                 Section {
-                    Button("Export → MaxPreps (.txt)") {
-                        exportMaxPreps()
+                    if store.sport.id == SportCatalog.defaultSportID {
+                        Button("Export → MaxPreps (.txt)") {
+                            exportMaxPreps()
+                        }
                     }
 
                     Button("Save Match") { saveMatch() }

@@ -4,6 +4,7 @@ struct CreatePlayerView: View {
     @Environment(\.dismiss) private var dismiss
 
     let onCreate: (Player) -> Void
+    let sport: any SportDefinition
 
     @State private var name: String = ""
     @State private var numberText: String = ""
@@ -12,8 +13,6 @@ struct CreatePlayerView: View {
     @State private var positionName: String = ""
     @State private var isGoalie: Bool = false
     @State private var notes: String = ""
-
-    private let sport = SportDefinition.current
 
     var body: some View {
         NavigationStack {

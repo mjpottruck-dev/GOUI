@@ -181,10 +181,12 @@ struct Player: Identifiable, Codable, Hashable {
     var pkFaced: Int = 0
     var pkSaved: Int = 0
     var pkConceded: Int = 0
+
+    var statValues: [String: Int] = [:]
 }
 
 extension Player {
-    func displayPosition(for sport: SportDefinition) -> String? {
+    func displayPosition(for sport: any SportDefinition) -> String? {
         guard sport.supportsPositions else { return nil }
         if let positionName {
             return positionName
@@ -197,6 +199,57 @@ extension Player {
             return isGoalie
         }
         return position == .gk
+    }
+
+    func statValue(for statID: String) -> Int {
+        if let value = statValues[statID] {
+            return value
+        }
+        return legacyStatValue(for: statID)
+    }
+
+    mutating func setStatValue(_ value: Int, for statID: String) {
+        statValues[statID] = value
+        setLegacyStatValue(value, for: statID)
+    }
+
+    mutating func incrementStat(_ statID: String, by delta: Int) {
+        let current = statValue(for: statID)
+        setStatValue(current + delta, for: statID)
+    }
+
+    private func legacyStatValue(for statID: String) -> Int {
+        switch statID {
+        case "goals": return goals
+        case "assists": return assists
+        case "shots": return shots
+        case "shotsOnTarget": return shotsOnTarget
+        case "yellowCards": return yellowCards
+        case "redCards": return redCards
+        case "saves": return saves
+        case "goalsConceded": return goalsConceded
+        case "pkFaced": return pkFaced
+        case "pkSaved": return pkSaved
+        case "pkConceded": return pkConceded
+        default: return 0
+        }
+    }
+
+    mutating private func setLegacyStatValue(_ value: Int, for statID: String) {
+        switch statID {
+        case "goals": goals = value
+        case "assists": assists = value
+        case "shots": shots = value
+        case "shotsOnTarget": shotsOnTarget = value
+        case "yellowCards": yellowCards = value
+        case "redCards": redCards = value
+        case "saves": saves = value
+        case "goalsConceded": goalsConceded = value
+        case "pkFaced": pkFaced = value
+        case "pkSaved": pkSaved = value
+        case "pkConceded": pkConceded = value
+        default: break
+        }
     }
 }
 
@@ -218,10 +271,72 @@ struct PlayerStatLine: Identifiable, Codable, Hashable {
     var pkSaved: Int = 0
     var pkConceded: Int = 0
 
+    var statValues: [String: Int] = [:]
+
     init() {}
 
     static func fromPlayer(_ player: Player) -> PlayerStatLine {
-        PlayerStatLine()
+        var line = PlayerStatLine()
+        line.statValues = player.statValues
+        line.syncLegacyStatsFromDictionary()
+        return line
+    }
+
+    func value(for statID: String) -> Int {
+        if let value = statValues[statID] {
+            return value
+        }
+        return legacyStatValue(for: statID)
+    }
+
+    mutating func setValue(_ value: Int, for statID: String) {
+        statValues[statID] = value
+        setLegacyStatValue(value, for: statID)
+    }
+
+    mutating func increment(_ statID: String, by delta: Int) {
+        let current = value(for: statID)
+        setValue(current + delta, for: statID)
+    }
+
+    mutating func syncLegacyStatsFromDictionary() {
+        for (statID, value) in statValues {
+            setLegacyStatValue(value, for: statID)
+        }
+    }
+
+    private func legacyStatValue(for statID: String) -> Int {
+        switch statID {
+        case "goals": return goals
+        case "assists": return assists
+        case "shots": return shots
+        case "shotsOnTarget": return shotsOnTarget
+        case "yellowCards": return yellowCards
+        case "redCards": return redCards
+        case "saves": return saves
+        case "goalsConceded": return goalsConceded
+        case "pkFaced": return pkFaced
+        case "pkSaved": return pkSaved
+        case "pkConceded": return pkConceded
+        default: return 0
+        }
+    }
+
+    mutating private func setLegacyStatValue(_ value: Int, for statID: String) {
+        switch statID {
+        case "goals": goals = value
+        case "assists": assists = value
+        case "shots": shots = value
+        case "shotsOnTarget": shotsOnTarget = value
+        case "yellowCards": yellowCards = value
+        case "redCards": redCards = value
+        case "saves": saves = value
+        case "goalsConceded": goalsConceded = value
+        case "pkFaced": pkFaced = value
+        case "pkSaved": pkSaved = value
+        case "pkConceded": pkConceded = value
+        default: break
+        }
     }
 }
 
@@ -241,6 +356,7 @@ struct MatchRecord: Identifiable, Codable, Hashable {
     var secondsElapsed: Int = 0
     var fieldSize: Int = 7
     var seasonID: UUID? = nil
+    var sportID: String = SportCatalog.defaultSportID
 
     var playerSeconds: [UUID: Int] = [:]
     var playerStats: [UUID: PlayerStatLine] = [:]
@@ -262,6 +378,7 @@ struct Team: Identifiable, Codable, Hashable {
     var primaryGoalkeeperID: UUID? = nil
     var secondaryGoalkeeperID: UUID? = nil
     var thirdGoalkeeperID: UUID? = nil
+    var sportID: String = SportCatalog.defaultSportID
 
     var matches: [MatchRecord] = []
 }

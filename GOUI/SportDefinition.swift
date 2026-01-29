@@ -1,11 +1,113 @@
-import Foundation
+import SwiftUI
 
-struct SportDefinition: Hashable {
-    var supportsGoalie: Bool
-    var supportsPositions: Bool
+enum SportSeason: String, CaseIterable {
+    case fall
+    case winter
+    case spring
 }
 
-extension SportDefinition {
-    static let soccer = SportDefinition(supportsGoalie: true, supportsPositions: true)
-    static let current = SportDefinition.soccer
+protocol SportDefinition {
+    var id: String { get }
+    var displayName: String { get }
+    var season: SportSeason { get }
+    var supportsGoalie: Bool { get }
+    var supportsPositions: Bool { get }
+    var periods: [PeriodDefinition] { get }
+    var statSchema: [StatType] { get }
+    var eventTypes: [EventType] { get }
+    var courtLayout: CourtLayoutDefinition { get }
+    var scoringRules: ScoringRules { get }
+}
+
+struct PeriodDefinition {
+    let name: String
+    let duration: TimeInterval
+    let maxCount: Int
+}
+
+struct StatType: Identifiable {
+    let id: String
+    let displayName: String
+    let shortLabel: String?
+    let countsForTeam: Bool
+    let countsForPlayer: Bool
+}
+
+enum EventUIAction: String {
+    case direct
+    case assist
+    case shot
+    case shotPenalty
+    case card
+}
+
+struct ShotOutcomeStats {
+    let onTarget: [String: Int]
+    let offTarget: [String: Int]
+}
+
+struct EventType: Identifiable {
+    let id: String
+    let label: String
+    let iconName: String
+    let requiresPlayer: Bool
+    let secondaryPlayerOptional: Bool
+    let isGoalieOnly: Bool
+    let usesGoalie: Bool
+    let uiAction: EventUIAction
+    let primaryStatChanges: [String: Int]
+    let secondaryStatChanges: [String: Int]
+    let shotOutcomeStats: ShotOutcomeStats?
+    let cardStatChanges: [CardType: [String: Int]]
+}
+
+enum CourtLayoutKind {
+    case soccer
+    case waterPolo
+    case basketball
+}
+
+struct CourtLayoutDefinition {
+    let kind: CourtLayoutKind
+}
+
+struct ScoringRules {
+    let scoreLabel: String
+    let primaryStatID: String
+    let teamEventPoints: [String: Int]
+    let opponentEventPoints: [String: Int]
+
+    func points(for eventID: String, isOpponent: Bool) -> Int? {
+        if isOpponent {
+            return opponentEventPoints[eventID]
+        }
+        return teamEventPoints[eventID]
+    }
+}
+
+enum SportCatalog {
+    static let soccerID = "soccer"
+    static let waterPoloID = "water_polo"
+    static let basketballID = "basketball"
+    static let defaultSportID = soccerID
+    private static var registry: [String: any SportDefinition] = [:]
+
+    @discardableResult
+    static func register(_ sport: any SportDefinition) -> any SportDefinition {
+        registry[sport.id] = sport
+        return sport
+    }
+
+    static var all: [any SportDefinition] {
+        registry.values.sorted { $0.displayName < $1.displayName }
+    }
+
+    static var defaultSport: any SportDefinition {
+        sport(for: defaultSportID)
+    }
+
+    static func sport(for id: String?) -> any SportDefinition {
+        let resolvedID = id ?? defaultSportID
+        return registry[resolvedID] ?? registry[defaultSportID] ?? SoccerSport()
+    }
 }

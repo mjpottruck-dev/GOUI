@@ -13,11 +13,11 @@ struct MatchView: View {
     @State private var showFormationPicker = false
     @State private var showSplitSheet = false
 
-    @State private var activeQuickEvent: MatchActionKind? = nil
+    @State private var activeQuickEvent: EventType? = nil
     @State private var showFieldOverlay = false
     @State private var pendingScorer: Player? = nil
     @State private var pendingPlayer: Player? = nil
-    @State private var pendingShotIsPenalty = false
+    @State private var pendingEventType: EventType? = nil
     @State private var showAssistPicker = false
     @State private var showShotDialog = false
     @State private var showCardDialog = false
@@ -90,8 +90,8 @@ struct MatchView: View {
             Button("Off Target") { confirmShot(onTarget: false) }
             Button("Cancel", role: .cancel) {
                 pendingPlayer = nil
-                pendingShotIsPenalty = false
                 activeQuickEvent = nil
+                pendingEventType = nil
             }
         }
         .confirmationDialog("Card", isPresented: $showCardDialog, titleVisibility: .visible) {
@@ -100,15 +100,18 @@ struct MatchView: View {
             Button("Cancel", role: .cancel) {
                 pendingPlayer = nil
                 activeQuickEvent = nil
+                pendingEventType = nil
             }
         }
         .sheet(isPresented: $showSubSheet) {
             SubstitutionSheet(store: store, onSwap: attemptSwap)
         }
         .sheet(isPresented: $showSplitSheet) {
-            SplitHalfSheet(
-                onSplit: {
-                    store.splitHalfAndResume()
+            SplitPeriodSheet(
+                currentPeriodName: store.currentPeriodLabel(),
+                nextPeriodName: store.nextPeriodLabel(),
+                onAdvance: {
+                    store.advancePeriodAndResume()
                 },
                 onKeepPaused: {}
             )
@@ -142,7 +145,7 @@ struct MatchView: View {
 
                     Spacer()
 
-                    Text(store.hasSplitHalf ? "2nd Half" : "1st Half")
+                    Text(store.currentPeriodLabel())
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(GoStatsTheme.text2)
                 }
@@ -179,11 +182,13 @@ struct MatchView: View {
 
                     Spacer()
 
-                    Button(resolvedFormation.rawValue) {
-                        showFormationPicker = true
+                    if store.sport.supportsPositions {
+                        Button(resolvedFormation.rawValue) {
+                            showFormationPicker = true
+                        }
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(GoStatsTheme.text2)
                     }
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(GoStatsTheme.text2)
                 }
 
                 FieldView1443(store: store)
@@ -233,9 +238,19 @@ struct MatchView: View {
         }
     }
 
+    private var teamEventTypes: [EventType] {
+        store.sport.eventTypes.filter { !$0.isGoalieOnly }
+    }
+
+    private var goalieEventTypes: [EventType] {
+        guard store.sport.supportsGoalie else { return [] }
+        return store.sport.eventTypes.filter { $0.isGoalieOnly }
+    }
+
     // MARK: - Quick Events
 
     private var quickEventsTeam: some View {
+        let eventTypes = teamEventTypes
         LiquidGlassContainer {
             VStack(alignment: .leading, spacing: 12) {
                 Text("QUICK EVENTS — TEAM")
@@ -243,36 +258,35 @@ struct MatchView: View {
                     .foregroundStyle(GoStatsTheme.text2)
 
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                    quickButton("Goal") { startQuickEvent(.goal) }
-                    quickButton("Shot") { startQuickEvent(.shot) }
-                    quickButton("Own Goal") { startQuickEvent(.ownGoal) }
-                    quickButton("PK Attempt") { startQuickEvent(.pkAttempt) }
-                    quickButton("Card") { startQuickEvent(.card) }
-                    quickButton("PK Made") { startQuickEvent(.pkMade) }
+                    ForEach(eventTypes) { eventType in
+                        quickButton(eventType.label) {
+                            startQuickEvent(eventType)
+                        }
+                    }
                 }
             }
         }
     }
 
     private var quickEventsKeeper: some View {
-        LiquidGlassContainer {
-            VStack(alignment: .leading, spacing: 12) {
-                Text("QUICK EVENTS — KEEPER")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(GoStatsTheme.text2)
+        let eventTypes = goalieEventTypes
+        return Group {
+            if eventTypes.isEmpty {
+                EmptyView()
+            } else {
+                LiquidGlassContainer {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("QUICK EVENTS — GOALIE")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(GoStatsTheme.text2)
 
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                    quickButton("Save") {
-                        store.recordKeeperSave()
-                    }
-                    quickButton("Conceded") {
-                        store.recordKeeperConceded()
-                    }
-                    quickButton("PK Saved") {
-                        store.recordKeeperPKSaved()
-                    }
-                    quickButton("PK Conceded") {
-                        store.recordKeeperConceded(isPenalty: true)
+                        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                            ForEach(eventTypes) { eventType in
+                                quickButton(eventType.label) {
+                                    startQuickEvent(eventType)
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -318,6 +332,7 @@ struct MatchView: View {
                         Button {
                             showFieldOverlay = false
                             activeQuickEvent = nil
+                            pendingEventType = nil
                         } label: {
                             HStack(spacing: 8) {
                                 Image(systemName: "xmark.circle.fill")
@@ -360,16 +375,22 @@ struct MatchView: View {
                         .padding(.horizontal, 16)
 
                         FieldView1443(store: store, onSelectPlayer: { player in
-                            store.recordGoal(scorer: scorer, assist: player)
+                            if let eventType = pendingEventType {
+                                store.recordEvent(eventType: eventType, primaryPlayer: scorer, secondaryPlayer: player)
+                            }
                             pendingScorer = nil
                             showAssistPicker = false
+                            pendingEventType = nil
                         })
                         .padding(.horizontal, 16)
 
                         Button {
-                            store.recordGoal(scorer: scorer, assist: nil)
+                            if let eventType = pendingEventType {
+                                store.recordEvent(eventType: eventType, primaryPlayer: scorer, secondaryPlayer: nil)
+                            }
                             pendingScorer = nil
                             showAssistPicker = false
+                            pendingEventType = nil
                         } label: {
                             Text("No Assist")
                                 .frame(maxWidth: 180)
@@ -395,50 +416,53 @@ struct MatchView: View {
 
     // MARK: - Quick Event Flow
 
-    private func startQuickEvent(_ kind: MatchActionKind) {
-        activeQuickEvent = kind
-        showFieldOverlay = true
+    private func startQuickEvent(_ eventType: EventType) {
+        pendingEventType = eventType
+        if eventType.requiresPlayer {
+            activeQuickEvent = eventType
+            showFieldOverlay = true
+        } else {
+            store.recordEvent(eventType: eventType)
+            pendingEventType = nil
+        }
     }
 
-    private func handleFieldSelection(_ player: Player, for kind: MatchActionKind) {
+    private func handleFieldSelection(_ player: Player, for eventType: EventType) {
         showFieldOverlay = false
-        switch kind {
-        case .goal:
+        pendingEventType = eventType
+        switch eventType.uiAction {
+        case .assist:
             pendingScorer = player
             showAssistPicker = true
         case .shot:
             pendingPlayer = player
-            pendingShotIsPenalty = false
             showShotDialog = true
-        case .pkAttempt:
+        case .shotPenalty:
             pendingPlayer = player
-            pendingShotIsPenalty = true
             showShotDialog = true
         case .card:
             pendingPlayer = player
             showCardDialog = true
-        case .pkMade:
-            store.recordPKMade(shooter: player)
-        case .ownGoal:
-            store.recordOwnGoal(player: player)
-        default:
-            break
+        case .direct:
+            store.recordEvent(eventType: eventType, primaryPlayer: player)
+            pendingEventType = nil
         }
         activeQuickEvent = nil
     }
 
     private func confirmShot(onTarget: Bool) {
-        guard let player = pendingPlayer else { return }
-        store.recordShot(shooter: player, onTarget: onTarget, isPenalty: pendingShotIsPenalty)
+        guard let player = pendingPlayer, let eventType = pendingEventType else { return }
+        store.recordEvent(eventType: eventType, primaryPlayer: player, shotOnTarget: onTarget)
         pendingPlayer = nil
-        pendingShotIsPenalty = false
+        pendingEventType = nil
     }
 
     private func confirmCard(type: CardType) {
-        if let player = pendingPlayer {
-            store.recordCard(player: player, card: type)
+        if let player = pendingPlayer, let eventType = pendingEventType {
+            store.recordEvent(eventType: eventType, primaryPlayer: player, cardType: type)
         }
         pendingPlayer = nil
+        pendingEventType = nil
     }
 
     // MARK: - Substitution
@@ -464,21 +488,24 @@ struct MatchView: View {
     // MARK: - Timer Controls
 
     private var primaryControlTitle: String {
-        if store.hasSplitHalf {
+        if store.isRunning {
+            return "Pause"
+        }
+        if !store.hasNextPeriod(), store.secondsElapsed > 0 {
             return "End Match"
         }
-        return store.isRunning ? "Pause" : "Start"
+        return "Start"
     }
 
     private func handleStartPause() {
         haptic(.light)
-        if store.hasSplitHalf {
-            showingEndSheet = true
-            return
-        }
         if store.isRunning {
             store.pauseGame()
-            showSplitSheet = true
+            if store.hasNextPeriod() {
+                showSplitSheet = true
+            } else {
+                showingEndSheet = true
+            }
         } else {
             store.startGame()
         }
@@ -593,10 +620,13 @@ private struct SubstitutionSheet: View {
     }
 
     private func positionSubtitle(for player: Player) -> String {
-        if let secondary = player.secondaryPosition {
-            return "\(player.position.rawValue) / \(secondary.rawValue)"
+        if store.sport.supportsPositions {
+            if let secondary = player.secondaryPosition {
+                return "\(player.position.rawValue) / \(secondary.rawValue)"
+            }
+            return player.position.rawValue
         }
-        return player.position.rawValue
+        return player.positionName ?? "No Position"
     }
 }
 
@@ -649,8 +679,10 @@ private struct BenchPlayerTile: View {
     }
 }
 
-private struct SplitHalfSheet: View {
-    let onSplit: () -> Void
+private struct SplitPeriodSheet: View {
+    let currentPeriodName: String
+    let nextPeriodName: String?
+    let onAdvance: () -> Void
     let onKeepPaused: () -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -659,20 +691,20 @@ private struct SplitHalfSheet: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 16) {
-                Text("Start the second half?")
+                Text(nextPeriodName == nil ? "Resume match?" : "Start next period?")
                     .font(.title2.weight(.semibold))
 
-                Text("End the first half and resume play in the second half.")
+                Text(nextPeriodDescription)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
 
                 VStack(spacing: 12) {
                     Button {
-                        onSplit()
+                        onAdvance()
                         dismiss()
                     } label: {
-                        Text("Start 2nd Half")
+                        Text(nextPeriodButtonTitle)
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(GlassPillButtonStyle(fill: GoStatsTheme.primary.opacity(0.95)))
@@ -699,7 +731,7 @@ private struct SplitHalfSheet: View {
                 }
             }
             .padding(24)
-            .navigationTitle("Half-Time")
+            .navigationTitle("Break")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -708,5 +740,19 @@ private struct SplitHalfSheet: View {
             }
         }
         .presentationDetents([.medium])
+    }
+
+    private var nextPeriodDescription: String {
+        if let nextPeriodName {
+            return "End \(currentPeriodName) and resume play in \(nextPeriodName)."
+        }
+        return "Resume play when you're ready."
+    }
+
+    private var nextPeriodButtonTitle: String {
+        if let nextPeriodName {
+            return "Start \(nextPeriodName)"
+        }
+        return "Resume"
     }
 }

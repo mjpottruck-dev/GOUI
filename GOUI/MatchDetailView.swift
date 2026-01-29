@@ -3,6 +3,7 @@ import SwiftUI
 struct MatchDetailView: View {
     let match: MatchRecord
     let team: Team
+    let sport: any SportDefinition
     @State private var selectedPlayerDetail: PlayerDetail? = nil
     @State private var shareSheetPayload: ShareSheetPayload? = nil
     @State private var exportError: String? = nil
@@ -76,20 +77,22 @@ struct MatchDetailView: View {
                     }
                     .padding(.horizontal, 16)
 
-                    LiquidGlassContainer(cornerRadius: 22) {
-                        Button(action: exportMaxPreps) {
-                            HStack(spacing: 10) {
-                                Image(systemName: "square.and.arrow.up")
-                                Text("Export → MaxPreps (.txt)")
-                                    .font(.system(size: 15, weight: .semibold))
-                                Spacer()
+                    if sport.id == SportCatalog.defaultSportID {
+                        LiquidGlassContainer(cornerRadius: 22) {
+                            Button(action: exportMaxPreps) {
+                                HStack(spacing: 10) {
+                                    Image(systemName: "square.and.arrow.up")
+                                    Text("Export → MaxPreps (.txt)")
+                                        .font(.system(size: 15, weight: .semibold))
+                                    Spacer()
+                                }
+                                .foregroundStyle(GoStatsTheme.text)
+                                .padding(.vertical, 6)
                             }
-                            .foregroundStyle(GoStatsTheme.text)
-                            .padding(.vertical, 6)
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
+                        .padding(.horizontal, 16)
                     }
-                    .padding(.horizontal, 16)
 
                     Spacer(minLength: 20)
                 }
@@ -115,7 +118,8 @@ struct MatchDetailView: View {
                                         .font(.system(size: 18, weight: .semibold))
                                         .foregroundStyle(GoStatsTheme.text)
 
-                                    Text("\(detail.player.position.rawValue) • \(secondsToTime(detail.seconds))")
+                                    let positionLabel = detail.player.displayPosition(for: sport) ?? "No Position"
+                                    Text("\(positionLabel) • \(secondsToTime(detail.seconds))")
                                         .font(.system(size: 13))
                                         .foregroundStyle(GoStatsTheme.text2)
                                 }
@@ -128,17 +132,9 @@ struct MatchDetailView: View {
                                         .foregroundStyle(GoStatsTheme.primary)
 
                                     VStack(spacing: 8) {
-                                        statsRow("Goals", detail.line.goals)
-                                        statsRow("Assists", detail.line.assists)
-                                        statsRow("Shots", detail.line.shots)
-                                        statsRow("Shots on Target", detail.line.shotsOnTarget)
-                                        statsRow("Yellow Cards", detail.line.yellowCards)
-                                        statsRow("Red Cards", detail.line.redCards)
-                                        statsRow("Saves", detail.line.saves)
-                                        statsRow("Goals Conceded", detail.line.goalsConceded)
-                                        statsRow("PK Faced", detail.line.pkFaced)
-                                        statsRow("PK Saved", detail.line.pkSaved)
-                                        statsRow("PK Conceded", detail.line.pkConceded)
+                                        ForEach(statTypesForDetail, id: \.id) { stat in
+                                            statsRow(stat.displayName, detail.line.value(for: stat.id))
+                                        }
                                     }
                                 }
                             }
@@ -175,7 +171,8 @@ struct MatchDetailView: View {
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(GoStatsTheme.text)
 
-                Text("\(player.position.rawValue) • \(secondsToTime(seconds))")
+                let positionLabel = player.displayPosition(for: sport) ?? "No Position"
+                Text("\(positionLabel) • \(secondsToTime(seconds))")
                     .font(.system(size: 12))
                     .foregroundStyle(GoStatsTheme.text2)
             }
@@ -183,10 +180,9 @@ struct MatchDetailView: View {
             Spacer()
 
             HStack(spacing: 10) {
-                statPill("G", "\(line.goals)")
-                statPill("A", "\(line.assists)")
-                statPill("S", "\(line.shots)")
-                statPill("SOT", "\(line.shotsOnTarget)")
+                ForEach(statTypesForRow, id: \.id) { stat in
+                    statPill(stat.shortLabel ?? stat.displayName, "\(line.value(for: stat.id))")
+                }
                 statsActionButton {
                     selectedPlayerDetail = PlayerDetail(player: player, line: line, seconds: seconds)
                 }
@@ -266,6 +262,14 @@ struct MatchDetailView: View {
                 .font(.system(size: 14, weight: .semibold, design: .monospaced))
                 .foregroundStyle(GoStatsTheme.text2)
         }
+    }
+
+    private var statTypesForRow: [StatType] {
+        Array(sport.statSchema.filter { $0.countsForPlayer }.prefix(4))
+    }
+
+    private var statTypesForDetail: [StatType] {
+        sport.statSchema.filter { $0.countsForPlayer }
     }
 
     private func exportMaxPreps() {

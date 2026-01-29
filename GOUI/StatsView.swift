@@ -3,6 +3,7 @@ import SwiftUI
 struct StatsView: View {
     @Bindable var teamStore: TeamStore
     let teamID: UUID
+    let sport: any SportDefinition
 
     @State private var selectedSeasonID: UUID? = nil
     @State private var showFullLeaderboard: Bool = false
@@ -21,22 +22,22 @@ struct StatsView: View {
         return team.matches.filter { $0.seasonID == selectedSeasonID }
     }
 
-    private var leaderboard: [(player: Player, goals: Int)] {
+    private var leaderboard: [(player: Player, value: Int)] {
         guard let team else { return [] }
         var totals: [UUID: Int] = [:]
         for match in matches {
             for (pid, line) in match.playerStats {
-                totals[pid, default: 0] += line.goals
+                totals[pid, default: 0] += line.value(for: sport.scoringRules.primaryStatID)
             }
         }
         let players = team.players.compactMap { player -> (Player, Int)? in
-            guard let goals = totals[player.id], goals > 0 else { return nil }
-            return (player, goals)
+            guard let value = totals[player.id], value > 0 else { return nil }
+            return (player, value)
         }
         return players.sorted { $0.1 > $1.1 }
     }
 
-    private var podium: [(player: Player, goals: Int)] {
+    private var podium: [(player: Player, value: Int)] {
         Array(leaderboard.prefix(3))
     }
 
@@ -101,18 +102,18 @@ struct StatsView: View {
     private var podiumCard: some View {
         LiquidGlassContainer(cornerRadius: 22) {
             VStack(alignment: .leading, spacing: 12) {
-                Text("TOP SCORERS")
+                Text("TOP \(primaryStatType.displayName.uppercased())")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(GoStatsTheme.primary)
 
                 if podium.isEmpty {
-                    Text("No goals yet this season.")
+                    Text("No \(primaryStatType.displayName.lowercased()) yet this season.")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(GoStatsTheme.text2)
                 } else {
                     HStack(spacing: 10) {
                         ForEach(Array(podium.enumerated()), id: \.offset) { index, entry in
-                            podiumChip(rank: index + 1, player: entry.player, goals: entry.goals)
+                            podiumChip(rank: index + 1, player: entry.player, value: entry.value)
                         }
                     }
                 }
@@ -128,14 +129,14 @@ struct StatsView: View {
                     .foregroundStyle(GoStatsTheme.primary)
 
                 if leaderboard.isEmpty {
-                    Text("No scorers yet. Save a match to populate stats.")
+                    Text("No \(primaryStatType.displayName.lowercased()) yet. Save a match to populate stats.")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(GoStatsTheme.text2)
                 } else {
                     VStack(spacing: 8) {
                         let visible = showFullLeaderboard ? leaderboard : Array(leaderboard.prefix(5))
                         ForEach(Array(visible.enumerated()), id: \.offset) { index, entry in
-                            leaderboardRow(rank: index + 1, player: entry.player, goals: entry.goals)
+                            leaderboardRow(rank: index + 1, player: entry.player, value: entry.value)
                         }
 
                         if leaderboard.count > 5 {
@@ -172,8 +173,8 @@ struct StatsView: View {
 
                 HStack(spacing: 10) {
                     statChip("Matches", "\(matches.count)")
-                    statChip("Goals For", "\(matches.reduce(0) { $0 + $1.goalsFor })")
-                    statChip("Goals Against", "\(matches.reduce(0) { $0 + $1.goalsAgainst })")
+                    statChip("\(sport.scoringRules.scoreLabel) For", "\(matches.reduce(0) { $0 + $1.goalsFor })")
+                    statChip("\(sport.scoringRules.scoreLabel) Against", "\(matches.reduce(0) { $0 + $1.goalsAgainst })")
                 }
             }
         }
@@ -188,7 +189,7 @@ struct StatsView: View {
 
                 if let team {
                     NavigationLink {
-                        TeamStatsView(team: team)
+                        TeamStatsView(team: team, sport: sport)
                     } label: {
                         HStack(spacing: 10) {
                             Image(systemName: "person.text.rectangle")
@@ -218,7 +219,7 @@ struct StatsView: View {
         }
     }
 
-    private func podiumChip(rank: Int, player: Player, goals: Int) -> some View {
+    private func podiumChip(rank: Int, player: Player, value: Int) -> some View {
         VStack(spacing: 6) {
             Text("#\(rank)")
                 .font(.system(size: 11, weight: .semibold))
@@ -227,7 +228,7 @@ struct StatsView: View {
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(GoStatsTheme.text)
                 .lineLimit(1)
-            Text("\(goals)")
+            Text("\(value)")
                 .font(.system(size: 18, weight: .semibold, design: .monospaced))
                 .foregroundStyle(GoStatsTheme.text)
         }
@@ -239,7 +240,7 @@ struct StatsView: View {
         )
     }
 
-    private func leaderboardRow(rank: Int, player: Player, goals: Int) -> some View {
+    private func leaderboardRow(rank: Int, player: Player, value: Int) -> some View {
         HStack {
             Text("#\(rank)")
                 .font(.system(size: 12, weight: .semibold, design: .monospaced))
@@ -252,7 +253,7 @@ struct StatsView: View {
 
             Spacer()
 
-            Text("\(goals)")
+            Text("\(value)")
                 .font(.system(size: 14, weight: .semibold, design: .monospaced))
                 .foregroundStyle(GoStatsTheme.text)
                 .padding(.horizontal, 10)
@@ -286,5 +287,10 @@ struct StatsView: View {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(Color(uiColor: .secondarySystemGroupedBackground).opacity(0.55))
         )
+    }
+
+    private var primaryStatType: StatType {
+        sport.statSchema.first(where: { $0.id == sport.scoringRules.primaryStatID })
+            ?? StatType(id: sport.scoringRules.primaryStatID, displayName: sport.scoringRules.scoreLabel, shortLabel: nil, countsForTeam: true, countsForPlayer: true)
     }
 }

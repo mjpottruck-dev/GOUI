@@ -72,7 +72,8 @@ struct HomePreMatchView: View {
 
                         NavigationLink {
                             if let teamID = selectedTeamID ?? teamStore.teams.first?.id {
-                                StatsView(teamStore: teamStore, teamID: teamID)
+                                let sport = SportCatalog.sport(for: teamStore.teams.first(where: { $0.id == teamID })?.sportID)
+                                StatsView(teamStore: teamStore, teamID: teamID, sport: sport)
                             } else {
                                 Text("Select a team")
                             }
@@ -83,7 +84,7 @@ struct HomePreMatchView: View {
                         NavigationLink {
                             if let teamID = selectedTeamID ?? teamStore.teams.first?.id,
                                let team = teamStore.teams.first(where: { $0.id == teamID }) {
-                                TeamStatsView(team: team)
+                                TeamStatsView(team: team, sport: SportCatalog.sport(for: team.sportID))
                             } else {
                                 Text("Select a team")
                             }
