@@ -10,7 +10,9 @@ final class MatchStore: ObservableObject {
     // MARK: - Timer
     @Published var isRunning: Bool = false
     @Published private(set) var elapsedSeconds: Int = 0
-    @Published var hasSplitHalf: Bool = false
+    @Published var currentPeriodIndex: Int = 0
+
+    @Published var sport: any SportDefinition
 
     private var startDate: Date? = nil
     private var accumulatedSeconds: Int = 0
@@ -18,6 +20,10 @@ final class MatchStore: ObservableObject {
     private var timer: Timer?
 
     var secondsElapsed: Int { elapsedSeconds }
+
+    init(sport: any SportDefinition = SportCatalog.defaultSport) {
+        self.sport = sport
+    }
 
     // Team + formation for current session
     @Published var currentTeamID: UUID? = nil
@@ -48,6 +54,7 @@ final class MatchStore: ObservableObject {
         let onFieldLineupIDs: [UUID]
         let formation: Formation?
         let fieldSize: Int
+        let currentPeriodIndex: Int
     }
 
     // MARK: - Computed
@@ -69,6 +76,24 @@ final class MatchStore: ObservableObject {
 
     var canUndo: Bool {
         !undoStack.isEmpty
+    }
+
+    func currentPeriodLabel() -> String {
+        guard !sport.periods.isEmpty else {
+            return currentPeriodIndex == 0 ? "Period 1" : "Period \(currentPeriodIndex + 1)"
+        }
+        let index = min(max(currentPeriodIndex, 0), sport.periods.count - 1)
+        return sport.periods[index].name
+    }
+
+    func nextPeriodLabel() -> String? {
+        let nextIndex = currentPeriodIndex + 1
+        guard nextIndex < sport.periods.count else { return nil }
+        return sport.periods[nextIndex].name
+    }
+
+    func hasNextPeriod() -> Bool {
+        nextPeriodLabel() != nil
     }
 
     // MARK: - Controls
@@ -93,8 +118,10 @@ final class MatchStore: ObservableObject {
         refreshElapsedFromClock()
     }
 
-    func splitHalfAndResume() {
-        hasSplitHalf = true
+    func advancePeriodAndResume() {
+        if currentPeriodIndex < max(0, sport.periods.count - 1) {
+            currentPeriodIndex += 1
+        }
         if !isRunning {
             startGame()
         }
@@ -128,7 +155,7 @@ final class MatchStore: ObservableObject {
         pauseGame()
         accumulatedSeconds = 0
         elapsedSeconds = 0
-        hasSplitHalf = false
+        currentPeriodIndex = 0
         lastPlayerUpdateSeconds = 0
 
         goalsFor = 0
@@ -140,6 +167,11 @@ final class MatchStore: ObservableObject {
         currentTeamID = team?.id
         currentSeasonID = seasonID
         self.formation = formation
+        if let team {
+            sport = SportCatalog.sport(for: team.sportID)
+        } else {
+            sport = SportCatalog.defaultSport
+        }
 
         if let team {
             fieldSize = team.fieldSize
@@ -157,6 +189,7 @@ final class MatchStore: ObservableObject {
                 resetPlayer.pkFaced = 0
                 resetPlayer.pkSaved = 0
                 resetPlayer.pkConceded = 0
+                resetPlayer.statValues = Dictionary(uniqueKeysWithValues: sport.statSchema.map { ($0.id, 0) })
                 return resetPlayer
             }
             let depth = Team.goalkeeperDepthIDs(
@@ -165,7 +198,11 @@ final class MatchStore: ObservableObject {
                 currentSecondary: team.secondaryGoalkeeperID,
                 currentThird: team.thirdGoalkeeperID
             )
-            goalkeeperDepthIDs = [depth.primary, depth.secondary, depth.third].compactMap { $0 }
+            if sport.supportsGoalie {
+                goalkeeperDepthIDs = [depth.primary, depth.secondary, depth.third].compactMap { $0 }
+            } else {
+                goalkeeperDepthIDs = []
+            }
             onFieldLineupIDs = team.startingOnFieldIDs
             onFieldIDs = Set(team.startingOnFieldIDs)
         } else {
@@ -192,7 +229,8 @@ final class MatchStore: ObservableObject {
                 onFieldIDs: onFieldIDs,
                 onFieldLineupIDs: onFieldLineupIDs,
                 formation: formation,
-                fieldSize: fieldSize
+                fieldSize: fieldSize,
+                currentPeriodIndex: currentPeriodIndex
             )
         )
     }
@@ -207,120 +245,47 @@ final class MatchStore: ObservableObject {
         onFieldLineupIDs = snap.onFieldLineupIDs
         formation = snap.formation
         fieldSize = snap.fieldSize
+        currentPeriodIndex = snap.currentPeriodIndex
     }
 
     // MARK: - Events + Stats
-    func recordGoal(scorer: Player, assist: Player?) {
+    func recordEvent(
+        eventType: EventType,
+        primaryPlayer: Player? = nil,
+        secondaryPlayer: Player? = nil,
+        shotOnTarget: Bool? = nil,
+        cardType: CardType? = nil
+    ) {
         pushUndo()
-        goalsFor += 1
-        updatePlayerStats(id: scorer.id) { p in
-            p.goals += 1
-            p.shots += 1
-            p.shotsOnTarget += 1
+
+        if let points = sport.scoringRules.points(for: eventType.id, isOpponent: false) {
+            goalsFor += points
         }
-        if let assist {
-            updatePlayerStats(id: assist.id) { p in
-                p.assists += 1
+        if let points = sport.scoringRules.points(for: eventType.id, isOpponent: true) {
+            goalsAgainst += points
+        }
+
+        if let player = resolvedPrimaryPlayer(for: eventType, primaryPlayer: primaryPlayer) {
+            applyStatChanges(eventType.primaryStatChanges, to: player.id)
+            if let shotOnTarget, let shotStats = eventType.shotOutcomeStats {
+                let changes = shotOnTarget ? shotStats.onTarget : shotStats.offTarget
+                applyStatChanges(changes, to: player.id)
+            }
+            if let cardType, let cardChanges = eventType.cardStatChanges[cardType] {
+                applyStatChanges(cardChanges, to: player.id)
             }
         }
-        addEvent(
-            kind: .goal,
-            title: "Goal — \(displayName(for: scorer))",
-            detail: assist.map { "Assist: \(displayName(for: $0))" }
-        )
-    }
 
-    func recordShot(shooter: Player, onTarget: Bool, isPenalty: Bool = false) {
-        pushUndo()
-        updatePlayerStats(id: shooter.id) { p in
-            p.shots += 1
-            if onTarget { p.shotsOnTarget += 1 }
+        if let secondary = secondaryPlayer {
+            applyStatChanges(eventType.secondaryStatChanges, to: secondary.id)
         }
-        let label = isPenalty ? "PK Attempt" : "Shot"
+
         addEvent(
-            kind: isPenalty ? .pkAttempt : .shot,
-            title: "\(label) — \(displayName(for: shooter))",
-            detail: onTarget ? "On Target" : "Off Target"
+            eventTypeID: eventType.id,
+            label: eventType.label,
+            title: eventTitle(for: eventType, primaryPlayer: primaryPlayer, secondaryPlayer: secondaryPlayer),
+            detail: eventDetail(for: eventType, secondaryPlayer: secondaryPlayer, shotOnTarget: shotOnTarget, cardType: cardType)
         )
-    }
-
-    func recordPKMade(shooter: Player) {
-        pushUndo()
-        goalsFor += 1
-        updatePlayerStats(id: shooter.id) { p in
-            p.goals += 1
-            p.shots += 1
-            p.shotsOnTarget += 1
-        }
-        addEvent(
-            kind: .pkMade,
-            title: "PK Made — \(displayName(for: shooter))",
-            detail: nil
-        )
-    }
-
-    func recordOwnGoal(player: Player) {
-        pushUndo()
-        goalsAgainst += 1
-        addEvent(
-            kind: .ownGoal,
-            title: "Own Goal — \(displayName(for: player))",
-            detail: nil
-        )
-    }
-
-    func recordCard(player: Player, card: CardType) {
-        pushUndo()
-        updatePlayerStats(id: player.id) { p in
-            switch card {
-            case .yellow:
-                p.yellowCards += 1
-            case .red:
-                p.redCards += 1
-            }
-        }
-        addEvent(
-            kind: .card,
-            title: "Card — \(displayName(for: player))",
-            detail: card.rawValue
-        )
-    }
-
-    func recordKeeperSave() {
-        guard let keeper = activeGoalkeeper() else { return }
-        pushUndo()
-        updatePlayerStats(id: keeper.id) { p in
-            p.saves += 1
-        }
-        addEvent(kind: .save, title: "Save — \(displayName(for: keeper))", detail: nil)
-    }
-
-    func recordKeeperConceded(isPenalty: Bool = false) {
-        guard let keeper = activeGoalkeeper() else { return }
-        pushUndo()
-        goalsAgainst += 1
-        updatePlayerStats(id: keeper.id) { p in
-            p.goalsConceded += 1
-            if isPenalty {
-                p.pkConceded += 1
-                p.pkFaced += 1
-            }
-        }
-        addEvent(
-            kind: isPenalty ? .pkConceded : .conceded,
-            title: "\(isPenalty ? "PK Conceded" : "Conceded") — \(displayName(for: keeper))",
-            detail: nil
-        )
-    }
-
-    func recordKeeperPKSaved() {
-        guard let keeper = activeGoalkeeper() else { return }
-        pushUndo()
-        updatePlayerStats(id: keeper.id) { p in
-            p.pkSaved += 1
-            p.pkFaced += 1
-        }
-        addEvent(kind: .pkSave, title: "PK Saved — \(displayName(for: keeper))", detail: nil)
     }
 
     private func updatePlayerStats(id: UUID, update: (inout Player) -> Void) {
@@ -330,12 +295,57 @@ final class MatchStore: ObservableObject {
         players[idx] = player
     }
 
-    private func addEvent(kind: MatchActionKind, title: String, detail: String?) {
-        let event = MatchEvent(kind: kind, seconds: secondsElapsed, title: title, detail: detail)
+    private func applyStatChanges(_ changes: [String: Int], to playerID: UUID) {
+        guard !changes.isEmpty else { return }
+        updatePlayerStats(id: playerID) { player in
+            for (statID, delta) in changes {
+                player.incrementStat(statID, by: delta)
+            }
+        }
+    }
+
+    private func addEvent(eventTypeID: String, label: String, title: String, detail: String?) {
+        let event = MatchEvent(eventTypeID: eventTypeID, label: label, seconds: secondsElapsed, title: title, detail: detail)
         events.insert(event, at: 0)
     }
 
+    private func resolvedPrimaryPlayer(for eventType: EventType, primaryPlayer: Player?) -> Player? {
+        if let primaryPlayer {
+            return primaryPlayer
+        }
+        if eventType.usesGoalie {
+            return activeGoalkeeper()
+        }
+        return nil
+    }
+
+    private func eventTitle(for eventType: EventType, primaryPlayer: Player?, secondaryPlayer: Player?) -> String {
+        if let player = resolvedPrimaryPlayer(for: eventType, primaryPlayer: primaryPlayer) {
+            return "\(eventType.label) — \(displayName(for: player))"
+        }
+        return eventType.label
+    }
+
+    private func eventDetail(
+        for eventType: EventType,
+        secondaryPlayer: Player?,
+        shotOnTarget: Bool?,
+        cardType: CardType?
+    ) -> String? {
+        if let secondaryPlayer, eventType.secondaryPlayerOptional {
+            return "Assist: \(displayName(for: secondaryPlayer))"
+        }
+        if let cardType {
+            return cardType.rawValue
+        }
+        if let shotOnTarget {
+            return shotOnTarget ? "On Target" : "Off Target"
+        }
+        return nil
+    }
+
     func activeGoalkeeper() -> Player? {
+        guard sport.supportsGoalie else { return nil }
         if let lineupKeeper = lineupGoalkeeper() {
             return lineupKeeper
         }
@@ -444,26 +454,53 @@ final class MatchStore: ObservableObject {
     func loadSampleIfEmpty() {
         guard players.isEmpty else { return }
 
-        fieldSize = 11
+        let sample: [Player]
+        switch sport.id {
+        case SportCatalog.basketballID:
+            fieldSize = 5
+            sample = [
+                Player(name: "Guard", number: 1, position: .cm),
+                Player(name: "Guard", number: 2, position: .cm),
+                Player(name: "Forward", number: 3, position: .cm),
+                Player(name: "Forward", number: 4, position: .cm),
+                Player(name: "Center", number: 5, position: .cm)
+            ]
+        case SportCatalog.waterPoloID:
+            fieldSize = 7
+            sample = [
+                Player(name: "Goalie", number: 1, position: .gk),
+                Player(name: "Field", number: 2, position: .cm),
+                Player(name: "Field", number: 3, position: .cm),
+                Player(name: "Field", number: 4, position: .cm),
+                Player(name: "Field", number: 5, position: .cm),
+                Player(name: "Field", number: 6, position: .cm),
+                Player(name: "Field", number: 7, position: .cm)
+            ]
+        default:
+            fieldSize = 11
+            sample = [
+                Player(name: "Keeper", number: 1, position: .gk),
 
-        let sample: [Player] = [
-            Player(name: "Keeper", number: 1, position: .gk),
+                Player(name: "RB", number: 2, position: .rb),
+                Player(name: "CB", number: 4, position: .cb),
+                Player(name: "CB", number: 5, position: .cb),
+                Player(name: "LB", number: 3, position: .lb),
 
-            Player(name: "RB", number: 2, position: .rb),
-            Player(name: "CB", number: 4, position: .cb),
-            Player(name: "CB", number: 5, position: .cb),
-            Player(name: "LB", number: 3, position: .lb),
+                Player(name: "CM", number: 8, position: .cm),
+                Player(name: "CDM", number: 6, position: .cdm),
+                Player(name: "CM", number: 10, position: .cm),
 
-            Player(name: "CM", number: 8, position: .cm),
-            Player(name: "CDM", number: 6, position: .cdm),
-            Player(name: "CM", number: 10, position: .cm),
+                Player(name: "RW", number: 7, position: .rw),
+                Player(name: "ST", number: 9, position: .st),
+                Player(name: "LW", number: 11, position: .lw)
+            ]
+        }
 
-            Player(name: "RW", number: 7, position: .rw),
-            Player(name: "ST", number: 9, position: .st),
-            Player(name: "LW", number: 11, position: .lw)
-        ]
-
-        players = sample
+        players = sample.map { player in
+            var updated = player
+            updated.statValues = Dictionary(uniqueKeysWithValues: sport.statSchema.map { ($0.id, 0) })
+            return updated
+        }
         let depth = Team.goalkeeperDepthIDs(from: sample)
         goalkeeperDepthIDs = [depth.primary, depth.secondary, depth.third].compactMap { $0 }
         onFieldLineupIDs = sample.map { $0.id }

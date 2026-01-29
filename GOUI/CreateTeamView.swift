@@ -12,6 +12,22 @@ struct CreateTeamView: View {
     @State private var primaryFormation: Formation = .f433
     @State private var players: [Player] = []
     @State private var showAddPlayer = false
+    @State private var sportID: String = SportCatalog.defaultSportID
+
+    private var sport: any SportDefinition {
+        SportCatalog.sport(for: sportID)
+    }
+
+    private var fieldSizeOptions: [Int] {
+        switch sport.id {
+        case SportCatalog.basketballID:
+            return [5]
+        case SportCatalog.waterPoloID:
+            return [7]
+        default:
+            return [7, 9, 11]
+        }
+    }
 
     private var sortedPlayers: [Player] {
         players.sorted { lhs, rhs in
@@ -27,15 +43,22 @@ struct CreateTeamView: View {
             Form {
                 Section("TEAM") {
                     TextField("Team name", text: $name)
+                    Picker("Sport", selection: $sportID) {
+                        ForEach(SportCatalog.all, id: \.id) { sport in
+                            Text(sport.displayName).tag(sport.id)
+                        }
+                    }
                     Picker("Field size", selection: $fieldSize) {
-                        Text("7v7").tag(7)
-                        Text("9v9").tag(9)
-                        Text("11v11").tag(11)
+                        ForEach(fieldSizeOptions, id: \.self) { value in
+                            Text("\(value)v\(value)").tag(value)
+                        }
                     }
 
-                    Picker("Primary Formation", selection: $primaryFormation) {
-                        ForEach(Formation.allCases) { formation in
-                            Text(formation.rawValue).tag(formation)
+                    if sport.supportsPositions {
+                        Picker("Primary Formation", selection: $primaryFormation) {
+                            ForEach(Formation.allCases) { formation in
+                                Text(formation.rawValue).tag(formation)
+                            }
                         }
                     }
                 }
@@ -55,7 +78,7 @@ struct CreateTeamView: View {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(player.name)
                                         .font(.system(size: 15, weight: .semibold))
-                                    Text(player.position.rawValue)
+                                    Text(player.displayPosition(for: sport) ?? "No Position")
                                         .font(.system(size: 12))
                                         .foregroundStyle(GoStatsTheme.text2)
                                 }
@@ -92,8 +115,13 @@ struct CreateTeamView: View {
             }
         }
         .sheet(isPresented: $showAddPlayer) {
-            CreatePlayerView { player in
+            CreatePlayerView(onCreate: { player in
                 players.append(player)
+            }, sport: sport)
+        }
+        .onChange(of: sportID) { _, _ in
+            if let first = fieldSizeOptions.first {
+                fieldSize = first
             }
         }
     }
@@ -111,9 +139,10 @@ struct CreateTeamView: View {
             fieldSize: fieldSize,
             startingOnFieldIDs: starterIDs,
             primaryFormation: primaryFormation,
-            primaryGoalkeeperID: goalkeeperDepth.primary,
-            secondaryGoalkeeperID: goalkeeperDepth.secondary,
-            thirdGoalkeeperID: goalkeeperDepth.third,
+            primaryGoalkeeperID: sport.supportsGoalie ? goalkeeperDepth.primary : nil,
+            secondaryGoalkeeperID: sport.supportsGoalie ? goalkeeperDepth.secondary : nil,
+            thirdGoalkeeperID: sport.supportsGoalie ? goalkeeperDepth.third : nil,
+            sportID: sportID,
             matches: []
         )
 

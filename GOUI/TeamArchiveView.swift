@@ -28,7 +28,7 @@ struct TeamArchiveView: View {
                     } else {
                         ForEach(team.matches) { match in
                             NavigationLink {
-                                MatchDetailView(match: match, team: team)
+                                MatchDetailView(match: match, team: team, sport: SportCatalog.sport(for: team.sportID))
                             } label: {
                                 archiveRow(match)
                             }

@@ -11,7 +11,9 @@ struct TeamRosterView: View {
     @State private var displayedPlayers: [Player] = []
     @State private var refreshTask: Task<Void, Never>? = nil
 
-    private let sport = SportDefinition.current
+    private var sport: any SportDefinition {
+        SportCatalog.sport(for: team?.sportID)
+    }
 
     private var teamIndex: Int? {
         teamStore.teams.firstIndex(where: { $0.id == teamID })
@@ -65,9 +67,9 @@ struct TeamRosterView: View {
             .navigationTitle(team?.name ?? "Roster")
             .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always))
             .sheet(isPresented: $showingAddPlayer) {
-                AddPlayerView { newPlayer in
+                AddPlayerView(onCreate: { newPlayer in
                     addPlayer(newPlayer)
-                }
+                }, sport: sport)
             }
             .sheet(item: $editingPlayer) { player in
                 EditPlayerSheet(player: player, sport: sport) { updated in
@@ -207,7 +209,7 @@ private func sortPlayers(_ a: Player, _ b: Player) -> Bool {
 private struct PlayerRowView: View, Equatable {
     let player: Player
     let isStarter: Bool
-    let sport: SportDefinition
+    let sport: any SportDefinition
 
     static func == (lhs: PlayerRowView, rhs: PlayerRowView) -> Bool {
         lhs.player.id == rhs.player.id
@@ -285,10 +287,10 @@ private struct EditPlayerSheet: View {
     @State private var notes: String
 
     let playerID: UUID
-    let sport: SportDefinition
+    let sport: any SportDefinition
     let onSave: (Player) -> Void
 
-    init(player: Player, sport: SportDefinition, onSave: @escaping (Player) -> Void) {
+    init(player: Player, sport: any SportDefinition, onSave: @escaping (Player) -> Void) {
         self._name = State(initialValue: player.name)
         self._numberText = State(initialValue: player.jersey.isEmpty ? "\(player.number)" : player.jersey)
         self._position = State(initialValue: player.position)

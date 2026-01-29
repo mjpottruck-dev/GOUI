@@ -2,7 +2,7 @@ import SwiftUI
 
 struct PlayerPickerSheet: View {
 
-    let kind: MatchActionKind
+    let eventType: EventType
     @ObservedObject var store: MatchStore
     let onPick: (Player) -> Void
 
@@ -10,10 +10,9 @@ struct PlayerPickerSheet: View {
         PlayerFieldPicker(
             mode: .primary,
             store: store,
-            title: "\(kind.rawValue) • Player"
+            title: "\(eventType.label) • Player"
         ) { p in
             onPick(p)
         }
     }
 }
-

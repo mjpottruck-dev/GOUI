@@ -321,6 +321,10 @@ final class TeamStore {
                     changed = true
                 }
             }
+            if teams[ti].sportID.isEmpty {
+                teams[ti].sportID = SportCatalog.defaultSportID
+                changed = true
+            }
             for mi in teams[ti].matches.indices {
                 let secondsKeys = Set(teams[ti].matches[mi].playerSeconds.keys)
                 let statsKeys = Set(teams[ti].matches[mi].playerStats.keys)
@@ -343,6 +347,33 @@ final class TeamStore {
                     teams[ti].matches[mi].seasonID = activeSeasonID
                     changed = true
                 }
+                if teams[ti].matches[mi].sportID.isEmpty {
+                    teams[ti].matches[mi].sportID = teams[ti].sportID
+                    changed = true
+                }
+                for pid in teams[ti].matches[mi].playerStats.keys {
+                    var line = teams[ti].matches[mi].playerStats[pid] ?? PlayerStatLine()
+                    if line.statValues.isEmpty {
+                        line.syncLegacyStatsFromDictionary()
+                        if line.statValues.isEmpty {
+                            line.statValues = [
+                                "goals": line.goals,
+                                "assists": line.assists,
+                                "shots": line.shots,
+                                "shotsOnTarget": line.shotsOnTarget,
+                                "yellowCards": line.yellowCards,
+                                "redCards": line.redCards,
+                                "saves": line.saves,
+                                "goalsConceded": line.goalsConceded,
+                                "pkFaced": line.pkFaced,
+                                "pkSaved": line.pkSaved,
+                                "pkConceded": line.pkConceded
+                            ]
+                        }
+                        teams[ti].matches[mi].playerStats[pid] = line
+                        changed = true
+                    }
+                }
             }
 
             for pi in teams[ti].players.indices {
@@ -356,6 +387,22 @@ final class TeamStore {
                 }
                 if teams[ti].players[pi].positionName == nil {
                     teams[ti].players[pi].positionName = teams[ti].players[pi].position.rawValue
+                    changed = true
+                }
+                if teams[ti].players[pi].statValues.isEmpty {
+                    teams[ti].players[pi].statValues = [
+                        "goals": teams[ti].players[pi].goals,
+                        "assists": teams[ti].players[pi].assists,
+                        "shots": teams[ti].players[pi].shots,
+                        "shotsOnTarget": teams[ti].players[pi].shotsOnTarget,
+                        "yellowCards": teams[ti].players[pi].yellowCards,
+                        "redCards": teams[ti].players[pi].redCards,
+                        "saves": teams[ti].players[pi].saves,
+                        "goalsConceded": teams[ti].players[pi].goalsConceded,
+                        "pkFaced": teams[ti].players[pi].pkFaced,
+                        "pkSaved": teams[ti].players[pi].pkSaved,
+                        "pkConceded": teams[ti].players[pi].pkConceded
+                    ]
                     changed = true
                 }
             }
@@ -467,6 +514,7 @@ private struct LegacyMatchRecord: Codable {
             secondsElapsed: secondsElapsed ?? 0,
             fieldSize: fieldSize ?? 7,
             seasonID: nil,
+            sportID: SportCatalog.defaultSportID,
             playerSeconds: playerSeconds ?? [:],
             playerStats: playerStats ?? [:]
         )

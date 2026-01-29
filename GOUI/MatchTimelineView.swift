@@ -59,7 +59,7 @@ struct MatchTimelineView: View {
 
             Spacer()
 
-            Text(e.kind.rawValue)
+            Text(e.label)
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(GoStatsTheme.text2)
                 .padding(.horizontal, 10)

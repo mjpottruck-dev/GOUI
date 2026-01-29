@@ -4,6 +4,7 @@ struct StatsOverviewView: View {
 
     @State var teamStore: TeamStore
     let teamID: UUID
+    let sport: any SportDefinition
 
     var body: some View {
         ZStack {
@@ -42,15 +43,18 @@ struct StatsOverviewView: View {
                 }
 
                 HStack(spacing: 10) {
-                    metricChip("GF", "\(totals.goalsFor)")
-                    metricChip("GA", "\(totals.goalsAgainst)")
-                    metricChip("GD", "\(totals.goalDiff)")
+                    metricChip("For", "\(totals.goalsFor)")
+                    metricChip("Against", "\(totals.goalsAgainst)")
+                    metricChip("Diff", "\(totals.goalDiff)")
                 }
 
                 HStack(spacing: 10) {
-                    metricChip("Shots", "\(totals.shots)")
-                    metricChip("SOT", "\(totals.shotsOnTarget)")
-                    metricChip("Conv", totals.conversionText)
+                    ForEach(teamSummaryStats, id: \.id) { stat in
+                        metricChip(stat.shortLabel ?? stat.displayName, "\(totals.statValues[stat.id, default: 0])")
+                    }
+                    if let conversionText = totals.conversionText {
+                        metricChip("Conv", conversionText)
+                    }
                 }
             }
         }
@@ -68,10 +72,9 @@ struct StatsOverviewView: View {
                     emptyRow(icon: "crown", text: "No stats yet. Save a match to generate leaders.")
                 } else {
                     VStack(spacing: 10) {
-                        leaderRow(title: "Goals", icon: "soccerball", items: leaders.goals)
-                        leaderRow(title: "Assists", icon: "arrowshape.turn.up.right.fill", items: leaders.assists)
-                        leaderRow(title: "Shots", icon: "scope", items: leaders.shots)
-                        leaderRow(title: "Saves", icon: "hand.raised.fill", items: leaders.saves)
+                        ForEach(leaders.entries, id: \.stat.id) { entry in
+                            leaderRow(title: entry.stat.displayName, icon: entry.iconName, items: entry.items)
+                        }
                     }
                 }
             }
@@ -100,7 +103,7 @@ struct StatsOverviewView: View {
                     VStack(spacing: 10) {
                         ForEach(matches.prefix(5)) { m in
                             NavigationLink {
-                                MatchDetailView(match: m, team: team ?? Team(name: "Team"))
+                                MatchDetailView(match: m, team: team ?? Team(name: "Team"), sport: sport)
                             } label: {
                                 recentRow(m)
                             }
@@ -238,41 +241,38 @@ struct StatsOverviewView: View {
         guard let team else { return Totals() }
 
         var gf = 0, ga = 0
-        var shots = 0, sot = 0
+        var statValues: [String: Int] = [:]
 
         for m in team.matches {
             gf += m.goalsFor
             ga += m.goalsAgainst
 
             for (_, line) in m.playerStats {
-                shots += line.shots
-                sot += line.shotsOnTarget
+                for stat in teamSummaryStats {
+                    statValues[stat.id, default: 0] += line.value(for: stat.id)
+                }
             }
         }
 
-        return Totals(goalsFor: gf, goalsAgainst: ga, shots: shots, shotsOnTarget: sot)
+        return Totals(goalsFor: gf, goalsAgainst: ga, statValues: statValues, conversionText: conversionText(for: statValues, goalsFor: gf))
     }
 
     private var leaders: Leaders {
         guard let team else { return Leaders() }
 
-        var agg: [UUID: PlayerStatLine] = [:]
+        var totalsByPlayer: [UUID: [String: Int]] = [:]
 
         for m in team.matches {
             for (pid, line) in m.playerStats {
-                var cur = agg[pid] ?? PlayerStatLine()
-                cur.goals += line.goals
-                cur.assists += line.assists
-                cur.shots += line.shots
-                cur.shotsOnTarget += line.shotsOnTarget
-                cur.saves += line.saves
-                agg[pid] = cur
+                for stat in leaderStatTypes {
+                    totalsByPlayer[pid, default: [:]][stat.id, default: 0] += line.value(for: stat.id)
+                }
             }
         }
 
-        func top(_ key: KeyPath<PlayerStatLine, Int>) -> [(String, Int)] {
-            let pairs: [(String, Int)] = agg.compactMap { pid, line in
-                let value = line[keyPath: key]
+        func top(stat: StatType) -> [(String, Int)] {
+            let pairs: [(String, Int)] = totalsByPlayer.compactMap { pid, statTotals in
+                let value = statTotals[stat.id, default: 0]
                 guard value > 0 else { return nil }
                 let name = team.players.first(where: { $0.id == pid }).map { "#\($0.number) \($0.name)" } ?? "Player"
                 return (name, value)
@@ -280,38 +280,68 @@ struct StatsOverviewView: View {
             return pairs.sorted { $0.1 > $1.1 }
         }
 
-        return Leaders(
-            goals: top(\.goals),
-            assists: top(\.assists),
-            shots: top(\.shots),
-            saves: top(\.saves)
-        )
+        let entries = leaderStatTypes.map { stat in
+            Leaders.Entry(stat: stat, items: top(stat: stat))
+        }
+        return Leaders(entries: entries)
+    }
+
+    private var teamSummaryStats: [StatType] {
+        let stats = sport.statSchema.filter { $0.countsForTeam }
+        let preferred = ["shots", "shotsOnTarget"].compactMap { id in
+            stats.first(where: { $0.id == id })
+        }
+        if !preferred.isEmpty {
+            return preferred
+        }
+        return Array(stats.prefix(2))
+    }
+
+    private var leaderStatTypes: [StatType] {
+        Array(sport.statSchema.filter { $0.countsForPlayer }.prefix(4))
+    }
+
+    private func conversionText(for statValues: [String: Int], goalsFor: Int) -> String? {
+        let shots = statValues["shots", default: 0]
+        guard shots > 0 else { return nil }
+        let pct = Double(goalsFor) / Double(shots) * 100.0
+        return String(format: "%.0f%%", pct)
     }
 }
 
 private struct Totals {
     var goalsFor: Int = 0
     var goalsAgainst: Int = 0
-    var shots: Int = 0
-    var shotsOnTarget: Int = 0
+    var statValues: [String: Int] = [:]
+    var conversionText: String? = nil
 
     var goalDiff: Int { goalsFor - goalsAgainst }
-
-    var conversionText: String {
-        let denom = max(shots, 1)
-        let pct = Double(goalsFor) / Double(denom) * 100.0
-        return String(format: "%.0f%%", pct)
-    }
 }
 
 private struct Leaders {
-    var goals: [(name: String, value: Int)] = []
-    var assists: [(name: String, value: Int)] = []
-    var shots: [(name: String, value: Int)] = []
-    var saves: [(name: String, value: Int)] = []
+    struct Entry {
+        let stat: StatType
+        let items: [(name: String, value: Int)]
+
+        var iconName: String {
+            switch stat.id {
+            case "goals":
+                return "soccerball"
+            case "assists":
+                return "arrowshape.turn.up.right.fill"
+            case "shots":
+                return "scope"
+            case "saves":
+                return "hand.raised.fill"
+            default:
+                return "chart.bar.fill"
+            }
+        }
+    }
+
+    var entries: [Entry] = []
 
     var hasAnyData: Bool {
-        !goals.isEmpty || !assists.isEmpty || !shots.isEmpty || !saves.isEmpty
+        entries.contains { !$0.items.isEmpty }
     }
 }
-

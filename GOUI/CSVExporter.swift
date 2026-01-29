@@ -5,8 +5,10 @@ enum CSVExporter {
     // MARK: - Public API
 
     /// Builds a CSV string for a single match (team roster + per-match stats snapshot).
-    static func matchCSV(team: Team, match: MatchRecord) -> String {
+    static func matchCSV(team: Team, match: MatchRecord, sport: any SportDefinition? = nil) -> String {
         var lines: [String] = []
+        let resolvedSport = sport ?? SportCatalog.sport(for: match.sportID)
+        let statColumns = resolvedSport.statSchema.filter { $0.countsForPlayer }
 
         // Header row
         lines.append([
@@ -21,19 +23,10 @@ enum CSVExporter {
             "PlayerNumber",
             "PlayerName",
             "Position",
-            "MinutesPlayed",
-            "Goals",
-            "Assists",
-            "Shots",
-            "ShotsOnTarget",
-            "YellowCards",
-            "RedCards",
-            "Saves",
-            "GoalsConceded",
-            "PKFaced",
-            "PKSaved",
-            "PKConceded"
-        ].joined(separator: ","))
+            "MinutesPlayed"
+        ]
+        .appending(contentsOf: statColumns.map(\.id))
+        .joined(separator: ","))
 
         let dateString = match.date.formatted(date: .numeric, time: .shortened)
 
@@ -43,6 +36,7 @@ enum CSVExporter {
 
             let st = match.playerStats[p.id] ?? PlayerStatLine()
 
+            let positionLabel = p.displayPosition(for: resolvedSport) ?? ""
             let row: [String] = [
                 esc(team.name),
                 esc(dateString),
@@ -54,20 +48,11 @@ enum CSVExporter {
                 "\(match.fieldSize)",
                 "\(p.number)",
                 esc(p.name),
-                esc(p.position.rawValue),     // ✅ FIX: enum -> string
-                "\(mins)",
-                "\(st.goals)",
-                "\(st.assists)",
-                "\(st.shots)",
-                "\(st.shotsOnTarget)",
-                "\(st.yellowCards)",
-                "\(st.redCards)",
-                "\(st.saves)",
-                "\(st.goalsConceded)",
-                "\(st.pkFaced)",
-                "\(st.pkSaved)",
-                "\(st.pkConceded)"
-            ]
+                esc(positionLabel),
+                "\(mins)"
+            ] + statColumns.map { stat in
+                "\(st.value(for: stat.id))"
+            }
 
             lines.append(row.joined(separator: ","))
         }
@@ -99,5 +84,3 @@ enum CSVExporter {
         return s
     }
 }
-
-

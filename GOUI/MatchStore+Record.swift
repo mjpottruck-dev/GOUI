@@ -14,23 +14,16 @@ extension MatchStore {
         rec.secondsElapsed = elapsedSeconds
         rec.fieldSize = fieldSize
         rec.seasonID = currentSeasonID
+        rec.sportID = sport.id
 
         rec.playerSeconds = Dictionary(uniqueKeysWithValues: players.map { ($0.id, $0.secondsPlayed) })
 
         var stats: [UUID: PlayerStatLine] = [:]
         for p in players {
             var line = PlayerStatLine()
-            line.goals = p.goals
-            line.assists = p.assists
-            line.shots = p.shots
-            line.shotsOnTarget = p.shotsOnTarget
-            line.yellowCards = p.yellowCards
-            line.redCards = p.redCards
-            line.saves = p.saves
-            line.goalsConceded = p.goalsConceded
-            line.pkFaced = p.pkFaced
-            line.pkSaved = p.pkSaved
-            line.pkConceded = p.pkConceded
+            for stat in sport.statSchema where stat.countsForPlayer {
+                line.setValue(p.statValue(for: stat.id), for: stat.id)
+            }
             stats[p.id] = line
         }
         rec.playerStats = stats

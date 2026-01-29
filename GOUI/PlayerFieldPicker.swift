@@ -54,7 +54,7 @@ struct PlayerFieldPicker: View {
 
                                             Spacer()
 
-                                            Text(p.position.rawValue)
+                                            Text(p.displayPosition(for: store.sport) ?? "No Position")
                                                 .font(.system(size: 12, weight: .semibold))
                                                 .foregroundStyle(GoStatsTheme.text2)
                                         }
@@ -84,4 +84,3 @@ struct PlayerFieldPicker: View {
         }
     }
 }
-

@@ -7,6 +7,11 @@ struct MainTabsView: View {
     @Bindable var teamStore: TeamStore
     let teamID: UUID
 
+    private var sport: any SportDefinition {
+        let team = teamStore.teams.first(where: { $0.id == teamID })
+        return SportCatalog.sport(for: team?.sportID)
+    }
+
     var body: some View {
         ZStack {
             GoStatsTheme.bg.ignoresSafeArea()
@@ -22,7 +27,7 @@ struct MainTabsView: View {
                 TeamRosterView(teamStore: teamStore, teamID: teamID)
                     .tabItem { Label("Roster", systemImage: "person.3") }
 
-                StatsView(teamStore: teamStore, teamID: teamID)
+                StatsView(teamStore: teamStore, teamID: teamID, sport: sport)
                     .tabItem { Label("Stats", systemImage: "chart.bar") }
 
                 SettingsView(teamStore: teamStore)
