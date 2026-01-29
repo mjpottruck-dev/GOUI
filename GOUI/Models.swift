@@ -233,6 +233,24 @@ struct Team: Identifiable, Codable, Hashable {
     var fieldSize: Int = 7
     var startingOnFieldIDs: [UUID] = []
     var primaryFormation: Formation = .f433
+    var primaryGoalkeeperID: UUID? = nil
 
     var matches: [MatchRecord] = []
+}
+
+extension Team {
+    static func primaryGoalkeeperID(from players: [Player], current: UUID? = nil) -> UUID? {
+        let goalkeepers = players.filter { $0.position == .gk }
+        if let current, goalkeepers.contains(where: { $0.id == current }) {
+            return current
+        }
+        guard !goalkeepers.isEmpty else { return nil }
+        let sortedGoalkeepers = goalkeepers.sorted { lhs, rhs in
+            if lhs.number == rhs.number {
+                return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+            }
+            return lhs.number < rhs.number
+        }
+        return sortedGoalkeepers.first?.id
+    }
 }
