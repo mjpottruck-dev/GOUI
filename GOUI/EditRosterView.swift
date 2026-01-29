@@ -11,6 +11,8 @@ struct EditRosterView: View {
     @State private var primaryGoalkeeperID: UUID?
     @State private var secondaryGoalkeeperID: UUID?
     @State private var thirdGoalkeeperID: UUID?
+    @State private var createdAt: Date
+    @State private var matches: [MatchRecord]
 
     let onSave: (Team) -> Void
     let existingTeamID: UUID
@@ -24,6 +26,8 @@ struct EditRosterView: View {
         self._primaryGoalkeeperID = State(initialValue: team.primaryGoalkeeperID)
         self._secondaryGoalkeeperID = State(initialValue: team.secondaryGoalkeeperID)
         self._thirdGoalkeeperID = State(initialValue: team.thirdGoalkeeperID)
+        self._createdAt = State(initialValue: team.createdAt)
+        self._matches = State(initialValue: team.matches)
         self.onSave = onSave
         self.existingTeamID = team.id
     }
@@ -123,13 +127,15 @@ struct EditRosterView: View {
                             id: existingTeamID,
                             name: teamName.trimmingCharacters(in: .whitespacesAndNewlines),
                             players: players,
+                            createdAt: createdAt,
+                            updatedAt: Date(),
                             fieldSize: fieldSize,
                             startingOnFieldIDs: clamped,
                             primaryFormation: primaryFormation,
                             primaryGoalkeeperID: resolvedDepth.primary,
                             secondaryGoalkeeperID: resolvedDepth.secondary,
                             thirdGoalkeeperID: resolvedDepth.third,
-                            matches: []
+                            matches: matches
                         )
                         onSave(team)
                         dismiss()

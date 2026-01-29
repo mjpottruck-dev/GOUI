@@ -6,7 +6,12 @@ final class TeamStore {
 
     // MARK: - State
     var teams: [Team] = [] {
-        didSet { save() }
+        didSet {
+            save()
+            if !isApplyingSync {
+                scheduleSync()
+            }
+        }
     }
 
     var seasons: [Season] = [] {
@@ -17,25 +22,58 @@ final class TeamStore {
         didSet { save() }
     }
 
+    var deletedTeamIDs: [UUID] = [] {
+        didSet { save() }
+    }
+
+    var deletedPlayerIDs: [UUID] = [] {
+        didSet { save() }
+    }
+
+    var cloudSyncEnabled: Bool = UserDefaults.standard.bool(forKey: SettingsKeys.cloudSyncEnabled) {
+        didSet {
+            UserDefaults.standard.set(cloudSyncEnabled, forKey: SettingsKeys.cloudSyncEnabled)
+            if cloudSyncEnabled {
+                scheduleSync()
+            }
+        }
+    }
+
+    var syncStatus = SyncStatus()
+
+    private let syncManager = CloudSyncManager()
+    private var syncTask: Task<Void, Never>? = nil
+    private var isApplyingSync = false
+
     // MARK: - Init
     init() {
         load()
         ensureDefaultSeason()
         seedDemoTeamIfNeeded()
+        if cloudSyncEnabled {
+            scheduleSync()
+        }
     }
 
     // MARK: - CRUD (Teams)
     func addTeam(_ team: Team) {
-        teams.append(team)
+        var newTeam = team
+        let now = Date()
+        newTeam.createdAt = now
+        newTeam.updatedAt = now
+        teams.append(newTeam)
     }
 
     func deleteTeam(_ team: Team) {
+        deletedTeamIDs.append(team.id)
         teams.removeAll { $0.id == team.id }
     }
 
     func updateTeam(_ team: Team) {
         if let idx = teams.firstIndex(where: { $0.id == team.id }) {
-            teams[idx] = team
+            var updated = team
+            updated.updatedAt = Date()
+            teams[idx] = updated
         }
     }
 
@@ -60,17 +98,47 @@ final class TeamStore {
     func addMatchRecord(teamID: UUID, record: MatchRecord) {
         guard let idx = teams.firstIndex(where: { $0.id == teamID }) else { return }
         teams[idx].matches.insert(record, at: 0)
+        teams[idx].updatedAt = Date()
     }
 
     func deleteMatch(teamID: UUID, matchID: UUID) {
         guard let idx = teams.firstIndex(where: { $0.id == teamID }) else { return }
         teams[idx].matches.removeAll { $0.id == matchID }
+        teams[idx].updatedAt = Date()
     }
 
     func updateMatch(teamID: UUID, match: MatchRecord) {
         guard let teamIdx = teams.firstIndex(where: { $0.id == teamID }) else { return }
         guard let matchIdx = teams[teamIdx].matches.firstIndex(where: { $0.id == match.id }) else { return }
         teams[teamIdx].matches[matchIdx] = match
+        teams[teamIdx].updatedAt = Date()
+    }
+
+    // MARK: - Players
+    func addPlayer(_ player: Player, to teamID: UUID) {
+        guard let idx = teams.firstIndex(where: { $0.id == teamID }) else { return }
+        var newPlayer = player
+        let now = Date()
+        newPlayer.createdAt = now
+        newPlayer.updatedAt = now
+        teams[idx].players.append(newPlayer)
+        teams[idx].updatedAt = now
+    }
+
+    func updatePlayer(_ player: Player, on teamID: UUID) {
+        guard let idx = teams.firstIndex(where: { $0.id == teamID }) else { return }
+        guard let playerIndex = teams[idx].players.firstIndex(where: { $0.id == player.id }) else { return }
+        var updated = player
+        updated.updatedAt = Date()
+        teams[idx].players[playerIndex] = updated
+        teams[idx].updatedAt = Date()
+    }
+
+    func deletePlayer(_ player: Player, from teamID: UUID) {
+        guard let idx = teams.firstIndex(where: { $0.id == teamID }) else { return }
+        deletedPlayerIDs.append(player.id)
+        teams[idx].players.removeAll { $0.id == player.id }
+        teams[idx].updatedAt = Date()
     }
 
     // MARK: - Persistence
@@ -82,7 +150,15 @@ final class TeamStore {
     private func save() {
         do {
             let encoder = JSONEncoder()
-            let data = try encoder.encode(AppData(teams: teams, seasons: seasons, activeSeasonID: activeSeasonID))
+            let data = try encoder.encode(
+                AppData(
+                    teams: teams,
+                    seasons: seasons,
+                    activeSeasonID: activeSeasonID,
+                    deletedTeamIDs: deletedTeamIDs,
+                    deletedPlayerIDs: deletedPlayerIDs
+                )
+            )
             try data.write(to: fileURL, options: [.atomic])
         } catch {
             print("❌ TeamStore save failed:", error)
@@ -105,6 +181,8 @@ final class TeamStore {
                 teams = decoded.teams
                 seasons = decoded.seasons
                 activeSeasonID = decoded.activeSeasonID
+                deletedTeamIDs = decoded.deletedTeamIDs
+                deletedPlayerIDs = decoded.deletedPlayerIDs
                 migrateIfNeeded()
                 return
             }
@@ -113,6 +191,8 @@ final class TeamStore {
                 teams = decoded
                 seasons = []
                 activeSeasonID = nil
+                deletedTeamIDs = []
+                deletedPlayerIDs = []
                 migrateIfNeeded()
                 save()
                 return
@@ -122,6 +202,8 @@ final class TeamStore {
                 teams = legacy.map { $0.toTeam() }
                 seasons = []
                 activeSeasonID = nil
+                deletedTeamIDs = []
+                deletedPlayerIDs = []
                 migrateIfNeeded()
                 save()
                 return
@@ -131,12 +213,16 @@ final class TeamStore {
             teams = []
             seasons = []
             activeSeasonID = nil
+            deletedTeamIDs = []
+            deletedPlayerIDs = []
 
         } catch {
             print("❌ TeamStore load failed:", error)
             teams = []
             seasons = []
             activeSeasonID = nil
+            deletedTeamIDs = []
+            deletedPlayerIDs = []
         }
     }
 
@@ -200,8 +286,17 @@ final class TeamStore {
     // MARK: - Migration
     private func migrateIfNeeded() {
         var changed = false
+        let now = Date()
 
         for ti in teams.indices {
+            if teams[ti].createdAt > now {
+                teams[ti].createdAt = now
+                changed = true
+            }
+            if teams[ti].updatedAt > now {
+                teams[ti].updatedAt = now
+                changed = true
+            }
             let resolvedDepth = Team.goalkeeperDepthIDs(
                 from: teams[ti].players,
                 currentPrimary: teams[ti].primaryGoalkeeperID,
@@ -249,11 +344,65 @@ final class TeamStore {
                     changed = true
                 }
             }
+
+            for pi in teams[ti].players.indices {
+                if teams[ti].players[pi].createdAt > now {
+                    teams[ti].players[pi].createdAt = now
+                    changed = true
+                }
+                if teams[ti].players[pi].updatedAt > now {
+                    teams[ti].players[pi].updatedAt = now
+                    changed = true
+                }
+                if teams[ti].players[pi].positionName == nil {
+                    teams[ti].players[pi].positionName = teams[ti].players[pi].position.rawValue
+                    changed = true
+                }
+            }
         }
 
         if changed {
             save()
         }
+    }
+
+    private func scheduleSync() {
+        guard cloudSyncEnabled else { return }
+        syncTask?.cancel()
+        syncTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            await self?.performSync()
+        }
+    }
+
+    @MainActor
+    private func performSync() async {
+        guard cloudSyncEnabled else { return }
+        if syncStatus.isSyncing { return }
+        syncStatus.isSyncing = true
+        syncStatus.lastError = nil
+
+        let matchesByTeam = Dictionary(uniqueKeysWithValues: teams.map { ($0.id, $0.matches) })
+        let payload = SyncPayload(
+            teams: teams,
+            deletedTeamIDs: deletedTeamIDs,
+            deletedPlayerIDs: deletedPlayerIDs
+        )
+
+        do {
+            let result = try await syncManager.sync(payload: payload, localMatches: matchesByTeam)
+            isApplyingSync = true
+            teams = result.teams
+            deletedTeamIDs = result.deletedTeamIDs
+            deletedPlayerIDs = result.deletedPlayerIDs
+            isApplyingSync = false
+            syncStatus.lastSyncDate = result.lastSyncDate
+        } catch {
+            syncStatus.lastError = error.localizedDescription
+            print("❌ Cloud sync failed:", error)
+        }
+
+        syncStatus.isSyncing = false
     }
 }
 
@@ -261,6 +410,8 @@ private struct AppData: Codable {
     var teams: [Team]
     var seasons: [Season]
     var activeSeasonID: UUID?
+    var deletedTeamIDs: [UUID] = []
+    var deletedPlayerIDs: [UUID] = []
 }
 
 private struct LegacyTeam: Codable {

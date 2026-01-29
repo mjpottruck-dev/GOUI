@@ -25,7 +25,7 @@ struct MainTabsView: View {
                 StatsView(teamStore: teamStore, teamID: teamID)
                     .tabItem { Label("Stats", systemImage: "chart.bar") }
 
-                SettingsView()
+                SettingsView(teamStore: teamStore)
                     .tabItem { Label("Settings", systemImage: "gearshape") }
             }
         }
