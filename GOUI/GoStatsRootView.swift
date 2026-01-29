@@ -10,34 +10,39 @@ struct GoStatsRootView: View {
     @State private var goToTabs = false
 
     var body: some View {
-        NavigationStack {
-            HomePreMatchView(
-                store: store,
-                teamStore: teamStore,
-                selectedTeamID: $selectedTeamID,
-                onStartMatch: { teamID in
-                    selectedTeamID = teamID
-                    if let team = teamStore.teams.first(where: { $0.id == teamID }) {
-                        store.resetForNewMatch(
-                            team: team,
-                            formation: team.primaryFormation,
-                            seasonID: teamStore.activeSeasonID
-                        )
+        ZStack {
+            GoStatsTheme.bg.ignoresSafeArea()
+
+            NavigationStack {
+                HomePreMatchView(
+                    store: store,
+                    teamStore: teamStore,
+                    selectedTeamID: $selectedTeamID,
+                    onStartMatch: { teamID in
+                        selectedTeamID = teamID
+                        if let team = teamStore.teams.first(where: { $0.id == teamID }) {
+                            store.resetForNewMatch(
+                                team: team,
+                                formation: team.primaryFormation,
+                                seasonID: teamStore.activeSeasonID
+                            )
+                        }
+                        goToTabs = true
                     }
-                    goToTabs = true
-                }
-            )
-            .navigationDestination(isPresented: $goToTabs) {
-                if let tid = selectedTeamID {
-                    MainTabsView(
-                        store: store,
-                        teamStore: teamStore,
-                        teamID: tid
-                    )
-                } else {
-                    Text("No team selected")
+                )
+                .navigationDestination(isPresented: $goToTabs) {
+                    if let tid = selectedTeamID {
+                        MainTabsView(
+                            store: store,
+                            teamStore: teamStore,
+                            teamID: tid
+                        )
+                    } else {
+                        Text("No team selected")
+                    }
                 }
             }
+            .background(GoStatsTheme.bg)
         }
         .tint(GoStatsTheme.primary)
     }
