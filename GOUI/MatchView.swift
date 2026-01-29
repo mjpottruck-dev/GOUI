@@ -453,9 +453,15 @@ struct MatchView: View {
         }
         store.onFieldIDs.remove(fieldPlayer.id)
         store.onFieldIDs.insert(benchPlayer.id)
-        if benchPlayer.position == .gk {
-            store.promoteGoalkeeper(benchPlayer.id)
+        if store.activeGoalkeeperID == fieldPlayer.id {
+            if benchPlayer.position == .gk {
+                store.activeGoalkeeperID = benchPlayer.id
+                store.promoteGoalkeeper(benchPlayer.id)
+            } else {
+                store.activeGoalkeeperID = nil
+            }
         }
+        store.syncActiveGoalkeeper()
         store.markPlayerSecondsBaseline()
         return true
     }

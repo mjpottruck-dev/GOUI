@@ -31,6 +31,7 @@ final class MatchStore: ObservableObject {
     @Published var players: [Player] = []
     @Published var onFieldIDs: Set<UUID> = []
     @Published var onFieldLineupIDs: [UUID] = []
+    @Published var activeGoalkeeperID: UUID? = nil
     var goalkeeperDepthIDs: [UUID] = []
 
     // MARK: - Events
@@ -46,6 +47,7 @@ final class MatchStore: ObservableObject {
         let players: [Player]
         let onFieldIDs: Set<UUID>
         let onFieldLineupIDs: [UUID]
+        let activeGoalkeeperID: UUID?
         let formation: Formation?
         let fieldSize: Int
     }
@@ -168,12 +170,14 @@ final class MatchStore: ObservableObject {
             goalkeeperDepthIDs = [depth.primary, depth.secondary, depth.third].compactMap { $0 }
             onFieldLineupIDs = team.startingOnFieldIDs
             onFieldIDs = Set(team.startingOnFieldIDs)
+            syncActiveGoalkeeper()
         } else {
             fieldSize = 7
             players = []
             onFieldIDs = []
             onFieldLineupIDs = []
             goalkeeperDepthIDs = []
+            activeGoalkeeperID = nil
         }
 
         if players.isEmpty {
@@ -191,6 +195,7 @@ final class MatchStore: ObservableObject {
                 players: players,
                 onFieldIDs: onFieldIDs,
                 onFieldLineupIDs: onFieldLineupIDs,
+                activeGoalkeeperID: activeGoalkeeperID,
                 formation: formation,
                 fieldSize: fieldSize
             )
@@ -205,6 +210,7 @@ final class MatchStore: ObservableObject {
         players = snap.players
         onFieldIDs = snap.onFieldIDs
         onFieldLineupIDs = snap.onFieldLineupIDs
+        activeGoalkeeperID = snap.activeGoalkeeperID
         formation = snap.formation
         fieldSize = snap.fieldSize
     }
@@ -336,19 +342,28 @@ final class MatchStore: ObservableObject {
     }
 
     func activeGoalkeeper() -> Player? {
-        if let primaryID = goalkeeperDepthIDs.first,
-           onFieldIDs.contains(primaryID),
-           let keeper = players.first(where: { $0.id == primaryID }) {
+        if let resolvedID = resolvedActiveGoalkeeperID(),
+           let keeper = players.first(where: { $0.id == resolvedID }) {
             return keeper
         }
-        if !goalkeeperDepthIDs.isEmpty {
-            for id in goalkeeperDepthIDs where onFieldIDs.contains(id) {
-                if let keeper = players.first(where: { $0.id == id }) {
-                    return keeper
-                }
-            }
+        return players.first(where: { $0.position == .gk })
+    }
+
+    func syncActiveGoalkeeper() {
+        let resolved = resolvedActiveGoalkeeperID()
+        if activeGoalkeeperID != resolved {
+            activeGoalkeeperID = resolved
         }
-        return onFieldPlayers.first(where: { $0.position == .gk }) ?? players.first(where: { $0.position == .gk })
+    }
+
+    private func resolvedActiveGoalkeeperID() -> UUID? {
+        if let activeID = activeGoalkeeperID, onFieldIDs.contains(activeID) {
+            return activeID
+        }
+        if let depthID = goalkeeperDepthIDs.first(where: { onFieldIDs.contains($0) }) {
+            return depthID
+        }
+        return players.first(where: { onFieldIDs.contains($0.id) && $0.position == .gk })?.id
     }
 
     func promoteGoalkeeper(_ id: UUID) {
@@ -453,5 +468,6 @@ final class MatchStore: ObservableObject {
         goalkeeperDepthIDs = [depth.primary, depth.secondary, depth.third].compactMap { $0 }
         onFieldLineupIDs = sample.map { $0.id }
         onFieldIDs = Set(sample.map { $0.id })
+        syncActiveGoalkeeper()
     }
 }
