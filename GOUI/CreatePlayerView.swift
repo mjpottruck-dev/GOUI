@@ -35,10 +35,13 @@ struct CreatePlayerView: View {
 
                 Section {
                     Button("Create Player") {
-                        let number = Int(numberText.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0
+                        let trimmedNumber = numberText.trimmingCharacters(in: .whitespacesAndNewlines)
+                        let number = Int(trimmedNumber) ?? 0
+                        let jersey = trimmedNumber.isEmpty ? "\(number)" : trimmedNumber
                         let newPlayer = Player(
                             name: name.trimmingCharacters(in: .whitespacesAndNewlines),
                             number: number,
+                            jersey: jersey,
                             position: position,
                             secondaryPosition: secondaryPosition
                         )

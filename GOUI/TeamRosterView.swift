@@ -123,7 +123,7 @@ private struct EditPlayerSheet: View {
 
     init(player: Player, onSave: @escaping (Player) -> Void) {
         self._name = State(initialValue: player.name)
-        self._numberText = State(initialValue: "\(player.number)")
+        self._numberText = State(initialValue: player.jersey.isEmpty ? "\(player.number)" : player.jersey)
         self._position = State(initialValue: player.position)
         self._secondaryPosition = State(initialValue: player.secondaryPosition)
         self.playerID = player.id
@@ -159,11 +159,14 @@ private struct EditPlayerSheet: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Save") {
-                        let number = Int(numberText.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0
+                        let trimmedNumber = numberText.trimmingCharacters(in: .whitespacesAndNewlines)
+                        let number = Int(trimmedNumber) ?? 0
+                        let jersey = trimmedNumber.isEmpty ? "\(number)" : trimmedNumber
                         let updated = Player(
                             id: playerID,
                             name: name.trimmingCharacters(in: .whitespacesAndNewlines),
                             number: number,
+                            jersey: jersey,
                             position: position,
                             secondaryPosition: secondaryPosition
                         )
