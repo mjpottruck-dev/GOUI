@@ -23,6 +23,19 @@ struct SyncResult {
 final class CloudSyncManager {
     private let database: CKDatabase
 
+    static var isAvailable: Bool {
+        #if targetEnvironment(simulator)
+        return false
+        #else
+        return true
+        #endif
+    }
+
+    static func makeIfAvailable() -> CloudSyncManager? {
+        guard isAvailable else { return nil }
+        return CloudSyncManager()
+    }
+
     init(container: CKContainer = CKContainer.default()) {
         self.database = container.privateCloudDatabase
     }

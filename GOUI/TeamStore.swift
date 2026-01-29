@@ -41,7 +41,7 @@ final class TeamStore {
 
     var syncStatus = SyncStatus()
 
-    private let syncManager = CloudSyncManager()
+    private lazy var syncManager: CloudSyncManager? = CloudSyncManager.makeIfAvailable()
     private var syncTask: Task<Void, Never>? = nil
     private var isApplyingSync = false
 
@@ -415,6 +415,7 @@ final class TeamStore {
 
     private func scheduleSync() {
         guard cloudSyncEnabled else { return }
+        guard syncManager != nil else { return }
         syncTask?.cancel()
         syncTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: 300_000_000)
@@ -425,6 +426,7 @@ final class TeamStore {
     @MainActor
     private func performSync() async {
         guard cloudSyncEnabled else { return }
+        guard let syncManager else { return }
         if syncStatus.isSyncing { return }
         syncStatus.isSyncing = true
         syncStatus.lastError = nil
