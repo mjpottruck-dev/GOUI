@@ -6,13 +6,22 @@ public enum GoStatsTheme {
     public static let teal = Color(hex: "#0ABAB5")
 
     // MARK: - Adaptive Backgrounds (Dark Mode compatible)
-    // Use system backgrounds so it looks native in light/dark automatically.
-    public static let bg = Color(uiColor: .systemGroupedBackground)
-    public static let surface = Color(uiColor: .secondarySystemGroupedBackground)
+    // Use a custom dark surface when in dark mode to match the requested look.
+    public static let bg = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 43 / 255, green: 43 / 255, blue: 43 / 255, alpha: 1)
+            : .systemGroupedBackground
+    })
+    public static let surface = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 36 / 255, green: 36 / 255, blue: 36 / 255, alpha: 1)
+            : .secondarySystemGroupedBackground
+    })
 
-    // MARK: - Neutrals
-    public static let uiGray = Color(hex: "#D9DEE3")
-    public static let uiGray2 = Color(hex: "#AEB8BF")
+    // MARK: - Neutrals (Adaptive)
+    public static let uiGray = Color(uiColor: .separator)
+    public static let uiGray2 = Color(uiColor: .tertiaryLabel)
+    public static let stroke = Color(uiColor: .separator)
 
     // MARK: - Adaptive Text (Dark Mode compatible)
     public static let text = Color(uiColor: .label)
@@ -67,4 +76,3 @@ public extension Color {
                   opacity: Double(a) / 255)
     }
 }
-
