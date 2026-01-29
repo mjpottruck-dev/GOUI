@@ -3,6 +3,7 @@ import SwiftUI
 struct MatchDetailView: View {
     let match: MatchRecord
     let team: Team
+    @State private var selectedPlayerDetail: PlayerDetail? = nil
 
     var body: some View {
         ZStack {
@@ -58,7 +59,7 @@ struct MatchDetailView: View {
                         VStack(alignment: .leading, spacing: 12) {
                             Text("PLAYER STATS")
                                 .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(GoStatsTheme.text2)
+                                .foregroundStyle(GoStatsTheme.primary)
 
                             VStack(spacing: 10) {
                                 ForEach(sortedPlayersForMatch, id: \.id) { p in
@@ -80,6 +81,60 @@ struct MatchDetailView: View {
         }
         .navigationTitle("Match")
         .navigationBarTitleDisplayMode(.inline)
+        .sheet(item: $selectedPlayerDetail) { detail in
+            NavigationStack {
+                ZStack {
+                    GoStatsTheme.bg.ignoresSafeArea()
+
+                    ScrollView {
+                        VStack(spacing: 12) {
+                            LiquidGlassContainer(cornerRadius: 22) {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("PLAYER")
+                                        .font(.system(size: 12, weight: .semibold))
+                                        .foregroundStyle(GoStatsTheme.primary)
+
+                                    Text("#\(detail.player.number) \(detail.player.name)")
+                                        .font(.system(size: 18, weight: .semibold))
+                                        .foregroundStyle(GoStatsTheme.text)
+
+                                    Text("\(detail.player.position.rawValue) • \(secondsToTime(detail.seconds))")
+                                        .font(.system(size: 13))
+                                        .foregroundStyle(GoStatsTheme.text2)
+                                }
+                            }
+
+                            LiquidGlassContainer(cornerRadius: 22) {
+                                VStack(alignment: .leading, spacing: 10) {
+                                    Text("MATCH STATS")
+                                        .font(.system(size: 12, weight: .semibold))
+                                        .foregroundStyle(GoStatsTheme.primary)
+
+                                    VStack(spacing: 8) {
+                                        statsRow("Goals", detail.line.goals)
+                                        statsRow("Assists", detail.line.assists)
+                                        statsRow("Shots", detail.line.shots)
+                                        statsRow("Shots on Target", detail.line.shotsOnTarget)
+                                        statsRow("Yellow Cards", detail.line.yellowCards)
+                                        statsRow("Red Cards", detail.line.redCards)
+                                        statsRow("Saves", detail.line.saves)
+                                        statsRow("Goals Conceded", detail.line.goalsConceded)
+                                        statsRow("PK Faced", detail.line.pkFaced)
+                                        statsRow("PK Saved", detail.line.pkSaved)
+                                        statsRow("PK Conceded", detail.line.pkConceded)
+                                    }
+                                }
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.top, 16)
+                        .padding(.bottom, 24)
+                    }
+                }
+                .navigationTitle("Player Stats")
+                .navigationBarTitleDisplayMode(.inline)
+            }
+        }
     }
 
     private var sortedPlayersForMatch: [Player] {
@@ -107,6 +162,9 @@ struct MatchDetailView: View {
                 statPill("A", "\(line.assists)")
                 statPill("S", "\(line.shots)")
                 statPill("SOT", "\(line.shotsOnTarget)")
+                statsActionButton {
+                    selectedPlayerDetail = PlayerDetail(player: player, line: line, seconds: seconds)
+                }
             }
         }
         .padding(.horizontal, 12)
@@ -134,6 +192,21 @@ struct MatchDetailView: View {
         )
     }
 
+    private func statsActionButton(action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: "plus")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(GoStatsTheme.primary)
+                .frame(width: 34, height: 34)
+                .background(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(Color(uiColor: .secondarySystemGroupedBackground).opacity(0.55))
+                )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("View all stats")
+    }
+
     private func chip(_ title: String, _ value: String) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(title.uppercased())
@@ -157,5 +230,30 @@ struct MatchDetailView: View {
         let sec = s % 60
         return String(format: "%02d:%02d", m, sec)
     }
-}
 
+    private func statsRow(_ title: String, _ value: Int) -> some View {
+        HStack {
+            Text(title)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(GoStatsTheme.text)
+            Spacer()
+            Text("\(value)")
+                .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                .foregroundStyle(GoStatsTheme.text2)
+        }
+    }
+
+    private struct PlayerDetail: Identifiable {
+        let id: UUID
+        let player: Player
+        let line: PlayerStatLine
+        let seconds: Int
+
+        init(player: Player, line: PlayerStatLine, seconds: Int) {
+            self.id = player.id
+            self.player = player
+            self.line = line
+            self.seconds = seconds
+        }
+    }
+}

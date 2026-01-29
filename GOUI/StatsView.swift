@@ -5,6 +5,7 @@ struct StatsView: View {
     let teamID: UUID
 
     @State private var selectedSeasonID: UUID? = nil
+    @State private var showFullLeaderboard: Bool = false
 
     private var team: Team? {
         teamStore.teams.first(where: { $0.id == teamID })
@@ -49,6 +50,7 @@ struct StatsView: View {
                     podiumCard
                     leaderboardCard
                     summaryCard
+                    playerStatsCard
                     Spacer(minLength: 16)
                 }
                 .padding(.horizontal, 16)
@@ -70,7 +72,7 @@ struct StatsView: View {
             VStack(alignment: .leading, spacing: 10) {
                 Text("SEASON")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(GoStatsTheme.text2)
+                    .foregroundStyle(GoStatsTheme.primary)
 
                 if seasons.isEmpty {
                     Text("No seasons available")
@@ -101,7 +103,7 @@ struct StatsView: View {
             VStack(alignment: .leading, spacing: 12) {
                 Text("TOP SCORERS")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(GoStatsTheme.text2)
+                    .foregroundStyle(GoStatsTheme.primary)
 
                 if podium.isEmpty {
                     Text("No goals yet this season.")
@@ -123,7 +125,7 @@ struct StatsView: View {
             VStack(alignment: .leading, spacing: 12) {
                 Text("LEADERBOARD")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(GoStatsTheme.text2)
+                    .foregroundStyle(GoStatsTheme.primary)
 
                 if leaderboard.isEmpty {
                     Text("No scorers yet. Save a match to populate stats.")
@@ -131,8 +133,29 @@ struct StatsView: View {
                         .foregroundStyle(GoStatsTheme.text2)
                 } else {
                     VStack(spacing: 8) {
-                        ForEach(Array(leaderboard.enumerated()), id: \.offset) { index, entry in
+                        let visible = showFullLeaderboard ? leaderboard : Array(leaderboard.prefix(5))
+                        ForEach(Array(visible.enumerated()), id: \.offset) { index, entry in
                             leaderboardRow(rank: index + 1, player: entry.player, goals: entry.goals)
+                        }
+
+                        if leaderboard.count > 5 {
+                            Button {
+                                withAnimation(.easeInOut) {
+                                    showFullLeaderboard.toggle()
+                                }
+                            } label: {
+                                Text(showFullLeaderboard ? "Show Top 5" : "View All")
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundStyle(GoStatsTheme.primary)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 8)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                            .fill(Color(uiColor: .secondarySystemGroupedBackground).opacity(0.55))
+                                    )
+                            }
+                            .buttonStyle(.plain)
+                            .padding(.top, 4)
                         }
                     }
                 }
@@ -145,12 +168,51 @@ struct StatsView: View {
             VStack(alignment: .leading, spacing: 12) {
                 Text("SUMMARY")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(GoStatsTheme.text2)
+                    .foregroundStyle(GoStatsTheme.primary)
 
                 HStack(spacing: 10) {
                     statChip("Matches", "\(matches.count)")
                     statChip("Goals For", "\(matches.reduce(0) { $0 + $1.goalsFor })")
                     statChip("Goals Against", "\(matches.reduce(0) { $0 + $1.goalsAgainst })")
+                }
+            }
+        }
+    }
+
+    private var playerStatsCard: some View {
+        LiquidGlassContainer(cornerRadius: 22) {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("PLAYER STATS")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(GoStatsTheme.primary)
+
+                if let team {
+                    NavigationLink {
+                        TeamStatsView(team: team)
+                    } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: "person.text.rectangle")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(GoStatsTheme.primary)
+                            Text("View individual stats")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(GoStatsTheme.text)
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .foregroundStyle(GoStatsTheme.text2)
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 12)
+                        .background(
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .fill(Color(uiColor: .secondarySystemGroupedBackground).opacity(0.55))
+                        )
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    Text("Select a team to view player stats.")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(GoStatsTheme.text2)
                 }
             }
         }
