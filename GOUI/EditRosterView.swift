@@ -9,6 +9,8 @@ struct EditRosterView: View {
     @State private var startingOnFieldIDs: Set<UUID>
     @State private var primaryFormation: Formation
     @State private var primaryGoalkeeperID: UUID?
+    @State private var secondaryGoalkeeperID: UUID?
+    @State private var thirdGoalkeeperID: UUID?
 
     let onSave: (Team) -> Void
     let existingTeamID: UUID
@@ -20,6 +22,8 @@ struct EditRosterView: View {
         self._startingOnFieldIDs = State(initialValue: Set(team.startingOnFieldIDs))
         self._primaryFormation = State(initialValue: team.primaryFormation)
         self._primaryGoalkeeperID = State(initialValue: team.primaryGoalkeeperID)
+        self._secondaryGoalkeeperID = State(initialValue: team.secondaryGoalkeeperID)
+        self._thirdGoalkeeperID = State(initialValue: team.thirdGoalkeeperID)
         self.onSave = onSave
         self.existingTeamID = team.id
     }
@@ -71,6 +75,35 @@ struct EditRosterView: View {
                         .font(.footnote)
                         .foregroundColor(starterCountColor)
                 }
+
+                Section("Goalkeepers") {
+                    if goalkeeperOptions.isEmpty {
+                        Text("Add goalkeepers to assign a primary, secondary, and third option.")
+                            .font(.footnote)
+                            .foregroundColor(.secondary)
+                    } else {
+                        Picker("Primary Goalkeeper", selection: $primaryGoalkeeperID) {
+                            Text("None").tag(nil as UUID?)
+                            ForEach(goalkeeperOptions) { player in
+                                Text(goalkeeperLabel(for: player)).tag(Optional(player.id))
+                            }
+                        }
+
+                        Picker("Secondary Goalkeeper", selection: $secondaryGoalkeeperID) {
+                            Text("None").tag(nil as UUID?)
+                            ForEach(goalkeeperOptions) { player in
+                                Text(goalkeeperLabel(for: player)).tag(Optional(player.id))
+                            }
+                        }
+
+                        Picker("Third Goalkeeper", selection: $thirdGoalkeeperID) {
+                            Text("None").tag(nil as UUID?)
+                            ForEach(goalkeeperOptions) { player in
+                                Text(goalkeeperLabel(for: player)).tag(Optional(player.id))
+                            }
+                        }
+                    }
+                }
             }
             .navigationTitle("Edit Roster")
             .toolbar {
@@ -79,19 +112,23 @@ struct EditRosterView: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Save") {
-                        let clamped = Array(startingOnFieldIDs).prefix(fieldSize)
-                        let resolvedPrimaryGoalkeeperID = Team.primaryGoalkeeperID(
+                        let clamped = players.filter { startingOnFieldIDs.contains($0.id) }.prefix(fieldSize).map(\.id)
+                        let resolvedDepth = Team.goalkeeperDepthIDs(
                             from: players,
-                            current: primaryGoalkeeperID
+                            currentPrimary: primaryGoalkeeperID,
+                            currentSecondary: secondaryGoalkeeperID,
+                            currentThird: thirdGoalkeeperID
                         )
                         let team = Team(
                             id: existingTeamID,
                             name: teamName.trimmingCharacters(in: .whitespacesAndNewlines),
                             players: players,
                             fieldSize: fieldSize,
-                            startingOnFieldIDs: Array(clamped),
+                            startingOnFieldIDs: clamped,
                             primaryFormation: primaryFormation,
-                            primaryGoalkeeperID: resolvedPrimaryGoalkeeperID,
+                            primaryGoalkeeperID: resolvedDepth.primary,
+                            secondaryGoalkeeperID: resolvedDepth.secondary,
+                            thirdGoalkeeperID: resolvedDepth.third,
                             matches: []
                         )
                         onSave(team)
@@ -115,5 +152,18 @@ struct EditRosterView: View {
                 startingOnFieldIDs.insert(id)
             }
         }
+    }
+
+    private var goalkeeperOptions: [Player] {
+        players.filter { $0.position == .gk }.sorted { lhs, rhs in
+            if lhs.number == rhs.number {
+                return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+            }
+            return lhs.number < rhs.number
+        }
+    }
+
+    private func goalkeeperLabel(for player: Player) -> String {
+        "#\(player.number) \(player.name)"
     }
 }

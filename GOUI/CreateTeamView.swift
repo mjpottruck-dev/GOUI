@@ -103,7 +103,7 @@ struct CreateTeamView: View {
         guard !trimmed.isEmpty else { return }
 
         let starterIDs = sortedPlayers.prefix(fieldSize).map(\.id)
-        let primaryGoalkeeperID = Team.primaryGoalkeeperID(from: sortedPlayers)
+        let goalkeeperDepth = Team.goalkeeperDepthIDs(from: sortedPlayers)
         let team = Team(
             id: UUID(),
             name: trimmed,
@@ -111,7 +111,9 @@ struct CreateTeamView: View {
             fieldSize: fieldSize,
             startingOnFieldIDs: starterIDs,
             primaryFormation: primaryFormation,
-            primaryGoalkeeperID: primaryGoalkeeperID,
+            primaryGoalkeeperID: goalkeeperDepth.primary,
+            secondaryGoalkeeperID: goalkeeperDepth.secondary,
+            thirdGoalkeeperID: goalkeeperDepth.third,
             matches: []
         )
 

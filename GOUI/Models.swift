@@ -234,23 +234,49 @@ struct Team: Identifiable, Codable, Hashable {
     var startingOnFieldIDs: [UUID] = []
     var primaryFormation: Formation = .f433
     var primaryGoalkeeperID: UUID? = nil
+    var secondaryGoalkeeperID: UUID? = nil
+    var thirdGoalkeeperID: UUID? = nil
 
     var matches: [MatchRecord] = []
 }
 
 extension Team {
-    static func primaryGoalkeeperID(from players: [Player], current: UUID? = nil) -> UUID? {
+    static func goalkeeperDepthIDs(
+        from players: [Player],
+        currentPrimary: UUID? = nil,
+        currentSecondary: UUID? = nil,
+        currentThird: UUID? = nil
+    ) -> (primary: UUID?, secondary: UUID?, third: UUID?) {
         let goalkeepers = players.filter { $0.position == .gk }
-        if let current, goalkeepers.contains(where: { $0.id == current }) {
-            return current
-        }
-        guard !goalkeepers.isEmpty else { return nil }
+        guard !goalkeepers.isEmpty else { return (nil, nil, nil) }
+
         let sortedGoalkeepers = goalkeepers.sorted { lhs, rhs in
             if lhs.number == rhs.number {
                 return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
             }
             return lhs.number < rhs.number
         }
-        return sortedGoalkeepers.first?.id
+        let sortedIDs = sortedGoalkeepers.map(\.id)
+
+        var ordered: [UUID] = []
+        for id in [currentPrimary, currentSecondary, currentThird].compactMap({ $0 }) {
+            if sortedIDs.contains(id), !ordered.contains(id) {
+                ordered.append(id)
+            }
+        }
+
+        for id in sortedIDs where !ordered.contains(id) {
+            ordered.append(id)
+            if ordered.count == 3 { break }
+        }
+
+        let primary = ordered.indices.contains(0) ? ordered[0] : nil
+        let secondary = ordered.indices.contains(1) ? ordered[1] : nil
+        let third = ordered.indices.contains(2) ? ordered[2] : nil
+        return (primary, secondary, third)
+    }
+
+    static func primaryGoalkeeperID(from players: [Player], current: UUID? = nil) -> UUID? {
+        goalkeeperDepthIDs(from: players, currentPrimary: current).primary
     }
 }
