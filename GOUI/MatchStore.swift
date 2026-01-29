@@ -31,6 +31,7 @@ final class MatchStore: ObservableObject {
     @Published var players: [Player] = []
     @Published var onFieldIDs: Set<UUID> = []
     @Published var onFieldLineupIDs: [UUID] = []
+    @Published var activeGoalkeeperID: UUID? = nil
     var goalkeeperDepthIDs: [UUID] = []
 
     // MARK: - Events
@@ -168,12 +169,14 @@ final class MatchStore: ObservableObject {
             goalkeeperDepthIDs = [depth.primary, depth.secondary, depth.third].compactMap { $0 }
             onFieldLineupIDs = team.startingOnFieldIDs
             onFieldIDs = Set(team.startingOnFieldIDs)
+            activeGoalkeeperID = onFieldPlayers.first(where: { $0.position == .gk })?.id
         } else {
             fieldSize = 7
             players = []
             onFieldIDs = []
             onFieldLineupIDs = []
             goalkeeperDepthIDs = []
+            activeGoalkeeperID = nil
         }
 
         if players.isEmpty {
@@ -336,23 +339,11 @@ final class MatchStore: ObservableObject {
     }
 
     func activeGoalkeeper() -> Player? {
-        if !goalkeeperDepthIDs.isEmpty {
-            for id in goalkeeperDepthIDs where onFieldIDs.contains(id) {
-                if let keeper = players.first(where: { $0.id == id }) {
-                    return keeper
-                }
-            }
+        if let activeGoalkeeperID, onFieldIDs.contains(activeGoalkeeperID),
+           let keeper = players.first(where: { $0.id == activeGoalkeeperID }) {
+            return keeper
         }
         return onFieldPlayers.first(where: { $0.position == .gk }) ?? players.first(where: { $0.position == .gk })
-    }
-
-    func promoteGoalkeeper(_ id: UUID) {
-        if let index = goalkeeperDepthIDs.firstIndex(of: id) {
-            goalkeeperDepthIDs.remove(at: index)
-        }
-        goalkeeperDepthIDs.insert(id, at: 0)
-        let unique = Array(NSOrderedSet(array: goalkeeperDepthIDs)) as? [UUID] ?? goalkeeperDepthIDs
-        goalkeeperDepthIDs = unique
     }
 
     func markPlayerSecondsBaseline() {

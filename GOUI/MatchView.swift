@@ -456,11 +456,23 @@ struct MatchView: View {
         }
         store.onFieldIDs.remove(fieldPlayer.id)
         store.onFieldIDs.insert(benchPlayer.id)
-        if benchPlayer.position == .gk && fieldPlayer.position == .gk {
-            store.promoteGoalkeeper(benchPlayer.id)
-        }
+        updateActiveGoalkeeper(fieldPlayer: fieldPlayer, benchPlayer: benchPlayer)
         store.markPlayerSecondsBaseline()
         return true
+    }
+
+    private func updateActiveGoalkeeper(fieldPlayer: Player, benchPlayer: Player) {
+        let wasActive = fieldPlayer.id == store.activeGoalkeeperID
+        if wasActive {
+            if benchPlayer.position == .gk {
+                store.activeGoalkeeperID = benchPlayer.id
+            } else {
+                let replacement = store.onFieldPlayers.first(where: { $0.position == .gk && $0.id != fieldPlayer.id })
+                store.activeGoalkeeperID = replacement?.id
+            }
+        } else if store.activeGoalkeeperID == nil, benchPlayer.position == .gk {
+            store.activeGoalkeeperID = benchPlayer.id
+        }
     }
 
     // MARK: - Timer Controls
