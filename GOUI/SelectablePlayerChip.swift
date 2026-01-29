@@ -46,8 +46,7 @@ struct SelectablePlayerChip: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(isSelected ? GoStatsTheme.teal.opacity(0.35) : Color.white.opacity(0.12), lineWidth: 1)
+                .stroke(isSelected ? GoStatsTheme.teal.opacity(0.35) : GoStatsTheme.stroke.opacity(0.25), lineWidth: 1)
         )
     }
 }
-
