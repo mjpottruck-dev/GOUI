@@ -6,14 +6,16 @@ struct TeamStatsView: View {
     @State private var range: StatsDateRange = .allTime
     @State private var customStart: Date = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date()
     @State private var customEnd: Date = Date()
+    @State private var searchText: String = ""
+    @State private var sortOrder: PlayerSort = .position
+    @FocusState private var isSearchFocused: Bool
 
     private struct Row: Identifiable {
         let id: UUID
         let number: Int
         let name: String
 
-        // ✅ Store as String for display
-        let position: String
+        let position: Position
 
         let matchesPlayed: Int
         let minutesPlayed: Int
@@ -34,6 +36,25 @@ struct TeamStatsView: View {
         let pkConceded: Int
 
         let impactScore: Int
+    }
+
+    private enum PlayerSort: String, CaseIterable, Identifiable {
+        case position = "Position (Def → Off)"
+        case nameAZ = "Name (A–Z)"
+        case nameZA = "Name (Z–A)"
+
+        var id: String { rawValue }
+    }
+
+    private static let positionOrder: [Position] = [
+        .gk,
+        .cb, .lb, .rb, .lwb, .rwb, .def,
+        .cdm, .dm, .cm, .cam, .am, .lm, .rm, .mid,
+        .lw, .rw, .st, .cf, .fw
+    ]
+
+    private var positionIndex: [Position: Int] {
+        Dictionary(uniqueKeysWithValues: Self.positionOrder.enumerated().map { ($0.element, $0.offset) })
     }
 
     private var filteredMatches: [MatchRecord] {
@@ -123,7 +144,7 @@ struct TeamStatsView: View {
                 id: p.id,
                 number: p.number,
                 name: p.name,
-                position: p.position.rawValue,   // ✅ FIX HERE
+                position: p.position,
                 matchesPlayed: mp,
                 minutesPlayed: mins,
                 goals: g,
@@ -139,6 +160,34 @@ struct TeamStatsView: View {
                 pkConceded: pkC,
                 impactScore: score
             )
+        }
+    }
+
+    private var filteredRows: [Row] {
+        let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return rows }
+        return rows.filter { $0.name.localizedCaseInsensitiveContains(trimmed) }
+    }
+
+    private var sortedRows: [Row] {
+        switch sortOrder {
+        case .position:
+            return filteredRows.sorted { lhs, rhs in
+                let leftIndex = positionIndex[lhs.position] ?? Int.max
+                let rightIndex = positionIndex[rhs.position] ?? Int.max
+                if leftIndex != rightIndex {
+                    return leftIndex < rightIndex
+                }
+                return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+            }
+        case .nameAZ:
+            return filteredRows.sorted {
+                $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+            }
+        case .nameZA:
+            return filteredRows.sorted {
+                $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedDescending
+            }
         }
     }
 
@@ -171,6 +220,37 @@ struct TeamStatsView: View {
                     DatePicker("End", selection: $customEnd, displayedComponents: [.date])
                 }
 
+                HStack(spacing: 10) {
+                    Button {
+                        isSearchFocused = true
+                    } label: {
+                        Image(systemName: "magnifyingglass")
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+
+                    TextField("Search player", text: $searchText)
+                        .textInputAutocapitalization(.words)
+                        .autocorrectionDisabled()
+                        .focused($isSearchFocused)
+
+                    if !searchText.isEmpty {
+                        Button {
+                            searchText = ""
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+
+                Picker("Sort", selection: $sortOrder) {
+                    ForEach(PlayerSort.allCases) { sort in
+                        Text(sort.rawValue).tag(sort)
+                    }
+                }
+
                 Text("Matches in range: \(filteredMatches.count)")
                     .foregroundStyle(.secondary)
             }
@@ -191,9 +271,9 @@ struct TeamStatsView: View {
             }
 
             Section("All Players") {
-                ForEach(r.sorted(by: { $0.impactScore > $1.impactScore })) { p in
+                ForEach(sortedRows) { p in
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("\(p.number) • \(p.name) (\(p.position))")
+                        Text("\(p.number) • \(p.name) (\(p.position.rawValue))")
                             .font(.headline)
 
                         Text("MP \(p.matchesPlayed) • Min \(p.minutesPlayed)")
@@ -252,4 +332,3 @@ struct TeamStatsView: View {
         return cal.date(byAdding: DateComponents(day: 1, second: -1), to: start) ?? date
     }
 }
-
