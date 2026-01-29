@@ -49,7 +49,7 @@ struct SoccerFieldView: View {
         .padding(10)
         .background(
             Circle()
-                .fill(isGK(p) ? Color.blue.opacity(0.35) : Color.white.opacity(0.18))
+                .fill(isGK(p) ? GoStatsTheme.primary.opacity(0.35) : Color.white.opacity(0.18))
         )
         .overlay(
             Circle().stroke(Color.white.opacity(0.25), lineWidth: 1)
@@ -88,4 +88,3 @@ struct SoccerFieldView: View {
         String(describing: p.position).uppercased().contains("GK")
     }
 }
-

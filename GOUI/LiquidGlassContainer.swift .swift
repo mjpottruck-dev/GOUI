@@ -198,7 +198,7 @@ public struct PressableScale: ButtonStyle {
 struct LiquidGlassDemoView: View {
     var body: some View {
         ZStack {
-            LinearGradient(colors: [.blue.opacity(0.25), .mint.opacity(0.25), .purple.opacity(0.20)],
+            LinearGradient(colors: [GoStatsTheme.primary.opacity(0.25), .mint.opacity(0.25), .purple.opacity(0.20)],
                            startPoint: .topLeading, endPoint: .bottomTrailing)
                 .ignoresSafeArea()
 
@@ -231,4 +231,3 @@ struct LiquidGlassDemoView: View {
     LiquidGlassDemoView()
         .preferredColorScheme(.dark)
 }
-
