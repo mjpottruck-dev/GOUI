@@ -10,9 +10,10 @@ public enum GoStatsTheme {
     public static let bg = Color(uiColor: .systemGroupedBackground)
     public static let surface = Color(uiColor: .secondarySystemGroupedBackground)
 
-    // MARK: - Neutrals
-    public static let uiGray = Color(hex: "#D9DEE3")
-    public static let uiGray2 = Color(hex: "#AEB8BF")
+    // MARK: - Neutrals (Adaptive)
+    public static let uiGray = Color(uiColor: .separator)
+    public static let uiGray2 = Color(uiColor: .tertiaryLabel)
+    public static let stroke = Color(uiColor: .separator)
 
     // MARK: - Adaptive Text (Dark Mode compatible)
     public static let text = Color(uiColor: .label)
@@ -67,4 +68,3 @@ public extension Color {
                   opacity: Double(a) / 255)
     }
 }
-
