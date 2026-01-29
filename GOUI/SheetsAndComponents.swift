@@ -47,7 +47,7 @@ struct QuickEventButton: View {
             .frame(maxWidth: .infinity)
         }
         .buttonStyle(.borderedProminent)
-        .tint(isPrimary ? .blue : .red)
+        .tint(isPrimary ? GoStatsTheme.primary : .red)
     }
 }
 
@@ -74,5 +74,4 @@ struct PlayerLine: View {
         }
     }
 }
-
 

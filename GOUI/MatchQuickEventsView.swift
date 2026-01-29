@@ -22,12 +22,12 @@ struct MatchQuickEventsView_Old: View {
             sectionTitle("Quick Events")
             grid {
                 ColoredActionButton(title: "Goal", icon: "checkmark.seal.fill", color: .green, action: onGoal)
-                ColoredActionButton(title: "Shot", icon: "scope", color: .blue, action: onShot)
+                ColoredActionButton(title: "Shot", icon: "scope", color: GoStatsTheme.primary, action: onShot)
 
                 ColoredActionButton(title: "Own Goal", icon: "exclamationmark.triangle.fill", color: .red, action: onOwnGoal)
                 ColoredActionButton(title: "Card", icon: "rectangle.on.rectangle", color: .red, action: onCard)
 
-                ColoredActionButton(title: "PK Attempt", icon: "circle.dashed", color: .blue, action: onPKAttempt)
+                ColoredActionButton(title: "PK Attempt", icon: "circle.dashed", color: GoStatsTheme.primary, action: onPKAttempt)
                 ColoredActionButton(title: "PK Made", icon: "circle.fill", color: .green, action: onPKMade)
             }
 
@@ -89,5 +89,4 @@ private struct ColoredActionButton: View {
         .onTapGesture { action() }
     }
 }
-
 

@@ -19,7 +19,7 @@ enum QuickActionKind {
         case .ownGoal, .card, .conceded, .pkConceded:
             return .red
         case .shot, .pkAttempt:
-            return .blue
+            return GoStatsTheme.primary
         }
     }
 }
@@ -44,5 +44,4 @@ struct QuickActionButtonStyle: ButtonStyle {
             .scaleEffect(configuration.isPressed ? 0.96 : 1.0)
     }
 }
-
 

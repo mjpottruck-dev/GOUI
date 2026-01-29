@@ -39,5 +39,6 @@ struct GoStatsRootView: View {
                 }
             }
         }
+        .tint(GoStatsTheme.primary)
     }
 }
