@@ -8,6 +8,7 @@ struct EditRosterView: View {
     @State private var players: [Player]
     @State private var startingOnFieldIDs: Set<UUID>
     @State private var primaryFormation: Formation
+    @State private var primaryGoalkeeperID: UUID?
 
     let onSave: (Team) -> Void
     let existingTeamID: UUID
@@ -18,6 +19,7 @@ struct EditRosterView: View {
         self._players = State(initialValue: team.players)
         self._startingOnFieldIDs = State(initialValue: Set(team.startingOnFieldIDs))
         self._primaryFormation = State(initialValue: team.primaryFormation)
+        self._primaryGoalkeeperID = State(initialValue: team.primaryGoalkeeperID)
         self.onSave = onSave
         self.existingTeamID = team.id
     }
@@ -78,6 +80,10 @@ struct EditRosterView: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Save") {
                         let clamped = Array(startingOnFieldIDs).prefix(fieldSize)
+                        let resolvedPrimaryGoalkeeperID = Team.primaryGoalkeeperID(
+                            from: players,
+                            current: primaryGoalkeeperID
+                        )
                         let team = Team(
                             id: existingTeamID,
                             name: teamName.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -85,6 +91,7 @@ struct EditRosterView: View {
                             fieldSize: fieldSize,
                             startingOnFieldIDs: Array(clamped),
                             primaryFormation: primaryFormation,
+                            primaryGoalkeeperID: resolvedPrimaryGoalkeeperID,
                             matches: []
                         )
                         onSave(team)

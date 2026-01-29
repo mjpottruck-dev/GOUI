@@ -182,12 +182,14 @@ final class TeamStore {
         ]
 
         let starterIDs = Array(players.prefix(7)).map(\.id)
+        let primaryGoalkeeperID = Team.primaryGoalkeeperID(from: players)
         let team = Team(
             name: "Demo Eleven",
             players: players,
             fieldSize: 7,
             startingOnFieldIDs: starterIDs,
-            primaryFormation: .f433
+            primaryFormation: .f433,
+            primaryGoalkeeperID: primaryGoalkeeperID
         )
 
         teams = [team]
@@ -198,6 +200,13 @@ final class TeamStore {
         var changed = false
 
         for ti in teams.indices {
+            if teams[ti].primaryGoalkeeperID == nil {
+                let resolved = Team.primaryGoalkeeperID(from: teams[ti].players)
+                if resolved != nil {
+                    teams[ti].primaryGoalkeeperID = resolved
+                    changed = true
+                }
+            }
             for mi in teams[ti].matches.indices {
                 let secondsKeys = Set(teams[ti].matches[mi].playerSeconds.keys)
                 let statsKeys = Set(teams[ti].matches[mi].playerStats.keys)
@@ -251,6 +260,7 @@ private struct LegacyTeam: Codable {
             fieldSize: fieldSize,
             startingOnFieldIDs: startingOnFieldIDs,
             primaryFormation: .f433,
+            primaryGoalkeeperID: Team.primaryGoalkeeperID(from: players),
             matches: (matches ?? []).map { $0.toMatchRecord() }
         )
     }
