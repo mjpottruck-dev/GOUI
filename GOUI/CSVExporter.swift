@@ -5,13 +5,14 @@ enum CSVExporter {
     // MARK: - Public API
 
     /// Builds a CSV string for a single match (team roster + per-match stats snapshot).
-    static func matchCSV(team: Team, match: MatchRecord, sport: any SportDefinition? = nil) -> String {
+    static func matchCSV(team: Team, match: MatchRecord, sport: (any SportDefinition)? = nil) -> String {
         var lines: [String] = []
         let resolvedSport = sport ?? SportCatalog.sport(for: match.sportID)
         let statColumns = resolvedSport.statSchema.filter { $0.countsForPlayer }
 
         // Header row
-        lines.append([
+        lines.append((
+            [
             "Team",
             "MatchDate",
             "Title",
@@ -24,9 +25,9 @@ enum CSVExporter {
             "PlayerName",
             "Position",
             "MinutesPlayed"
-        ]
-        .appending(contentsOf: statColumns.map(\.id))
-        .joined(separator: ","))
+            ]
+            + statColumns.map(\.id)
+        ).joined(separator: ","))
 
         let dateString = match.date.formatted(date: .numeric, time: .shortened)
 
