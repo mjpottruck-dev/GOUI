@@ -251,7 +251,7 @@ struct MatchView: View {
 
     private var quickEventsTeam: some View {
         let eventTypes = teamEventTypes
-        LiquidGlassContainer {
+        return LiquidGlassContainer {
             VStack(alignment: .leading, spacing: 12) {
                 Text("QUICK EVENTS — TEAM")
                     .font(.system(size: 12, weight: .semibold))
