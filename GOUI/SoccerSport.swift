@@ -4,8 +4,15 @@ struct SoccerSport: SportDefinition {
     let id = "soccer"
     let displayName = "Soccer"
     let season: SportSeason = .fall
+    let supportsTimer = true
     let supportsGoalie = true
     let supportsPositions = true
+    let supportsCourtOverlay = true
+    let supportsTeamScore = true
+    let supportsPeriods = true
+    let supportsHoles = false
+    let defaultHoleCount = 0
+    let scoringMode: ScoringMode = .teamVsTeam
 
     let periods: [PeriodDefinition] = [
         PeriodDefinition(name: "1st Half", duration: 45 * 60, maxCount: 1),
@@ -185,7 +192,9 @@ struct SoccerSport: SportDefinition {
             "ownGoal": 1,
             "conceded": 1,
             "pkConceded": 1
-        ]
+        ],
+        periodEventPoints: [:],
+        opponentPeriodEventPoints: [:]
     )
 }
 

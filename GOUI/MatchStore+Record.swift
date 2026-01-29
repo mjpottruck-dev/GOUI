@@ -15,6 +15,11 @@ extension MatchStore {
         rec.fieldSize = fieldSize
         rec.seasonID = currentSeasonID
         rec.sportID = sport.id
+        rec.templateID = activeTemplate?.id
+        rec.templateName = activeTemplate?.name
+        rec.periodScores = periodScores
+        rec.playerHoleScores = playerHoleScores
+        rec.playerHolePutts = playerHolePutts
 
         rec.playerSeconds = Dictionary(uniqueKeysWithValues: players.map { ($0.id, $0.secondsPlayed) })
 

@@ -13,16 +13,25 @@ final class MatchStore: ObservableObject {
     @Published var currentPeriodIndex: Int = 0
 
     @Published var sport: any SportDefinition
+    @Published private(set) var activePeriods: [PeriodDefinition] = []
+    @Published var periodScores: [PeriodScore] = []
+    @Published var playerHoleScores: [UUID: [Int]] = [:]
+    @Published var playerHolePutts: [UUID: [Int]] = [:]
+    @Published var activeTemplate: GameTemplate? = nil
 
     private var startDate: Date? = nil
     private var accumulatedSeconds: Int = 0
     private var lastPlayerUpdateSeconds: Int = 0
     private var timer: Timer?
+    private var holeCount: Int = 0
 
     var secondsElapsed: Int { elapsedSeconds }
 
     init(sport: any SportDefinition = SportCatalog.defaultSport) {
         self.sport = sport
+        self.activePeriods = resolvedPeriods(for: sport, template: nil)
+        self.periodScores = activePeriods.isEmpty ? [] : Array(repeating: PeriodScore(), count: activePeriods.count)
+        self.holeCount = resolvedHoleCount(for: sport, template: nil)
     }
 
     // Team + formation for current session
@@ -55,6 +64,9 @@ final class MatchStore: ObservableObject {
         let formation: Formation?
         let fieldSize: Int
         let currentPeriodIndex: Int
+        let periodScores: [PeriodScore]
+        let playerHoleScores: [UUID: [Int]]
+        let playerHolePutts: [UUID: [Int]]
     }
 
     // MARK: - Computed
@@ -79,17 +91,17 @@ final class MatchStore: ObservableObject {
     }
 
     func currentPeriodLabel() -> String {
-        guard !sport.periods.isEmpty else {
+        guard !activePeriods.isEmpty else {
             return currentPeriodIndex == 0 ? "Period 1" : "Period \(currentPeriodIndex + 1)"
         }
-        let index = min(max(currentPeriodIndex, 0), sport.periods.count - 1)
-        return sport.periods[index].name
+        let index = min(max(currentPeriodIndex, 0), activePeriods.count - 1)
+        return activePeriods[index].name
     }
 
     func nextPeriodLabel() -> String? {
         let nextIndex = currentPeriodIndex + 1
-        guard nextIndex < sport.periods.count else { return nil }
-        return sport.periods[nextIndex].name
+        guard nextIndex < activePeriods.count else { return nil }
+        return activePeriods[nextIndex].name
     }
 
     func hasNextPeriod() -> Bool {
@@ -99,6 +111,7 @@ final class MatchStore: ObservableObject {
     // MARK: - Controls
     func startGame() {
         guard !isRunning else { return }
+        guard sport.supportsTimer else { return }
         isRunning = true
         startDate = Date()
         lastPlayerUpdateSeconds = elapsedSeconds
@@ -107,6 +120,7 @@ final class MatchStore: ObservableObject {
     }
 
     func pauseGame() {
+        guard sport.supportsTimer else { return }
         guard isRunning else { return }
         let now = Date()
         if let startDate {
@@ -119,10 +133,10 @@ final class MatchStore: ObservableObject {
     }
 
     func advancePeriodAndResume() {
-        if currentPeriodIndex < max(0, sport.periods.count - 1) {
+        if currentPeriodIndex < max(0, activePeriods.count - 1) {
             currentPeriodIndex += 1
         }
-        if !isRunning {
+        if sport.supportsTimer, !isRunning {
             startGame()
         }
     }
@@ -161,6 +175,9 @@ final class MatchStore: ObservableObject {
         goalsFor = 0
         goalsAgainst = 0
         events.removeAll()
+        periodScores = []
+        playerHoleScores = [:]
+        playerHolePutts = [:]
 
         undoStack.removeAll()
 
@@ -172,6 +189,11 @@ final class MatchStore: ObservableObject {
         } else {
             sport = SportCatalog.defaultSport
         }
+
+        activeTemplate = nil
+        activePeriods = resolvedPeriods(for: sport, template: activeTemplate)
+        periodScores = activePeriods.isEmpty ? [] : Array(repeating: PeriodScore(), count: activePeriods.count)
+        holeCount = resolvedHoleCount(for: sport, template: activeTemplate)
 
         if let team {
             fieldSize = team.fieldSize
@@ -216,6 +238,19 @@ final class MatchStore: ObservableObject {
         if players.isEmpty {
             loadSampleIfEmpty()
         }
+
+        configureRosterMode()
+        configureHoleTracking()
+    }
+
+    func resetForNewMatch(team: Team?, formation: Formation?, seasonID: UUID?, template: GameTemplate?) {
+        resetForNewMatch(team: team, formation: formation, seasonID: seasonID)
+        activeTemplate = template
+        activePeriods = resolvedPeriods(for: sport, template: template)
+        periodScores = activePeriods.isEmpty ? [] : Array(repeating: PeriodScore(), count: activePeriods.count)
+        holeCount = resolvedHoleCount(for: sport, template: template)
+        configureRosterMode()
+        configureHoleTracking()
     }
 
     // MARK: - Undo
@@ -230,7 +265,10 @@ final class MatchStore: ObservableObject {
                 onFieldLineupIDs: onFieldLineupIDs,
                 formation: formation,
                 fieldSize: fieldSize,
-                currentPeriodIndex: currentPeriodIndex
+                currentPeriodIndex: currentPeriodIndex,
+                periodScores: periodScores,
+                playerHoleScores: playerHoleScores,
+                playerHolePutts: playerHolePutts
             )
         )
     }
@@ -246,6 +284,9 @@ final class MatchStore: ObservableObject {
         formation = snap.formation
         fieldSize = snap.fieldSize
         currentPeriodIndex = snap.currentPeriodIndex
+        periodScores = snap.periodScores
+        playerHoleScores = snap.playerHoleScores
+        playerHolePutts = snap.playerHolePutts
     }
 
     // MARK: - Events + Stats
@@ -263,6 +304,12 @@ final class MatchStore: ObservableObject {
         }
         if let points = sport.scoringRules.points(for: eventType.id, isOpponent: true) {
             goalsAgainst += points
+        }
+        if let points = sport.scoringRules.periodPoints(for: eventType.id, isOpponent: false) {
+            applyPeriodScore(delta: points, isOpponent: false)
+        }
+        if let points = sport.scoringRules.periodPoints(for: eventType.id, isOpponent: true) {
+            applyPeriodScore(delta: points, isOpponent: true)
         }
 
         if let player = resolvedPrimaryPlayer(for: eventType, primaryPlayer: primaryPlayer) {
@@ -286,6 +333,49 @@ final class MatchStore: ObservableObject {
             title: eventTitle(for: eventType, primaryPlayer: primaryPlayer, secondaryPlayer: secondaryPlayer),
             detail: eventDetail(for: eventType, secondaryPlayer: secondaryPlayer, shotOnTarget: shotOnTarget, cardType: cardType)
         )
+
+        if sport.supportsPeriods, eventType.id == "setWon" || eventType.id == "setLost" {
+            advancePeriodAndResume()
+        }
+    }
+
+    func recordHoleScore(player: Player, holeIndex: Int, strokes: Int, putts: Int?) {
+        guard holeCount > 0 else { return }
+        let clampedIndex = max(0, min(holeIndex, holeCount - 1))
+        pushUndo()
+
+        var scores = playerHoleScores[player.id, default: Array(repeating: 0, count: holeCount)]
+        let previousScore = scores[clampedIndex]
+        scores[clampedIndex] = strokes
+        playerHoleScores[player.id] = scores
+
+        if let putts {
+            var puttScores = playerHolePutts[player.id, default: Array(repeating: 0, count: holeCount)]
+            let previousPutts = puttScores[clampedIndex]
+            puttScores[clampedIndex] = putts
+            playerHolePutts[player.id] = puttScores
+            updatePlayerStats(id: player.id) { player in
+                player.incrementStat("putts", by: putts - previousPutts)
+            }
+        }
+
+        updatePlayerStats(id: player.id) { player in
+            player.incrementStat("strokes", by: strokes - previousScore)
+            if previousScore == 0 && strokes > 0 {
+                player.incrementStat("holesPlayed", by: 1)
+            }
+        }
+
+        addEvent(
+            eventTypeID: "holeScore",
+            label: "Hole",
+            title: "Hole \(clampedIndex + 1) — \(displayName(for: player))",
+            detail: holeDetail(strokes: strokes, putts: putts)
+        )
+
+        if clampedIndex >= currentPeriodIndex, clampedIndex < holeCount - 1 {
+            currentPeriodIndex = clampedIndex + 1
+        }
     }
 
     private func updatePlayerStats(id: UUID, update: (inout Player) -> Void) {
@@ -476,6 +566,27 @@ final class MatchStore: ObservableObject {
                 Player(name: "Field", number: 6, position: .cm),
                 Player(name: "Field", number: 7, position: .cm)
             ]
+        case SportCatalog.volleyballID:
+            fieldSize = 6
+            sample = [
+                Player(name: "Setter", number: 1, position: .cm),
+                Player(name: "Outside", number: 2, position: .cm),
+                Player(name: "Outside", number: 3, position: .cm),
+                Player(name: "Middle", number: 4, position: .cm),
+                Player(name: "Middle", number: 5, position: .cm),
+                Player(name: "Libero", number: 6, position: .cm)
+            ]
+        case SportCatalog.tennisID:
+            fieldSize = 2
+            sample = [
+                Player(name: "Player A", number: 1, position: .cm),
+                Player(name: "Player B", number: 2, position: .cm)
+            ]
+        case SportCatalog.golfID:
+            fieldSize = 1
+            sample = [
+                Player(name: "Golfer", number: 1, position: .cm)
+            ]
         default:
             fieldSize = 11
             sample = [
@@ -505,5 +616,80 @@ final class MatchStore: ObservableObject {
         goalkeeperDepthIDs = [depth.primary, depth.secondary, depth.third].compactMap { $0 }
         onFieldLineupIDs = sample.map { $0.id }
         onFieldIDs = Set(sample.map { $0.id })
+        configureHoleTracking()
+    }
+
+    private func applyPeriodScore(delta: Int, isOpponent: Bool) {
+        guard !periodScores.isEmpty else { return }
+        let index = min(max(currentPeriodIndex, 0), periodScores.count - 1)
+        var score = periodScores[index]
+        if isOpponent {
+            score.opponentScore += delta
+        } else {
+            score.teamScore += delta
+        }
+        periodScores[index] = score
+    }
+
+    private func resolvedPeriods(for sport: any SportDefinition, template: GameTemplate?) -> [PeriodDefinition] {
+        guard sport.supportsPeriods else { return [] }
+        var periods = sport.periods
+        if let count = template?.periodCountOverrides {
+            if count <= periods.count {
+                periods = Array(periods.prefix(count))
+            } else if let last = periods.last {
+                let startIndex = periods.count + 1
+                let extra = (startIndex...count).map { index in
+                    PeriodDefinition(name: "Period \(index)", duration: last.duration, maxCount: last.maxCount)
+                }
+                periods.append(contentsOf: extra)
+            }
+        }
+        if let overrides = template?.periodDurationOverrides {
+            for index in 0..<min(overrides.count, periods.count) {
+                let original = periods[index]
+                periods[index] = PeriodDefinition(name: original.name, duration: overrides[index], maxCount: original.maxCount)
+            }
+        }
+        return periods
+    }
+
+    private func resolvedHoleCount(for sport: any SportDefinition, template: GameTemplate?) -> Int {
+        guard sport.supportsHoles else { return 0 }
+        if let override = template?.periodCountOverrides {
+            return override
+        }
+        return sport.defaultHoleCount
+    }
+
+    private func configureRosterMode() {
+        guard let template = activeTemplate else { return }
+        switch template.defaultRosterMode {
+        case .fullRoster:
+            onFieldLineupIDs = players.map(\.id)
+            onFieldIDs = Set(onFieldLineupIDs)
+            fieldSize = max(players.count, 1)
+        case .teamDefaults:
+            break
+        }
+    }
+
+    private func configureHoleTracking() {
+        guard holeCount > 0 else { return }
+        for player in players {
+            if playerHoleScores[player.id] == nil {
+                playerHoleScores[player.id] = Array(repeating: 0, count: holeCount)
+            }
+            if playerHolePutts[player.id] == nil {
+                playerHolePutts[player.id] = Array(repeating: 0, count: holeCount)
+            }
+        }
+    }
+
+    private func holeDetail(strokes: Int, putts: Int?) -> String {
+        if let putts {
+            return \"Strokes: \\(strokes) • Putts: \\(putts)\"
+        }
+        return \"Strokes: \\(strokes)\"
     }
 }

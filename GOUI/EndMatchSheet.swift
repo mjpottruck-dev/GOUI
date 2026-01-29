@@ -22,19 +22,30 @@ struct EndMatchSheet: View {
         NavigationStack {
             Form {
                 Section("Summary") {
-                    HStack {
-                        Text("Score")
-                        Spacer()
-                        Text("\(store.goalsFor)–\(store.goalsAgainst)")
-                            .monospacedDigit()
-                            .foregroundStyle(.secondary)
+                    if store.sport.supportsTeamScore {
+                        HStack {
+                            Text("Score")
+                            Spacer()
+                            Text("\(store.goalsFor)–\(store.goalsAgainst)")
+                                .monospacedDigit()
+                                .foregroundStyle(.secondary)
+                        }
+                    } else {
+                        HStack {
+                            Text("Scoring")
+                            Spacer()
+                            Text("Individual")
+                                .foregroundStyle(.secondary)
+                        }
                     }
-                    HStack {
-                        Text("Time")
-                        Spacer()
-                        Text(store.timeString)
-                            .monospacedDigit()
-                            .foregroundStyle(.secondary)
+                    if store.sport.supportsTimer {
+                        HStack {
+                            Text("Time")
+                            Spacer()
+                            Text(store.timeString)
+                                .monospacedDigit()
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
 
@@ -87,13 +98,23 @@ struct EndMatchSheet: View {
 
         teamStore.addMatchRecord(teamID: teamID, record: record)
 
-        store.resetForNewMatch(team: team, formation: formation, seasonID: teamStore.activeSeasonID)
+        store.resetForNewMatch(
+            team: team,
+            formation: formation,
+            seasonID: teamStore.activeSeasonID,
+            template: store.activeTemplate
+        )
 
         dismiss()
     }
 
     private func discardMatch() {
-        store.resetForNewMatch(team: team, formation: formation, seasonID: teamStore.activeSeasonID)
+        store.resetForNewMatch(
+            team: team,
+            formation: formation,
+            seasonID: teamStore.activeSeasonID,
+            template: store.activeTemplate
+        )
         dismiss()
     }
 

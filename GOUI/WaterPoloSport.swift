@@ -4,8 +4,15 @@ struct WaterPoloSport: SportDefinition {
     let id = "water_polo"
     let displayName = "Water Polo"
     let season: SportSeason = .spring
+    let supportsTimer = true
     let supportsGoalie = true
     let supportsPositions = false
+    let supportsCourtOverlay = true
+    let supportsTeamScore = true
+    let supportsPeriods = true
+    let supportsHoles = false
+    let defaultHoleCount = 0
+    let scoringMode: ScoringMode = .teamVsTeam
 
     let periods: [PeriodDefinition] = [
         PeriodDefinition(name: "Q1", duration: 8 * 60, maxCount: 1),
@@ -131,7 +138,9 @@ struct WaterPoloSport: SportDefinition {
         scoreLabel: "Goals",
         primaryStatID: "goals",
         teamEventPoints: ["goal": 1],
-        opponentEventPoints: ["opponentGoal": 1]
+        opponentEventPoints: ["opponentGoal": 1],
+        periodEventPoints: [:],
+        opponentPeriodEventPoints: [:]
     )
 }
 
