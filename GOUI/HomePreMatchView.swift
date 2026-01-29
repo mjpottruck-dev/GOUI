@@ -11,13 +11,6 @@ struct HomePreMatchView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-
-                Text("Start Match")
-                    .font(.system(size: 34, weight: .bold))
-
-                Text("Select a team, then jump into Match View.")
-                    .foregroundStyle(.secondary)
-
                 VStack(alignment: .leading, spacing: 10) {
                     Text("TEAM")
                         .font(.system(size: 12, weight: .semibold))
@@ -83,6 +76,17 @@ struct HomePreMatchView: View {
                     } label: {
                         rowButton(title: "Season Stats", systemImage: "chart.bar")
                     }
+
+                    NavigationLink {
+                        if let teamID = selectedTeamID ?? teamStore.teams.first?.id,
+                           let team = teamStore.teams.first(where: { $0.id == teamID }) {
+                            TeamStatsView(team: team)
+                        } else {
+                            Text("Select a team")
+                        }
+                    } label: {
+                        rowButton(title: "Player Stats", systemImage: "person.text.rectangle")
+                    }
                 }
                 .padding(.top, 10)
 
@@ -90,7 +94,7 @@ struct HomePreMatchView: View {
             }
             .padding(16)
         }
-        .navigationTitle("Match")
+        .navigationTitle("Home")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             if selectedTeamID == nil {
@@ -104,6 +108,7 @@ struct HomePreMatchView: View {
             Image(systemName: systemImage)
                 .font(.system(size: 16, weight: .semibold))
                 .frame(width: 26)
+                .foregroundStyle(GoStatsTheme.primary)
 
             Text(title)
                 .font(.system(size: 16, weight: .semibold))

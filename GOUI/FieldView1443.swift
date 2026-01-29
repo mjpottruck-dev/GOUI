@@ -124,7 +124,7 @@ struct FieldView1443: View {
         return ZStack {
             if let gk {
                 playerCircle(gk)
-                    .position(CGPoint(x: w * 0.50, y: h * 0.84))
+                    .position(CGPoint(x: w * 0.50, y: h * 0.79))
             }
 
             ForEach(Array(assigned.enumerated()), id: \.offset) { _, item in

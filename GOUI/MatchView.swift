@@ -447,9 +447,11 @@ struct MatchView: View {
         let currentOnField = store.onFieldPlayers
         let updated = currentOnField.filter { $0.id != fieldPlayer.id } + [benchPlayer]
         guard updated.contains(where: { $0.position == .gk }) else { return false }
+        store.refreshElapsedFromClock()
         store.pushUndo()
         store.onFieldIDs.remove(fieldPlayer.id)
         store.onFieldIDs.insert(benchPlayer.id)
+        store.markPlayerSecondsBaseline()
         return true
     }
 

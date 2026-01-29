@@ -14,6 +14,7 @@ final class MatchStore: ObservableObject {
 
     private var startDate: Date? = nil
     private var accumulatedSeconds: Int = 0
+    private var lastPlayerUpdateSeconds: Int = 0
     private var timer: Timer?
 
     var secondsElapsed: Int { elapsedSeconds }
@@ -67,6 +68,7 @@ final class MatchStore: ObservableObject {
         guard !isRunning else { return }
         isRunning = true
         startDate = Date()
+        lastPlayerUpdateSeconds = elapsedSeconds
         startTimer()
         refreshElapsedFromClock()
     }
@@ -97,6 +99,7 @@ final class MatchStore: ObservableObject {
         } else {
             elapsedSeconds = accumulatedSeconds
         }
+        updatePlayerSecondsIfNeeded()
     }
 
     private func startTimer() {
@@ -118,6 +121,7 @@ final class MatchStore: ObservableObject {
         accumulatedSeconds = 0
         elapsedSeconds = 0
         hasSplitHalf = false
+        lastPlayerUpdateSeconds = 0
 
         goalsFor = 0
         goalsAgainst = 0
@@ -131,7 +135,22 @@ final class MatchStore: ObservableObject {
 
         if let team {
             fieldSize = team.fieldSize
-            players = team.players
+            players = team.players.map { player in
+                var resetPlayer = player
+                resetPlayer.secondsPlayed = 0
+                resetPlayer.goals = 0
+                resetPlayer.assists = 0
+                resetPlayer.shots = 0
+                resetPlayer.shotsOnTarget = 0
+                resetPlayer.yellowCards = 0
+                resetPlayer.redCards = 0
+                resetPlayer.saves = 0
+                resetPlayer.goalsConceded = 0
+                resetPlayer.pkFaced = 0
+                resetPlayer.pkSaved = 0
+                resetPlayer.pkConceded = 0
+                return resetPlayer
+            }
             onFieldIDs = Set(team.startingOnFieldIDs)
         } else {
             fieldSize = 7
@@ -297,7 +316,26 @@ final class MatchStore: ObservableObject {
     }
 
     func activeGoalkeeper() -> Player? {
-        onFieldPlayers.first(where: { $0.position == .gk })
+        onFieldPlayers.first(where: { $0.position == .gk }) ?? players.first(where: { $0.position == .gk })
+    }
+
+    func markPlayerSecondsBaseline() {
+        lastPlayerUpdateSeconds = elapsedSeconds
+    }
+
+    private func updatePlayerSecondsIfNeeded() {
+        guard isRunning else {
+            lastPlayerUpdateSeconds = elapsedSeconds
+            return
+        }
+        let delta = elapsedSeconds - lastPlayerUpdateSeconds
+        guard delta > 0 else { return }
+        for id in onFieldIDs {
+            updatePlayerStats(id: id) { p in
+                p.secondsPlayed += delta
+            }
+        }
+        lastPlayerUpdateSeconds = elapsedSeconds
     }
 
     func displayName(for player: Player, in roster: [Player]? = nil) -> String {
