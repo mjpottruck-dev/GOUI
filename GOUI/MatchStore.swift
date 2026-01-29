@@ -346,6 +346,15 @@ final class MatchStore: ObservableObject {
         return onFieldPlayers.first(where: { $0.position == .gk }) ?? players.first(where: { $0.position == .gk })
     }
 
+    func promoteGoalkeeper(_ id: UUID) {
+        if let index = goalkeeperDepthIDs.firstIndex(of: id) {
+            goalkeeperDepthIDs.remove(at: index)
+        }
+        goalkeeperDepthIDs.insert(id, at: 0)
+        let unique = Array(NSOrderedSet(array: goalkeeperDepthIDs)) as? [UUID] ?? goalkeeperDepthIDs
+        goalkeeperDepthIDs = unique
+    }
+
     func markPlayerSecondsBaseline() {
         lastPlayerUpdateSeconds = elapsedSeconds
     }
