@@ -9,28 +9,60 @@ struct CreatePlayerView: View {
     @State private var numberText: String = ""
     @State private var position: Position = .cm
     @State private var secondaryPosition: Position? = nil
+    @State private var positionName: String = ""
+    @State private var isGoalie: Bool = false
+    @State private var notes: String = ""
+
+    private let sport = SportDefinition.current
 
     var body: some View {
         NavigationStack {
             Form {
                 Section("Player Info") {
                     TextField("Name", text: $name)
+                    if !isNameValid {
+                        Text("Name is required.")
+                            .font(.footnote)
+                            .foregroundStyle(.red)
+                    }
 
                     TextField("Number", text: $numberText)
                         .keyboardType(.numberPad)
-
-                    Picker("Primary Position", selection: $position) {
-                        ForEach(Position.rosterPositions) { pos in
-                            Text(pos.rawValue).tag(pos)
-                        }
+                    if !isNumberValid {
+                        Text("Number must be between 0 and 99.")
+                            .font(.footnote)
+                            .foregroundStyle(.red)
                     }
 
-                    Picker("Secondary Position", selection: $secondaryPosition) {
-                        Text("None").tag(Position?.none)
-                        ForEach(Position.rosterPositions) { pos in
-                            Text(pos.rawValue).tag(Optional(pos))
+                    if sport.supportsPositions {
+                        Picker("Primary Position", selection: $position) {
+                            ForEach(Position.rosterPositions) { pos in
+                                Text(pos.rawValue).tag(pos)
+                            }
                         }
+                        .onChange(of: position) { _, newValue in
+                            positionName = newValue.rawValue
+                            if sport.supportsGoalie {
+                                isGoalie = newValue == .gk
+                            }
+                        }
+
+                        Picker("Secondary Position", selection: $secondaryPosition) {
+                            Text("None").tag(Position?.none)
+                            ForEach(Position.rosterPositions) { pos in
+                                Text(pos.rawValue).tag(Optional(pos))
+                            }
+                        }
+                    } else {
+                        TextField("Position (optional)", text: $positionName)
                     }
+
+                    if sport.supportsGoalie {
+                        Toggle("Goalie", isOn: $isGoalie)
+                    }
+
+                    TextField("Notes (optional)", text: $notes, axis: .vertical)
+                        .lineLimit(2...4)
                 }
 
                 Section {
@@ -38,17 +70,21 @@ struct CreatePlayerView: View {
                         let trimmedNumber = numberText.trimmingCharacters(in: .whitespacesAndNewlines)
                         let number = Int(trimmedNumber) ?? 0
                         let jersey = trimmedNumber.isEmpty ? "\(number)" : trimmedNumber
+                        let resolvedPositionName = positionName.isEmpty ? position.rawValue : positionName
                         let newPlayer = Player(
                             name: name.trimmingCharacters(in: .whitespacesAndNewlines),
                             number: number,
                             jersey: jersey,
                             position: position,
-                            secondaryPosition: secondaryPosition
+                            secondaryPosition: secondaryPosition,
+                            positionName: resolvedPositionName,
+                            isGoalie: sport.supportsGoalie ? isGoalie : nil,
+                            notes: notes.trimmingCharacters(in: .whitespacesAndNewlines)
                         )
                         onCreate(newPlayer)
                         dismiss()
                     }
-                    .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(!isFormValid)
                 }
             }
             .navigationTitle("Add Player")
@@ -58,5 +94,25 @@ struct CreatePlayerView: View {
                 }
             }
         }
+        .onAppear {
+            positionName = position.rawValue
+            if sport.supportsGoalie {
+                isGoalie = position == .gk
+            }
+        }
+    }
+
+    private var isNameValid: Bool {
+        !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var isNumberValid: Bool {
+        let trimmed = numberText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let value = Int(trimmed) else { return false }
+        return (0...99).contains(value)
+    }
+
+    private var isFormValid: Bool {
+        isNameValid && isNumberValid
     }
 }

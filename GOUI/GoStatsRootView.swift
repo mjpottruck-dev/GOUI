@@ -8,6 +8,7 @@ struct GoStatsRootView: View {
 
     @State private var selectedTeamID: UUID? = nil
     @State private var goToTabs = false
+    @State private var showSplash = true
 
     var body: some View {
         ZStack {
@@ -45,5 +46,33 @@ struct GoStatsRootView: View {
             .background(GoStatsTheme.bg)
         }
         .tint(GoStatsTheme.primary)
+        .overlay {
+            if showSplash {
+                SplashView(onSkip: {
+                    withAnimation(.easeOut(duration: 0.2)) {
+                        showSplash = false
+                    }
+                })
+                .transition(.opacity)
+            }
+        }
+        .task {
+            await runSplashSequenceIfNeeded()
+        }
+    }
+
+    @MainActor
+    private func runSplashSequenceIfNeeded() async {
+        #if DEBUG
+        if DebugSettings.skipSplashEnabled {
+            showSplash = false
+            return
+        }
+        #endif
+
+        try? await Task.sleep(nanoseconds: 3_000_000_000)
+        withAnimation(.easeOut(duration: 0.25)) {
+            showSplash = false
+        }
     }
 }

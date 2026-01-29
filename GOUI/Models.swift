@@ -160,6 +160,12 @@ struct Player: Identifiable, Codable, Hashable {
     var jersey: String = ""
     var position: Position
     var secondaryPosition: Position? = nil
+    var positionName: String? = nil
+    var isGoalie: Bool? = nil
+    var notes: String? = nil
+
+    var createdAt: Date = Date()
+    var updatedAt: Date = Date()
 
     var secondsPlayed: Int = 0
 
@@ -175,6 +181,23 @@ struct Player: Identifiable, Codable, Hashable {
     var pkFaced: Int = 0
     var pkSaved: Int = 0
     var pkConceded: Int = 0
+}
+
+extension Player {
+    func displayPosition(for sport: SportDefinition) -> String? {
+        guard sport.supportsPositions else { return nil }
+        if let positionName {
+            return positionName
+        }
+        return position.rawValue
+    }
+
+    var derivedIsGoalie: Bool {
+        if let isGoalie {
+            return isGoalie
+        }
+        return position == .gk
+    }
 }
 
 // MARK: - PlayerStatLine
@@ -229,6 +252,9 @@ struct Team: Identifiable, Codable, Hashable {
     var id: UUID = UUID()
     var name: String
     var players: [Player] = []
+
+    var createdAt: Date = Date()
+    var updatedAt: Date = Date()
 
     var fieldSize: Int = 7
     var startingOnFieldIDs: [UUID] = []

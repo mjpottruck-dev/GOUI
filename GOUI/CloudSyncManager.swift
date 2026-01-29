@@ -1,0 +1,226 @@
+import CloudKit
+import Foundation
+
+struct SyncStatus: Equatable {
+    var lastSyncDate: Date? = nil
+    var isSyncing: Bool = false
+    var lastError: String? = nil
+}
+
+struct SyncPayload {
+    var teams: [Team]
+    var deletedTeamIDs: [UUID]
+    var deletedPlayerIDs: [UUID]
+}
+
+struct SyncResult {
+    var teams: [Team]
+    var deletedTeamIDs: [UUID]
+    var deletedPlayerIDs: [UUID]
+    var lastSyncDate: Date
+}
+
+final class CloudSyncManager {
+    private let database: CKDatabase
+
+    init(container: CKContainer = CKContainer.default()) {
+        self.database = container.privateCloudDatabase
+    }
+
+    func sync(payload: SyncPayload, localMatches: [UUID: [MatchRecord]]) async throws -> SyncResult {
+        let recordsToSave = makeRecords(from: payload.teams)
+        let recordIDsToDelete = payload.deletedTeamIDs.map { CKRecord.ID(recordName: $0.uuidString) }
+            + payload.deletedPlayerIDs.map { CKRecord.ID(recordName: $0.uuidString) }
+
+        if !recordsToSave.isEmpty || !recordIDsToDelete.isEmpty {
+            try await modifyRecords(recordsToSave: recordsToSave, recordIDsToDelete: recordIDsToDelete)
+        }
+
+        let fetchedTeams = try await fetchRecords(ofType: "Team")
+        let fetchedPlayers = try await fetchRecords(ofType: "Player")
+
+        let mergedTeams = mergeTeams(
+            localTeams: payload.teams,
+            remoteTeams: fetchedTeams,
+            remotePlayers: fetchedPlayers,
+            localMatches: localMatches
+        )
+
+        return SyncResult(
+            teams: mergedTeams,
+            deletedTeamIDs: [],
+            deletedPlayerIDs: [],
+            lastSyncDate: Date()
+        )
+    }
+
+    private func modifyRecords(recordsToSave: [CKRecord], recordIDsToDelete: [CKRecord.ID]) async throws {
+        try await withCheckedThrowingContinuation { continuation in
+            let operation = CKModifyRecordsOperation(recordsToSave: recordsToSave, recordIDsToDelete: recordIDsToDelete)
+            operation.savePolicy = .allKeys
+            operation.modifyRecordsCompletionBlock = { _, _, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else {
+                    continuation.resume()
+                }
+            }
+            database.add(operation)
+        }
+    }
+
+    private func fetchRecords(ofType type: String) async throws -> [CKRecord] {
+        try await withCheckedThrowingContinuation { continuation in
+            var records: [CKRecord] = []
+            let query = CKQuery(recordType: type, predicate: NSPredicate(value: true))
+            let operation = CKQueryOperation(query: query)
+            operation.recordFetchedBlock = { record in
+                records.append(record)
+            }
+            operation.queryResultBlock = { result in
+                switch result {
+                case .success:
+                    continuation.resume(returning: records)
+                case .failure(let error):
+                    continuation.resume(throwing: error)
+                }
+            }
+            database.add(operation)
+        }
+    }
+
+    private func makeRecords(from teams: [Team]) -> [CKRecord] {
+        var records: [CKRecord] = []
+        for team in teams {
+            let recordID = CKRecord.ID(recordName: team.id.uuidString)
+            let teamRecord = CKRecord(recordType: "Team", recordID: recordID)
+            teamRecord["name"] = team.name as CKRecordValue
+            teamRecord["createdAt"] = team.createdAt as CKRecordValue
+            teamRecord["updatedAt"] = team.updatedAt as CKRecordValue
+            records.append(teamRecord)
+
+            for player in team.players {
+                let playerID = CKRecord.ID(recordName: player.id.uuidString)
+                let playerRecord = CKRecord(recordType: "Player", recordID: playerID)
+                playerRecord["teamID"] = team.id.uuidString as CKRecordValue
+                playerRecord["name"] = player.name as CKRecordValue
+                playerRecord["number"] = player.number as CKRecordValue
+                playerRecord["position"] = (player.positionName ?? player.position.rawValue) as CKRecordValue
+                playerRecord["isGoalie"] = (player.isGoalie ?? player.derivedIsGoalie) as CKRecordValue
+                playerRecord["notes"] = (player.notes ?? "") as CKRecordValue
+                playerRecord["createdAt"] = player.createdAt as CKRecordValue
+                playerRecord["updatedAt"] = player.updatedAt as CKRecordValue
+                records.append(playerRecord)
+            }
+        }
+        return records
+    }
+
+    private func mergeTeams(
+        localTeams: [Team],
+        remoteTeams: [CKRecord],
+        remotePlayers: [CKRecord],
+        localMatches: [UUID: [MatchRecord]]
+    ) -> [Team] {
+        let localByID = Dictionary(uniqueKeysWithValues: localTeams.map { ($0.id, $0) })
+        let remoteTeamsByID = Dictionary(uniqueKeysWithValues: remoteTeams.compactMap { record in
+            guard let id = UUID(uuidString: record.recordID.recordName) else { return nil }
+            return (id, record)
+        })
+
+        var playersByTeam: [UUID: [Player]] = [:]
+        for record in remotePlayers {
+            guard let teamIDString = record["teamID"] as? String,
+                  let teamID = UUID(uuidString: teamIDString),
+                  let player = decodePlayer(from: record)
+            else { continue }
+            playersByTeam[teamID, default: []].append(player)
+        }
+
+        var merged: [Team] = []
+        let allIDs = Set(localByID.keys).union(remoteTeamsByID.keys)
+
+        for id in allIDs {
+            let local = localByID[id]
+            let remote = remoteTeamsByID[id]
+
+            if let remote, let remoteTeam = decodeTeam(from: remote, players: playersByTeam[id] ?? []) {
+                if let local {
+                    if shouldPreferRemote(local: local, remote: remoteTeam) {
+                        if local.updatedAt != remoteTeam.updatedAt {
+                            print("⚠️ Cloud conflict (team \(id)): remote wins.")
+                        }
+                        var mergedTeam = remoteTeam
+                        mergedTeam.matches = local.matches
+                        merged.append(mergedTeam)
+                    } else {
+                        if local.updatedAt != remoteTeam.updatedAt {
+                            print("⚠️ Cloud conflict (team \(id)): local wins.")
+                        }
+                        merged.append(local)
+                    }
+                } else {
+                    var mergedTeam = remoteTeam
+                    if let matches = localMatches[id] {
+                        mergedTeam.matches = matches
+                    }
+                    merged.append(mergedTeam)
+                }
+            } else if let local {
+                merged.append(local)
+            }
+        }
+
+        return merged.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+    }
+
+    private func shouldPreferRemote(local: Team, remote: Team) -> Bool {
+        if remote.updatedAt == local.updatedAt {
+            return false
+        }
+        return remote.updatedAt > local.updatedAt
+    }
+
+    private func decodeTeam(from record: CKRecord, players: [Player]) -> Team? {
+        guard let id = UUID(uuidString: record.recordID.recordName),
+              let name = record["name"] as? String,
+              let createdAt = record["createdAt"] as? Date,
+              let updatedAt = record["updatedAt"] as? Date
+        else { return nil }
+        var team = Team(
+            id: id,
+            name: name,
+            players: players,
+            createdAt: createdAt,
+            updatedAt: updatedAt
+        )
+        team.matches = []
+        return team
+    }
+
+    private func decodePlayer(from record: CKRecord) -> Player? {
+        guard let id = UUID(uuidString: record.recordID.recordName),
+              let name = record["name"] as? String,
+              let number = record["number"] as? Int,
+              let createdAt = record["createdAt"] as? Date,
+              let updatedAt = record["updatedAt"] as? Date
+        else { return nil }
+        let positionName = record["position"] as? String
+        let isGoalie = record["isGoalie"] as? Bool
+        let notes = record["notes"] as? String
+        let resolvedPosition = Position(rawValue: positionName ?? "") ?? .cm
+        return Player(
+            id: id,
+            name: name,
+            number: number,
+            jersey: "\(number)",
+            position: resolvedPosition,
+            secondaryPosition: nil,
+            positionName: positionName,
+            isGoalie: isGoalie,
+            notes: notes,
+            createdAt: createdAt,
+            updatedAt: updatedAt
+        )
+    }
+}

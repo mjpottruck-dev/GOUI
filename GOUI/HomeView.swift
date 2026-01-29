@@ -24,6 +24,8 @@ struct HomeView: View {
     }
 
     var body: some View {
+        let _ = DebugRenderLogger.log("HomeView", enabled: DebugSettings.renderCountsEnabled)
+
         ZStack {
             GoStatsTheme.bg.ignoresSafeArea()
 
