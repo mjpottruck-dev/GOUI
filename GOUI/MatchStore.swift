@@ -336,9 +336,9 @@ final class MatchStore: ObservableObject {
     }
 
     func activeGoalkeeper() -> Player? {
-        if let firstID = onFieldLineupIDs.first,
-           onFieldIDs.contains(firstID),
-           let keeper = players.first(where: { $0.id == firstID }) {
+        if let primaryID = goalkeeperDepthIDs.first,
+           onFieldIDs.contains(primaryID),
+           let keeper = players.first(where: { $0.id == primaryID }) {
             return keeper
         }
         if !goalkeeperDepthIDs.isEmpty {
