@@ -273,7 +273,7 @@ private struct LegacyTeam: Codable {
 
     func toTeam() -> Team {
         let goalkeeperDepth = Team.goalkeeperDepthIDs(from: players)
-        Team(
+        return Team(
             id: id,
             name: name,
             players: players,
