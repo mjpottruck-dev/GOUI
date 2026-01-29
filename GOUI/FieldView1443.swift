@@ -77,46 +77,23 @@ struct FieldView1443: View {
         let gk = players.first(where: { $0.position == .gk })
         let fieldPlayers = players.filter { $0.id != gk?.id }
 
-        var assigned: [(Player, Position, CGPoint)] = []
-        var remaining = fieldPlayers
-
-        func positions(for player: Player) -> [Position] {
-            var positions = [player.position]
-            if let secondary = player.secondaryPosition {
-                positions.append(secondary)
-            }
-            return positions
-        }
-
         let lineCount = slots.count
         let startY: CGFloat = 0.70
         let endY: CGFloat = 0.20
         let step = lineCount > 1 ? (startY - endY) / CGFloat(lineCount - 1) : 0
 
-        for (lineIndex, line) in slots.enumerated() {
-            let y = h * (startY - (CGFloat(lineIndex) * step))
-            let points = spread(line.count, y: y, width: w)
-            for (slotIndex, position) in line.enumerated() {
-                if let playerIndex = remaining.firstIndex(where: { positions(for: $0).contains(position) }) {
-                    let player = remaining.remove(at: playerIndex)
-                    assigned.append((player, position, points[slotIndex]))
-                }
-            }
-        }
-
+        var assigned: [(Player, Position, CGPoint)] = []
         var openSlots: [(Position, CGPoint)] = []
         for (lineIndex, line) in slots.enumerated() {
             let y = h * (startY - (CGFloat(lineIndex) * step))
             let points = spread(line.count, y: y, width: w)
             for (slotIndex, position) in line.enumerated() {
                 let point = points[slotIndex]
-                if !assigned.contains(where: { $0.2 == point }) {
-                    openSlots.append((position, point))
-                }
+                openSlots.append((position, point))
             }
         }
 
-        for (idx, player) in remaining.enumerated() {
+        for (idx, player) in fieldPlayers.enumerated() {
             if idx < openSlots.count {
                 assigned.append((player, openSlots[idx].0, openSlots[idx].1))
             }
