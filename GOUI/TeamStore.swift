@@ -41,12 +41,13 @@ final class TeamStore {
 
     var syncStatus = SyncStatus()
 
-    private lazy var syncManager: CloudSyncManager? = CloudSyncManager.makeIfAvailable()
+    @ObservationIgnored private var syncManager: CloudSyncManager?
     private var syncTask: Task<Void, Never>? = nil
     private var isApplyingSync = false
 
     // MARK: - Init
     init() {
+        syncManager = CloudSyncManager.makeIfAvailable()
         load()
         ensureDefaultSeason()
         seedDemoTeamIfNeeded()
