@@ -336,6 +336,9 @@ final class MatchStore: ObservableObject {
     }
 
     func activeGoalkeeper() -> Player? {
+        if let lineupKeeper = lineupGoalkeeper() {
+            return lineupKeeper
+        }
         if let primaryID = goalkeeperDepthIDs.first,
            onFieldIDs.contains(primaryID),
            let keeper = players.first(where: { $0.id == primaryID }) {
@@ -349,6 +352,18 @@ final class MatchStore: ObservableObject {
             }
         }
         return onFieldPlayers.first(where: { $0.position == .gk }) ?? players.first(where: { $0.position == .gk })
+    }
+
+    private func lineupGoalkeeper() -> Player? {
+        let formation = formation ?? .f433
+        let slots = formation.slotPositions
+        guard let gkIndex = slots.firstIndex(of: .gk),
+              onFieldLineupIDs.indices.contains(gkIndex) else {
+            return nil
+        }
+        let gkID = onFieldLineupIDs[gkIndex]
+        guard onFieldIDs.contains(gkID) else { return nil }
+        return players.first(where: { $0.id == gkID })
     }
 
     func promoteGoalkeeper(_ id: UUID) {
