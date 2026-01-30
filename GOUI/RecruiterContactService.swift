@@ -9,7 +9,6 @@ final class RecruiterContactService {
     }
 
     func sendContactRequest(teamID: UUID, playerID: UUID, recruiterUserID: String) async throws {
-        guard let database else { throw CloudKitUnavailableError() }
         let record = CKRecord(recordType: CloudRecordType.recruiterNotification)
         record["teamID"] = teamID.uuidString as CKRecordValue
         record["playerID"] = playerID.uuidString as CKRecordValue
@@ -20,7 +19,7 @@ final class RecruiterContactService {
 
     private func saveRecord(_ record: CKRecord) async throws -> CKRecord {
         guard let database else { throw CloudKitUnavailableError() }
-        try await withCheckedThrowingContinuation { continuation in
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<CKRecord, Error>) in
             database.save(record) { saved, error in
                 if let error {
                     continuation.resume(throwing: error)

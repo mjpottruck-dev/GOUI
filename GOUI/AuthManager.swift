@@ -86,7 +86,7 @@ final class AuthManager: NSObject, ObservableObject {
     }
 
     private func performSignIn() async throws -> ASAuthorizationAppleIDCredential {
-        try await withCheckedThrowingContinuation { continuation in
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<ASAuthorizationAppleIDCredential, Error>) in
             let request = ASAuthorizationAppleIDProvider().createRequest()
             request.requestedScopes = [.fullName, .email]
             let controller = ASAuthorizationController(authorizationRequests: [request])
@@ -105,7 +105,7 @@ final class AuthManager: NSObject, ObservableObject {
 
     private func fetchUserRecordID() async throws -> CKRecord.ID? {
         guard let container else { throw CloudKitUnavailableError() }
-        try await withCheckedThrowingContinuation { continuation in
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<CKRecord.ID?, Error>) in
             container.fetchUserRecordID { recordID, error in
                 if let error {
                     continuation.resume(throwing: error)
@@ -119,7 +119,7 @@ final class AuthManager: NSObject, ObservableObject {
     private func fetchUser(userID: String) async throws -> AuthUser? {
         guard let database else { throw CloudKitUnavailableError() }
         let recordID = CKRecord.ID(recordName: userID)
-        return try await withCheckedThrowingContinuation { continuation in
+        return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<AuthUser?, Error>) in
             database.fetch(withRecordID: recordID) { record, error in
                 if let ckError = error as? CKError, ckError.code == .unknownItem {
                     continuation.resume(returning: nil)
@@ -167,7 +167,7 @@ final class AuthManager: NSObject, ObservableObject {
         record["createdAt"] = user.createdAt as CKRecordValue
         record["updatedAt"] = user.updatedAt as CKRecordValue
 
-        return try await withCheckedThrowingContinuation { continuation in
+        return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<AuthUser, Error>) in
             database.save(record) { saved, error in
                 if let error {
                     continuation.resume(throwing: error)
