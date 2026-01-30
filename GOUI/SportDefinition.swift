@@ -111,7 +111,8 @@ enum ScoringMode {
 
 enum SportCatalog {
     static let soccerID = "soccer"
-    static let waterPoloID = "water_polo"
+    static let waterPoloID = "waterpolo"
+    static let legacyWaterPoloID = "water_polo"
     static let basketballID = "basketball"
     static let volleyballID = "volleyball"
     static let tennisID = "tennis"
@@ -145,6 +146,7 @@ enum SportCatalog {
 
     static func sport(for id: String?) -> any SportDefinition {
         let resolvedID = id ?? defaultSportID
-        return registry[resolvedID] ?? registry[defaultSportID] ?? SoccerSport()
+        let normalizedID = resolvedID == legacyWaterPoloID ? waterPoloID : resolvedID
+        return registry[normalizedID] ?? registry[defaultSportID] ?? SoccerSport()
     }
 }

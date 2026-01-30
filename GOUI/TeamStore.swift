@@ -401,6 +401,9 @@ final class TeamStore {
             if teams[ti].sportID.isEmpty {
                 teams[ti].sportID = SportCatalog.defaultSportID
                 changed = true
+            } else if teams[ti].sportID == SportCatalog.legacyWaterPoloID {
+                teams[ti].sportID = SportCatalog.waterPoloID
+                changed = true
             }
 
             if seasons(for: teams[ti].id).isEmpty {
@@ -421,6 +424,9 @@ final class TeamStore {
             for seasonIndex in seasons.indices where seasons[seasonIndex].teamID == teams[ti].id {
                 if seasons[seasonIndex].sportID.isEmpty {
                     seasons[seasonIndex].sportID = teams[ti].sportID
+                    changed = true
+                } else if seasons[seasonIndex].sportID == SportCatalog.legacyWaterPoloID {
+                    seasons[seasonIndex].sportID = SportCatalog.waterPoloID
                     changed = true
                 }
             }
@@ -465,6 +471,9 @@ final class TeamStore {
                 }
                 if teams[ti].matches[mi].sportID.isEmpty {
                     teams[ti].matches[mi].sportID = teams[ti].sportID
+                    changed = true
+                } else if teams[ti].matches[mi].sportID == SportCatalog.legacyWaterPoloID {
+                    teams[ti].matches[mi].sportID = SportCatalog.waterPoloID
                     changed = true
                 }
                 for pid in teams[ti].matches[mi].playerStats.keys {
