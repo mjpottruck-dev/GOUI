@@ -12,6 +12,7 @@ extension MatchStore {
         seasonName: String = ""
     ) -> MatchRecord {
         var rec = MatchRecord()
+        rec.id = currentMatchID
         rec.date = date
         rec.opponent = opponent
         rec.title = title

@@ -50,6 +50,7 @@ final class MatchStore: ObservableObject {
 
     // MARK: - Events
     @Published var events: [MatchEvent] = []
+    @Published var currentMatchID: UUID = UUID()
 
     // MARK: - Undo
     private var undoStack: [Snapshot] = []
@@ -171,6 +172,7 @@ final class MatchStore: ObservableObject {
         elapsedSeconds = 0
         currentPeriodIndex = 0
         lastPlayerUpdateSeconds = 0
+        currentMatchID = UUID()
 
         goalsFor = 0
         goalsAgainst = 0
@@ -296,7 +298,7 @@ final class MatchStore: ObservableObject {
         secondaryPlayer: Player? = nil,
         shotOnTarget: Bool? = nil,
         cardType: CardType? = nil
-    ) {
+    ) -> MatchEvent {
         pushUndo()
 
         if let points = sport.scoringRules.points(for: eventType.id, isOpponent: false) {
@@ -312,7 +314,8 @@ final class MatchStore: ObservableObject {
             applyPeriodScore(delta: points, isOpponent: true)
         }
 
-        if let player = resolvedPrimaryPlayer(for: eventType, primaryPlayer: primaryPlayer) {
+        let resolvedPrimary = resolvedPrimaryPlayer(for: eventType, primaryPlayer: primaryPlayer)
+        if let player = resolvedPrimary {
             applyStatChanges(eventType.primaryStatChanges, to: player.id)
             if let shotOnTarget, let shotStats = eventType.shotOutcomeStats {
                 let changes = shotOnTarget ? shotStats.onTarget : shotStats.offTarget
@@ -327,16 +330,20 @@ final class MatchStore: ObservableObject {
             applyStatChanges(eventType.secondaryStatChanges, to: secondary.id)
         }
 
-        addEvent(
+        let event = addEvent(
             eventTypeID: eventType.id,
             label: eventType.label,
             title: eventTitle(for: eventType, primaryPlayer: primaryPlayer, secondaryPlayer: secondaryPlayer),
-            detail: eventDetail(for: eventType, secondaryPlayer: secondaryPlayer, shotOnTarget: shotOnTarget, cardType: cardType)
+            detail: eventDetail(for: eventType, secondaryPlayer: secondaryPlayer, shotOnTarget: shotOnTarget, cardType: cardType),
+            primaryPlayerID: resolvedPrimary?.id,
+            secondaryPlayerID: secondaryPlayer?.id
         )
 
         if sport.supportsPeriods, eventType.id == "setWon" || eventType.id == "setLost" {
             advancePeriodAndResume()
         }
+
+        return event
     }
 
     func recordHoleScore(player: Player, holeIndex: Int, strokes: Int, putts: Int?) {
@@ -366,11 +373,12 @@ final class MatchStore: ObservableObject {
             }
         }
 
-        addEvent(
+        _ = addEvent(
             eventTypeID: "holeScore",
             label: "Hole",
             title: "Hole \(clampedIndex + 1) — \(displayName(for: player))",
-            detail: holeDetail(strokes: strokes, putts: putts)
+            detail: holeDetail(strokes: strokes, putts: putts),
+            primaryPlayerID: player.id
         )
 
         if clampedIndex >= currentPeriodIndex, clampedIndex < holeCount - 1 {
@@ -394,9 +402,26 @@ final class MatchStore: ObservableObject {
         }
     }
 
-    private func addEvent(eventTypeID: String, label: String, title: String, detail: String?) {
-        let event = MatchEvent(eventTypeID: eventTypeID, label: label, seconds: secondsElapsed, title: title, detail: detail)
+    private func addEvent(
+        eventTypeID: String,
+        label: String,
+        title: String,
+        detail: String?,
+        primaryPlayerID: UUID? = nil,
+        secondaryPlayerID: UUID? = nil
+    ) -> MatchEvent {
+        let event = MatchEvent(
+            eventTypeID: eventTypeID,
+            label: label,
+            seconds: secondsElapsed,
+            title: title,
+            detail: detail,
+            createdAt: Date(),
+            primaryPlayerID: primaryPlayerID,
+            secondaryPlayerID: secondaryPlayerID
+        )
         events.insert(event, at: 0)
+        return event
     }
 
     private func resolvedPrimaryPlayer(for eventType: EventType, primaryPlayer: Player?) -> Player? {

@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @Bindable var teamStore: TeamStore
+    @ObservedObject var clipStore: ClipStore
 
     @AppStorage(DebugSettings.renderCountKey) private var renderCountsEnabled = false
     @AppStorage(DebugSettings.skipSplashKey) private var skipSplashEnabled = false
@@ -9,6 +10,19 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section("Video Storage") {
+                    HStack {
+                        Text("Used")
+                        Spacer()
+                        Text(storageString)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Button("Delete recordings not used by clips", role: .destructive) {
+                        clipStore.deleteRecordingsNotUsedByClips()
+                    }
+                }
+
                 Section("Cloud Sync") {
                     Toggle("Cloud Sync", isOn: $teamStore.cloudSyncEnabled)
 
@@ -46,5 +60,12 @@ struct SettingsView: View {
             }
             .navigationTitle("Settings")
         }
+    }
+
+    private var storageString: String {
+        let formatter = ByteCountFormatter()
+        formatter.allowedUnits = [.useGB, .useMB]
+        formatter.countStyle = .file
+        return formatter.string(fromByteCount: clipStore.totalStorageBytes())
     }
 }

@@ -29,11 +29,27 @@ struct MatchEvent: Identifiable, Codable, Hashable {
     var title: String
     var detail: String?
 
-    init(eventTypeID: String, label: String, seconds: Int, title: String, detail: String? = nil) {
+    var createdAt: Date = Date()
+    var primaryPlayerID: UUID? = nil
+    var secondaryPlayerID: UUID? = nil
+
+    init(
+        eventTypeID: String,
+        label: String,
+        seconds: Int,
+        title: String,
+        detail: String? = nil,
+        createdAt: Date = Date(),
+        primaryPlayerID: UUID? = nil,
+        secondaryPlayerID: UUID? = nil
+    ) {
         self.eventTypeID = eventTypeID
         self.label = label
         self.seconds = seconds
         self.title = title
         self.detail = detail
+        self.createdAt = createdAt
+        self.primaryPlayerID = primaryPlayerID
+        self.secondaryPlayerID = secondaryPlayerID
     }
 }
