@@ -45,14 +45,6 @@ struct TeamHomeView: View {
                             selectedTeamID: $selectedTeamID
                         ) { teamID, template in
                             selectedTeamID = teamID
-                            if let team = teamStore.teams.first(where: { $0.id == teamID }) {
-                                store.resetForNewMatch(
-                                    team: team,
-                                    formation: team.primaryFormation,
-                                    seasonID: teamStore.activeSeasonID(for: teamID),
-                                    template: template
-                                )
-                            }
                         }
                     }
                     .buttonStyle(.bordered)

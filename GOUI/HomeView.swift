@@ -61,9 +61,7 @@ struct HomeView: View {
                             store: store,
                             teamStore: teamStore,
                             selectedTeamID: $selectedTeamID,
-                            onStartMatch: { teamID, _ in
-                                selectedTeamID = teamID
-                            }
+                            onStartMatch: { _, _ in }
                         )
                     } label: {
                         primaryCard(
