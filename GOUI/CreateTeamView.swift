@@ -6,6 +6,7 @@ struct CreateTeamView: View {
     var onCreated: (UUID) -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject var analytics: AnalyticsService
 
     @State private var name: String = ""
     @State private var fieldSize: Int = 11
@@ -161,6 +162,7 @@ struct CreateTeamView: View {
         )
 
         teamStore.addTeam(team)
+        analytics.log(.createdTeam, metadata: ["teamID": team.id.uuidString])
         onCreated(team.id)
         dismiss()
     }

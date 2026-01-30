@@ -7,9 +7,46 @@ struct SettingsView: View {
     @AppStorage(DebugSettings.renderCountKey) private var renderCountsEnabled = false
     @AppStorage(DebugSettings.skipSplashKey) private var skipSplashEnabled = false
 
+    @EnvironmentObject var subscriptionManager: SubscriptionManager
+    @EnvironmentObject var roleManager: RoleManager
+
+    @State private var showPricing = false
+
     var body: some View {
         NavigationStack {
             Form {
+                Section("Subscription") {
+                    HStack {
+                        Text("Current Plan")
+                        Spacer()
+                        Text(subscriptionManager.currentPlan.displayName)
+                            .foregroundStyle(.secondary)
+                    }
+                    Button("View Pricing") {
+                        showPricing = true
+                    }
+                    if !subscriptionManager.entitlements.unlimitedExports {
+                        Text("Exports used this month: \(subscriptionManager.exportsThisMonth()) / \(SubscriptionLimits.freeExportsPerMonth)")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                Section("Profile") {
+                    Picker("Role", selection: Binding(
+                        get: { roleManager.role },
+                        set: { roleManager.setRole($0) }
+                    )) {
+                        ForEach(UserRole.allCases) { role in
+                            Text(role.displayName).tag(role)
+                        }
+                    }
+
+                    NavigationLink("Join Club") {
+                        JoinClubView()
+                    }
+                }
+
                 Section("Video Storage") {
                     HStack {
                         Text("Used")
@@ -25,6 +62,7 @@ struct SettingsView: View {
 
                 Section("Cloud Sync") {
                     Toggle("Cloud Sync", isOn: $teamStore.cloudSyncEnabled)
+                        .disabled(!subscriptionManager.entitlements.rosterCloudSync)
 
                     HStack {
                         Text("Status")
@@ -41,6 +79,18 @@ struct SettingsView: View {
                         Text("Last error: \(error)")
                             .font(.footnote)
                             .foregroundStyle(.red)
+                    }
+
+                    if !subscriptionManager.entitlements.rosterCloudSync {
+                        Text("Upgrade to Pro to enable roster cloud sync.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                Section("Analytics") {
+                    NavigationLink("Analytics Debug") {
+                        AnalyticsDebugView()
                     }
                 }
 
@@ -59,6 +109,10 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
+            .sheet(isPresented: $showPricing) {
+                PricingView()
+                    .environmentObject(subscriptionManager)
+            }
         }
     }
 

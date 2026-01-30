@@ -6,10 +6,15 @@ struct GoStatsRootView: View {
     @StateObject private var clipStore = ClipStore()
 
     @State private var teamStore = TeamStore()
+    @StateObject private var subscriptionManager = SubscriptionManager()
+    @StateObject private var roleManager = RoleManager()
+    @StateObject private var clubStore = ClubStore()
+    @StateObject private var analytics = AnalyticsService.shared
 
     @State private var selectedTeamID: UUID? = nil
     @State private var goToTabs = false
     @State private var showSplash = true
+    @State private var showOnboarding = false
 
     var body: some View {
         ZStack {
@@ -49,6 +54,10 @@ struct GoStatsRootView: View {
             .background(GoStatsTheme.bg)
         }
         .tint(GoStatsTheme.primary)
+        .environmentObject(subscriptionManager)
+        .environmentObject(roleManager)
+        .environmentObject(clubStore)
+        .environmentObject(analytics)
         .overlay {
             if showSplash {
                 SplashView(onSkip: {
@@ -59,8 +68,29 @@ struct GoStatsRootView: View {
                 .transition(.opacity)
             }
         }
+        .fullScreenCover(isPresented: $showOnboarding) {
+            OnboardingView(teamStore: teamStore)
+                .environmentObject(roleManager)
+                .environmentObject(clubStore)
+                .environmentObject(subscriptionManager)
+                .environmentObject(analytics)
+        }
         .task {
             await runSplashSequenceIfNeeded()
+            analytics.log(.appOpen)
+            if !showSplash && roleManager.needsOnboarding {
+                showOnboarding = true
+            }
+        }
+        .onChange(of: showSplash) { _, newValue in
+            if !newValue, roleManager.needsOnboarding {
+                showOnboarding = true
+            }
+        }
+        .onChange(of: roleManager.needsOnboarding) { _, needs in
+            if !showSplash && needs {
+                showOnboarding = true
+            }
         }
     }
 

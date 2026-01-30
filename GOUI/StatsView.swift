@@ -7,6 +7,9 @@ struct StatsView: View {
 
     @State private var selectedSeasonID: UUID? = nil
     @State private var showFullLeaderboard: Bool = false
+    @State private var showPricing = false
+
+    @EnvironmentObject var subscriptionManager: SubscriptionManager
 
     private var team: Team? {
         teamStore.teams.first(where: { $0.id == teamID })
@@ -45,18 +48,35 @@ struct StatsView: View {
         ZStack {
             GoStatsTheme.bg.ignoresSafeArea()
 
-            ScrollView {
-                VStack(spacing: 16) {
-                    seasonCard
-                    podiumCard
-                    leaderboardCard
-                    summaryCard
-                    playerStatsCard
-                    Spacer(minLength: 16)
+            if subscriptionManager.entitlements.advancedAnalytics {
+                ScrollView {
+                    VStack(spacing: 16) {
+                        seasonCard
+                        podiumCard
+                        leaderboardCard
+                        summaryCard
+                        playerStatsCard
+                        Spacer(minLength: 16)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 16)
+                    .padding(.bottom, 140)
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 16)
-                .padding(.bottom, 140)
+            } else {
+                ScrollView {
+                    VStack(spacing: 16) {
+                        UpgradePromptView(
+                            title: "Advanced Analytics",
+                            message: "Upgrade to Pro to unlock full season stats, leaderboards, and player analytics.",
+                            buttonTitle: "Upgrade"
+                        ) {
+                            showPricing = true
+                        }
+                        summaryCard
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 16)
+                }
             }
         }
         .navigationTitle("Stats")
@@ -65,6 +85,10 @@ struct StatsView: View {
             if selectedSeasonID == nil {
                 selectedSeasonID = teamStore.activeSeasonID(for: teamID) ?? seasons.first?.id
             }
+        }
+        .sheet(isPresented: $showPricing) {
+            PricingView()
+                .environmentObject(subscriptionManager)
         }
     }
 

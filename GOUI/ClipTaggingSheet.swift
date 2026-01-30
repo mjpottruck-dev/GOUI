@@ -9,12 +9,15 @@ struct ClipTaggingSheet: View {
     let activeRecordingElapsed: TimeInterval?
 
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject var subscriptionManager: SubscriptionManager
+    @EnvironmentObject var analytics: AnalyticsService
 
     @State private var selectedWindow: TimeInterval = 10
     @State private var useManualTrim = false
     @State private var startOffset: TimeInterval = 0
     @State private var endOffset: TimeInterval = 0
     @State private var title: String = ""
+    @State private var showPricing = false
 
     private let quickWindows: [TimeInterval] = [10, 15, 30]
 
@@ -87,6 +90,10 @@ struct ClipTaggingSheet: View {
             if let recording {
                 configureOffsets(recording: recording)
             }
+        }
+        .sheet(isPresented: $showPricing) {
+            PricingView()
+                .environmentObject(subscriptionManager)
         }
     }
 
@@ -165,6 +172,10 @@ struct ClipTaggingSheet: View {
     }
 
     private func createClip() {
+        guard subscriptionManager.canCreateClip(existingCount: clipStore.clips(for: gameID).count) else {
+            showPricing = true
+            return
+        }
         guard let recording else { return }
         let validStart = max(0, min(startOffset, maxDuration))
         let validEnd = max(validStart + 0.1, min(endOffset, maxDuration))
@@ -191,6 +202,7 @@ struct ClipTaggingSheet: View {
         }
 
         clipStore.addClip(clip, links: links)
+        analytics.log(.createdClip, metadata: ["gameID": gameID.uuidString])
         dismiss()
     }
 

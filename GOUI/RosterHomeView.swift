@@ -7,6 +7,9 @@ struct RosterHomeView: View {
     @State private var showingCreateTeam = false
     @State private var editingTeam: Team? = nil
     @State private var selectedSportFilter: String = "all"
+    @State private var showPermissionAlert = false
+
+    @EnvironmentObject var roleManager: RoleManager
 
     private var filteredTeams: [Team] {
         if selectedSportFilter == "all" { return teamStore.teams }
@@ -45,6 +48,10 @@ struct RosterHomeView: View {
                 } else {
                     ForEach(filteredTeams) { team in
                         Button {
+                            guard roleManager.canEditRoster() else {
+                                showPermissionAlert = true
+                                return
+                            }
                             editingTeam = team
                         } label: {
                             HStack {
@@ -66,6 +73,10 @@ struct RosterHomeView: View {
                         }
                     }
                     .onDelete { indexSet in
+                        guard roleManager.canEditRoster() else {
+                            showPermissionAlert = true
+                            return
+                        }
                         for idx in indexSet {
                             let team = filteredTeams[idx]
                             teamStore.deleteTeam(team)
@@ -76,7 +87,13 @@ struct RosterHomeView: View {
             .navigationTitle("Teams")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button { showingCreateTeam = true } label: {
+                    Button {
+                        guard roleManager.canEditRoster() else {
+                            showPermissionAlert = true
+                            return
+                        }
+                        showingCreateTeam = true
+                    } label: {
                         Image(systemName: "plus")
                     }
                 }
@@ -95,6 +112,11 @@ struct RosterHomeView: View {
                     }
                     teamStore.updateTeam(merged)
                 }
+            }
+            .alert("Permission Required", isPresented: $showPermissionAlert) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("Coach access is required to manage teams.")
             }
         }
     }

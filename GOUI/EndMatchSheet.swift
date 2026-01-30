@@ -11,6 +11,9 @@ struct EndMatchSheet: View {
     let formation: Formation
 
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject var subscriptionManager: SubscriptionManager
+    @EnvironmentObject var roleManager: RoleManager
+    @EnvironmentObject var analytics: AnalyticsService
 
     @State private var opponent: String = ""
     @State private var title: String = ""
@@ -20,6 +23,8 @@ struct EndMatchSheet: View {
     @State private var meetEventsText: String = ""
     @State private var shareSheetPayload: ShareSheetPayload? = nil
     @State private var exportError: String? = nil
+    @State private var showPricing = false
+    @State private var showPermissionAlert = false
 
     var body: some View {
         NavigationStack {
@@ -127,6 +132,15 @@ struct EndMatchSheet: View {
         } message: {
             Text(exportError ?? "")
         }
+        .alert("Permission Required", isPresented: $showPermissionAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Coach access is required to export.")
+        }
+        .sheet(isPresented: $showPricing) {
+            PricingView()
+                .environmentObject(subscriptionManager)
+        }
     }
 
     private func saveMatch() {
@@ -163,6 +177,7 @@ struct EndMatchSheet: View {
     }
 
     private func exportMaxPreps() {
+        guard canExport() else { return }
         let record = store.buildMatchRecord(
             opponent: opponent,
             title: title,
@@ -207,9 +222,23 @@ struct EndMatchSheet: View {
             }
 
             shareSheetPayload = ShareSheetPayload(items: urls)
+            subscriptionManager.recordExport()
         } catch {
             exportError = error.localizedDescription
         }
+    }
+
+    private func canExport() -> Bool {
+        analytics.log(.tappedExport, metadata: ["source": "end_match"])
+        guard roleManager.canExport() else {
+            showPermissionAlert = true
+            return false
+        }
+        if subscriptionManager.canExport() {
+            return true
+        }
+        showPricing = true
+        return false
     }
 
     private var isMeetSport: Bool {
