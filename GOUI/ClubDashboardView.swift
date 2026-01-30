@@ -12,7 +12,7 @@ struct ClubDashboardView: View {
     @State private var sharePayload: ShareSheetPayload? = nil
 
     private var club: Club? {
-        guard let clubID = roleManager.profile?.affiliatedClubID else { return nil }
+        guard let clubID = roleManager.affiliatedClubID else { return nil }
         return clubStore.clubs.first(where: { $0.id == clubID })
     }
 

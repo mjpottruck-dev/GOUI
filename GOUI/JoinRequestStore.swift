@@ -31,8 +31,10 @@ final class JoinRequestStore: ObservableObject {
         record["teamName"] = request.teamName as CKRecordValue
         record["joinCode"] = request.joinCode as CKRecordValue
         record["requesterUserID"] = request.requesterUserID as CKRecordValue
+        record["requesterName"] = request.requesterName as CKRecordValue
         record["requesterUserRecordName"] = (request.requesterUserRecordName ?? "") as CKRecordValue
-        record["requestedRole"] = request.requestedRole.rawValue as CKRecordValue
+        record["requestedMemberType"] = request.requestedMemberType.rawValue as CKRecordValue
+        record["message"] = (request.message ?? "") as CKRecordValue
         record["status"] = request.status.rawValue as CKRecordValue
         record["createdAt"] = request.createdAt as CKRecordValue
         record["updatedAt"] = request.updatedAt as CKRecordValue
@@ -46,8 +48,10 @@ final class JoinRequestStore: ObservableObject {
         record["teamName"] = request.teamName as CKRecordValue
         record["joinCode"] = request.joinCode as CKRecordValue
         record["requesterUserID"] = request.requesterUserID as CKRecordValue
+        record["requesterName"] = request.requesterName as CKRecordValue
         record["requesterUserRecordName"] = (request.requesterUserRecordName ?? "") as CKRecordValue
-        record["requestedRole"] = request.requestedRole.rawValue as CKRecordValue
+        record["requestedMemberType"] = request.requestedMemberType.rawValue as CKRecordValue
+        record["message"] = (request.message ?? "") as CKRecordValue
         record["status"] = status.rawValue as CKRecordValue
         record["createdAt"] = request.createdAt as CKRecordValue
         record["updatedAt"] = Date() as CKRecordValue
@@ -107,13 +111,24 @@ final class JoinRequestStore: ObservableObject {
               let teamName = record["teamName"] as? String,
               let joinCode = record["joinCode"] as? String,
               let requesterUserID = record["requesterUserID"] as? String,
-              let requestedRoleRaw = record["requestedRole"] as? String,
-              let requestedRole = TeamMembershipRole(rawValue: requestedRoleRaw),
+              let requestedMemberTypeRaw = (record["requestedMemberType"] as? String) ?? (record["requestedRole"] as? String),
               let statusRaw = record["status"] as? String,
               let status = JoinRequestStatus(rawValue: statusRaw),
               let createdAt = record["createdAt"] as? Date,
               let updatedAt = record["updatedAt"] as? Date
         else { return nil }
+        let memberType = TeamMemberType(rawValue: requestedMemberTypeRaw) ?? {
+            switch requestedMemberTypeRaw {
+            case "coachManager", "coachStaff":
+                return .coach
+            case "parent":
+                return .parent
+            case "player":
+                return .athlete
+            default:
+                return .athlete
+            }
+        }()
         let recordName = record.recordID.recordName
         return JoinRequest(
             id: UUID(uuidString: recordName) ?? UUID(),
@@ -121,8 +136,10 @@ final class JoinRequestStore: ObservableObject {
             teamName: teamName,
             joinCode: joinCode,
             requesterUserID: requesterUserID,
+            requesterName: (record["requesterName"] as? String) ?? "GoStats User",
             requesterUserRecordName: record["requesterUserRecordName"] as? String,
-            requestedRole: requestedRole,
+            requestedMemberType: memberType,
+            message: record["message"] as? String,
             status: status,
             createdAt: createdAt,
             updatedAt: updatedAt

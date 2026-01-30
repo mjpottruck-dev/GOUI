@@ -6,6 +6,35 @@ enum SportSeason: String, CaseIterable {
     case spring
 }
 
+enum SportType: String, CaseIterable {
+    case teamGame
+    case individualMeet
+    case dualIndividual
+}
+
+enum SegmentKind: String, CaseIterable {
+    case quarters
+    case halves
+    case periods
+    case sets
+    case innings
+    case holes
+    case events
+}
+
+struct SegmentDefinition {
+    let name: String
+    let durationSeconds: Int?
+    let count: Int
+}
+
+enum StatFormat: String, CaseIterable {
+    case count
+    case time
+    case distance
+    case score
+}
+
 protocol SportDefinition {
     var id: String { get }
     var displayName: String { get }
@@ -24,6 +53,13 @@ protocol SportDefinition {
     var eventTypes: [EventType] { get }
     var courtLayout: CourtLayoutDefinition { get }
     var scoringRules: ScoringRules { get }
+
+    var sportType: SportType { get }
+    var segmentKind: SegmentKind { get }
+    var defaultSegments: [SegmentDefinition] { get }
+    var statTypes: [StatType] { get }
+    var eventTypesTeam: [EventType] { get }
+    var eventTypesGoalie: [EventType] { get }
 }
 
 struct PeriodDefinition {
@@ -38,6 +74,10 @@ struct StatType: Identifiable {
     let shortLabel: String?
     let countsForTeam: Bool
     let countsForPlayer: Bool
+}
+
+extension StatType {
+    var format: StatFormat { .count }
 }
 
 enum EventUIAction: String {
@@ -149,4 +189,39 @@ enum SportCatalog {
         let normalizedID = resolvedID == legacyWaterPoloID ? waterPoloID : resolvedID
         return registry[normalizedID] ?? registry[defaultSportID] ?? SoccerSport()
     }
+}
+
+extension SportDefinition {
+    var sportType: SportType {
+        switch scoringMode {
+        case .teamVsTeam: return .teamGame
+        case .individual: return .individualMeet
+        case .dualIndividual: return .dualIndividual
+        }
+    }
+
+    var segmentKind: SegmentKind {
+        if supportsHoles { return .holes }
+        if supportsPeriods {
+            if id == SportCatalog.volleyballID || id == SportCatalog.tennisID {
+                return .sets
+            }
+            return .periods
+        }
+        return .events
+    }
+
+    var defaultSegments: [SegmentDefinition] {
+        if supportsPeriods {
+            return periods.map { SegmentDefinition(name: $0.name, durationSeconds: Int($0.duration), count: $0.maxCount) }
+        }
+        if supportsHoles {
+            return [SegmentDefinition(name: \"Hole\", durationSeconds: nil, count: defaultHoleCount)]
+        }
+        return [SegmentDefinition(name: \"Event\", durationSeconds: nil, count: 1)]
+    }
+
+    var statTypes: [StatType] { statSchema }
+    var eventTypesTeam: [EventType] { eventTypes.filter { !$0.isGoalieOnly } }
+    var eventTypesGoalie: [EventType] { eventTypes.filter { $0.isGoalieOnly } }
 }

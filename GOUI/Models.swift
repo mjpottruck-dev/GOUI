@@ -381,6 +381,8 @@ struct MatchRecord: Identifiable, Codable, Hashable {
 
     var playerSeconds: [UUID: Int] = [:]
     var playerStats: [UUID: PlayerStatLine] = [:]
+
+    var resultEntries: [ResultEntry] = []
 }
 
 struct PeriodScore: Identifiable, Codable, Hashable {
@@ -403,6 +405,8 @@ struct Team: Identifiable, Codable, Hashable {
 
     var createdAt: Date = Date()
     var updatedAt: Date = Date()
+    var seasonTag: String? = nil
+    var managerUserID: String? = nil
 
     var fieldSize: Int = 7
     var startingOnFieldIDs: [UUID] = []
@@ -417,6 +421,31 @@ struct Team: Identifiable, Codable, Hashable {
     var shareRecordName: String? = nil
 
     var matches: [MatchRecord] = []
+}
+
+struct ResultEntry: Identifiable, Codable, Hashable {
+    var id: UUID = UUID()
+    var gameID: UUID
+    var playerID: UUID
+    var segmentName: String
+    var valueString: String?
+    var valueDouble: Double?
+    var unit: String?
+}
+
+struct ChatThread: Identifiable, Codable, Hashable {
+    var id: UUID = UUID()
+    var teamID: UUID
+}
+
+struct ChatMessage: Identifiable, Codable, Hashable {
+    var id: UUID = UUID()
+    var threadID: UUID
+    var senderUserID: String
+    var senderName: String
+    var createdAt: Date = Date()
+    var text: String
+    var isDeleted: Bool = false
 }
 
 extension Team {

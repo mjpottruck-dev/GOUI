@@ -13,6 +13,7 @@ struct JoinTeamByCodeView: View {
 
     @State private var joinCode: String = ""
     @State private var statusMessage: String? = nil
+    @State private var message: String = ""
 
     var body: some View {
         NavigationStack {
@@ -22,10 +23,11 @@ struct JoinTeamByCodeView: View {
                         .textInputAutocapitalization(.characters)
                         .autocorrectionDisabled()
 
+                    TextField("Message (optional)", text: $message)
+
                     Button("Request Access") {
                         Task { await handleJoin() }
                     }
-                    .disabled(!authManager.isSignedIn)
 
                     if let statusMessage {
                         Text(statusMessage)
@@ -44,10 +46,7 @@ struct JoinTeamByCodeView: View {
     }
 
     private func handleJoin() async {
-        guard let authUser = authManager.currentUser else {
-            statusMessage = "Sign in with Apple to request access."
-            return
-        }
+        let requesterUser = authManager.currentUser
         let code = joinCode.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
         guard !code.isEmpty else { return }
         guard let team = teamStore.teams.first(where: { $0.joinCode == code }) else {
@@ -61,8 +60,25 @@ struct JoinTeamByCodeView: View {
             return
         }
 
-        let defaultRole: TeamMembershipRole = roleManager.role == .coach ? .coachStaff : .viewer
-        if joinRequestStore.hasPendingRequest(teamID: team.id, userID: authUser.userID) {
+        guard roleManager.role != .recruiter else {
+            statusMessage = "Recruiters cannot join teams by code."
+            return
+        }
+
+        let defaultMemberType: TeamMemberType = {
+            switch roleManager.role {
+            case .coach:
+                return .coach
+            case .parent:
+                return .parent
+            case .athlete:
+                return .athlete
+            case .recruiter:
+                return .recruiterViewer
+            }
+        }()
+        let defaultPermission: TeamPermissionRole = roleManager.role == .coach ? .coachStaff : .viewer
+        if joinRequestStore.hasPendingRequest(teamID: team.id, userID: requesterUser?.userID ?? roleManager.userID) {
             statusMessage = "You already requested to join this team."
             return
         }
@@ -72,9 +88,11 @@ struct JoinTeamByCodeView: View {
                 teamID: team.id,
                 teamName: team.name,
                 joinCode: team.joinCode,
-                requesterUserID: authUser.userID,
-                requesterUserRecordName: authUser.userRecordName,
-                requestedRole: defaultRole
+                requesterUserID: requesterUser?.userID ?? roleManager.userID,
+                requesterName: roleManager.displayName,
+                requesterUserRecordName: requesterUser?.userRecordName,
+                requestedMemberType: defaultMemberType,
+                message: message.trimmingCharacters(in: .whitespacesAndNewlines)
             )
             do {
                 try await joinRequestStore.submitJoinRequest(request)
@@ -83,12 +101,13 @@ struct JoinTeamByCodeView: View {
                 statusMessage = "Could not send request. Try again."
             }
         } else {
-            membershipStore.requestJoin(teamID: team.id, userID: authUser.userID, role: defaultRole)
-            if let pending = membershipStore.membershipRecord(for: team.id, userID: authUser.userID) {
+            let requesterID = requesterUser?.userID ?? roleManager.userID
+            membershipStore.requestJoin(teamID: team.id, userID: requesterID, memberType: defaultMemberType, permissionRole: defaultPermission)
+            if let pending = membershipStore.membershipRecord(for: team.id, userID: requesterID) {
                 membershipStore.approveMembership(pending)
             }
-            if let shareRecordName = team.shareRecordName, let requesterRecordName = authUser.userRecordName {
-                let permission: CKShare.ParticipantPermission = defaultRole.hasCoachPermissions ? .readWrite : .readOnly
+            if let shareRecordName = team.shareRecordName, let requesterRecordName = requesterUser?.userRecordName {
+                let permission: CKShare.ParticipantPermission = defaultPermission.hasCoachPermissions ? .readWrite : .readOnly
                 try? await sharingService.addParticipant(
                     shareRecordName: shareRecordName,
                     userRecordName: requesterRecordName,
