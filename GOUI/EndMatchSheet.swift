@@ -12,7 +12,7 @@ struct EndMatchSheet: View {
 
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var subscriptionManager: SubscriptionManager
-    @EnvironmentObject var roleManager: RoleManager
+    @EnvironmentObject var permissionService: PermissionService
     @EnvironmentObject var analytics: AnalyticsService
 
     @State private var opponent: String = ""
@@ -230,7 +230,7 @@ struct EndMatchSheet: View {
 
     private func canExport() -> Bool {
         analytics.log(.tappedExport, metadata: ["source": "end_match"])
-        guard roleManager.canExport() else {
+        guard permissionService.canExport(teamID: teamID) else {
             showPermissionAlert = true
             return false
         }

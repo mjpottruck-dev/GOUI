@@ -12,6 +12,7 @@ struct PlayerProfile: Codable, Hashable {
     var highlightClipIDs: [UUID] = []
     var statsHistory: [PlayerSeasonSnapshot] = []
     var isPublic: Bool = false
+    var isRecruiterVisible: Bool = false
     var publicProfileID: String = UUID().uuidString
     var lastSharedAt: Date? = nil
 

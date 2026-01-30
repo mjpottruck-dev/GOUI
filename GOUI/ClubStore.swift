@@ -11,8 +11,30 @@ struct Club: Identifiable, Codable, Hashable {
     var createdAt: Date
     var updatedAt: Date
     var teamIDs: [UUID]
+    var adminIDs: [String]
+    var inviteCodes: ClubInviteCodes
+}
+
+private struct LegacyClub: Codable {
+    var id: UUID
+    var name: String
+    var createdAt: Date
+    var updatedAt: Date
+    var teamIDs: [UUID]
     var adminIDs: [UUID]
     var inviteCodes: ClubInviteCodes
+
+    func toClub() -> Club {
+        Club(
+            id: id,
+            name: name,
+            createdAt: createdAt,
+            updatedAt: updatedAt,
+            teamIDs: teamIDs,
+            adminIDs: adminIDs.map { $0.uuidString },
+            inviteCodes: inviteCodes
+        )
+    }
 }
 
 final class ClubStore: ObservableObject {
@@ -28,7 +50,7 @@ final class ClubStore: ObservableObject {
         load()
     }
 
-    func createClub(name: String, adminID: UUID, teamIDs: [UUID]) -> Club {
+    func createClub(name: String, adminID: String, teamIDs: [UUID]) -> Club {
         let now = Date()
         let club = Club(
             id: UUID(),
@@ -56,14 +78,14 @@ final class ClubStore: ObservableObject {
         clubs[idx].updatedAt = Date()
     }
 
-    func joinClub(with code: String, userID: UUID) -> (club: Club, role: UserRole)? {
+    func joinClub(with code: String, userID: String) -> (club: Club, role: UserRole)? {
         if let club = clubs.first(where: { $0.inviteCodes.adminCode == code }) {
             var updated = club
             if !updated.adminIDs.contains(userID) {
                 updated.adminIDs.append(userID)
             }
             updateClub(updated)
-            return (updated, .clubAdmin)
+            return (updated, .coach)
         }
 
         if let club = clubs.first(where: { $0.inviteCodes.coachCode == code }) {
@@ -75,11 +97,19 @@ final class ClubStore: ObservableObject {
 
     private func load() {
         guard let data = try? Data(contentsOf: fileURL),
-              let decoded = try? JSONDecoder().decode([Club].self, from: data) else {
+              !data.isEmpty else {
             clubs = []
             return
         }
-        clubs = decoded
+        if let decoded = try? JSONDecoder().decode([Club].self, from: data) {
+            clubs = decoded
+            return
+        }
+        if let legacy = try? JSONDecoder().decode([LegacyClub].self, from: data) {
+            clubs = legacy.map { $0.toClub() }
+        } else {
+            clubs = []
+        }
     }
 
     private func save() {

@@ -1,33 +1,43 @@
 import Foundation
 
 enum UserRole: String, CaseIterable, Codable, Identifiable {
-    case parentPlayer
+    case familyMember
     case coach
-    case clubAdmin
+    case recruiter
 
     var id: String { rawValue }
 
     var displayName: String {
         switch self {
-        case .parentPlayer: return "Parent / Player"
+        case .familyMember: return "Family Member"
         case .coach: return "Coach"
-        case .clubAdmin: return "Club Admin"
+        case .recruiter: return "Recruiter"
         }
     }
 
     var permissionsSummary: String {
         switch self {
-        case .parentPlayer:
+        case .familyMember:
             return "View teams, stats, and highlights."
         case .coach:
             return "Edit rosters, log games, export stats."
-        case .clubAdmin:
-            return "Manage multiple teams and club settings."
+        case .recruiter:
+            return "Search public player profiles in read-only mode."
         }
     }
 }
 
 struct UserProfile: Identifiable, Codable {
+    var id: String { userID }
+    var userID: String
+    var displayName: String
+    var role: UserRole
+    var affiliatedTeamIDs: [UUID]
+    var affiliatedClubID: UUID?
+    var createdAt: Date
+}
+
+private struct LegacyUserProfile: Codable {
     var id: UUID
     var role: UserRole
     var affiliatedTeamIDs: [UUID]
@@ -45,6 +55,7 @@ final class RoleManager: ObservableObject {
     }
 
     private let fileURL: URL
+    private let userIDKey = "gostats.userID"
     private let onboardingKey = "onboarding.completed"
 
     init() {
@@ -54,8 +65,17 @@ final class RoleManager: ObservableObject {
         load()
     }
 
+    var userID: String {
+        if let stored = KeychainHelper.read(userIDKey) {
+            return stored
+        }
+        let newID = UUID().uuidString
+        KeychainHelper.save(newID, for: userIDKey)
+        return newID
+    }
+
     var role: UserRole {
-        profile?.role ?? .parentPlayer
+        profile?.role ?? .familyMember
     }
 
     var needsOnboarding: Bool {
@@ -64,13 +84,27 @@ final class RoleManager: ObservableObject {
 
     func setRole(_ role: UserRole) {
         var updated = profile ?? UserProfile(
-            id: UUID(),
+            userID: userID,
+            displayName: profile?.displayName ?? "GoStats User",
             role: role,
             affiliatedTeamIDs: [],
             affiliatedClubID: nil,
             createdAt: Date()
         )
         updated.role = role
+        profile = updated
+    }
+
+    func updateDisplayName(_ displayName: String) {
+        var updated = profile ?? UserProfile(
+            userID: userID,
+            displayName: displayName,
+            role: .familyMember,
+            affiliatedTeamIDs: [],
+            affiliatedClubID: nil,
+            createdAt: Date()
+        )
+        updated.displayName = displayName
         profile = updated
     }
 
@@ -95,23 +129,35 @@ final class RoleManager: ObservableObject {
     }
 
     func canEditRoster() -> Bool {
-        role == .coach || role == .clubAdmin
+        role == .coach
     }
 
     func canLogGames() -> Bool {
-        role == .coach || role == .clubAdmin
+        role == .coach
     }
 
     func canExport() -> Bool {
-        role == .coach || role == .clubAdmin
+        role == .coach
     }
 
     private func load() {
-        guard let data = try? Data(contentsOf: fileURL),
-              let decoded = try? JSONDecoder().decode(UserProfile.self, from: data) else {
+        guard let data = try? Data(contentsOf: fileURL) else { return }
+
+        if let decoded = try? JSONDecoder().decode(UserProfile.self, from: data) {
+            profile = decoded
             return
         }
-        profile = decoded
+
+        if let legacy = try? JSONDecoder().decode(LegacyUserProfile.self, from: data) {
+            profile = UserProfile(
+                userID: userID,
+                displayName: "GoStats User",
+                role: legacy.role,
+                affiliatedTeamIDs: legacy.affiliatedTeamIDs,
+                affiliatedClubID: legacy.affiliatedClubID,
+                createdAt: legacy.createdAt
+            )
+        }
     }
 
     private func save() {

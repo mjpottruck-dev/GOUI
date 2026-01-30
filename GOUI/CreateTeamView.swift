@@ -7,6 +7,9 @@ struct CreateTeamView: View {
 
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var analytics: AnalyticsService
+    @EnvironmentObject var membershipStore: TeamMembershipStore
+    @EnvironmentObject var roleManager: RoleManager
+    @EnvironmentObject var permissionService: PermissionService
 
     @State private var name: String = ""
     @State private var fieldSize: Int = 11
@@ -14,6 +17,7 @@ struct CreateTeamView: View {
     @State private var players: [Player] = []
     @State private var showAddPlayer = false
     @State private var sportID: String = SportCatalog.defaultSportID
+    @State private var showCoachLimitAlert = false
 
     private var sport: any SportDefinition {
         SportCatalog.sport(for: sportID)
@@ -129,10 +133,15 @@ struct CreateTeamView: View {
                 }
             }
         }
-        .sheet(isPresented: $showAddPlayer) {
+            .sheet(isPresented: $showAddPlayer) {
             CreatePlayerView(onCreate: { player in
                 players.append(player)
             }, sport: sport)
+        }
+        .alert("Coach Team Limit", isPresented: $showCoachLimitAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(permissionService.coachLimitMessage())
         }
         .onChange(of: sportID) { _, _ in
             if let first = fieldSizeOptions.first {
@@ -163,6 +172,18 @@ struct CreateTeamView: View {
 
         teamStore.addTeam(team)
         analytics.log(.createdTeam, metadata: ["teamID": team.id.uuidString])
+        if permissionService.canAssignCoachRole(teamID: team.id, role: .coachManager) {
+            membershipStore.requestJoin(teamID: team.id, userID: roleManager.userID, role: .coachManager)
+            if let pending = membershipStore.membershipRecord(for: team.id, userID: roleManager.userID) {
+                membershipStore.approveMembership(pending)
+            }
+        } else {
+            membershipStore.requestJoin(teamID: team.id, userID: roleManager.userID, role: .viewer)
+            if let pending = membershipStore.membershipRecord(for: team.id, userID: roleManager.userID) {
+                membershipStore.approveMembership(pending)
+            }
+            showCoachLimitAlert = true
+        }
         onCreated(team.id)
         dismiss()
     }

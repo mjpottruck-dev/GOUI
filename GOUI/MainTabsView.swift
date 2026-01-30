@@ -6,11 +6,14 @@ struct MainTabsView: View {
     @ObservedObject var store: MatchStore
     @ObservedObject var clipStore: ClipStore
     @Bindable var teamStore: TeamStore
-    let teamID: UUID
     @EnvironmentObject var roleManager: RoleManager
+    @EnvironmentObject var subscriptionManager: SubscriptionManager
+    @EnvironmentObject var appState: AppState
+    @EnvironmentObject var membershipStore: TeamMembershipStore
+    @EnvironmentObject var permissionService: PermissionService
 
     private var sport: any SportDefinition {
-        let team = teamStore.teams.first(where: { $0.id == teamID })
+        let team = teamStore.teams.first(where: { $0.id == activeTeamID })
         return SportCatalog.sport(for: team?.sportID)
     }
 
@@ -19,36 +22,52 @@ struct MainTabsView: View {
             GoStatsTheme.bg.ignoresSafeArea()
 
             TabView {
-                MatchView(
-                    store: store,
-                    clipStore: clipStore,
-                    teamStore: teamStore,
-                    teamID: teamID
-                )
-                .tabItem { Label("Match", systemImage: "soccerball") }
+                if let activeTeamID {
+                    MatchView(
+                        store: store,
+                        clipStore: clipStore,
+                        teamStore: teamStore,
+                        teamID: activeTeamID
+                    )
+                    .tabItem { Label("Match", systemImage: "soccerball") }
 
-                TeamRosterView(teamStore: teamStore, clipStore: clipStore, teamID: teamID)
-                    .tabItem { Label("Roster", systemImage: "person.3") }
+                    TeamRosterView(teamStore: teamStore, clipStore: clipStore, teamID: activeTeamID)
+                        .tabItem { Label("Roster", systemImage: "person.3") }
 
-                StatsView(teamStore: teamStore, teamID: teamID, sport: sport)
-                    .tabItem { Label("Stats", systemImage: "chart.bar") }
+                    StatsView(teamStore: teamStore, teamID: activeTeamID, sport: sport)
+                        .tabItem { Label("Stats", systemImage: "chart.bar") }
 
-                HighlightsHubView(
-                    matchStore: store,
-                    clipStore: clipStore,
-                    teamStore: teamStore,
-                    teamID: teamID
-                )
-                .tabItem { Label("Highlights", systemImage: "film") }
+                    HighlightsHubView(
+                        matchStore: store,
+                        clipStore: clipStore,
+                        teamStore: teamStore,
+                        teamID: activeTeamID
+                    )
+                    .tabItem { Label("Highlights", systemImage: "film") }
+                } else {
+                    NoTeamView()
+                        .tabItem { Label("Match", systemImage: "soccerball") }
+                }
 
-                if roleManager.role == .clubAdmin {
+                if subscriptionManager.entitlements.clubDashboard {
                     ClubDashboardView(teamStore: teamStore)
                         .tabItem { Label("Club", systemImage: "building.2") }
+                }
+
+                if roleManager.role == .recruiter {
+                    RecruiterPortalView(teamStore: teamStore, clipStore: clipStore)
+                        .tabItem { Label("Recruiter", systemImage: "magnifyingglass") }
                 }
 
                 SettingsView(teamStore: teamStore, clipStore: clipStore)
                     .tabItem { Label("Settings", systemImage: "gearshape") }
             }
         }
+    }
+
+    private var activeTeamID: UUID? {
+        let current = appState.currentTeamID
+        if current != nil { return current }
+        return membershipStore.activeTeamIDs(for: roleManager.userID).first ?? teamStore.teams.first?.id
     }
 }

@@ -4,6 +4,9 @@ struct TeamArchiveView: View {
 
     var teamStore: TeamStore
     let teamID: UUID
+    @State private var showSwitcher = false
+
+    @EnvironmentObject var appState: AppState
 
     private var team: Team? {
         teamStore.teams.first(where: { $0.id == teamID })
@@ -101,6 +104,20 @@ struct TeamArchiveView: View {
         }
         .navigationTitle("Archive")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    showSwitcher = true
+                } label: {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                }
+            }
+        }
+        .sheet(isPresented: $showSwitcher) {
+            TeamSwitcherSheet(teamStore: teamStore) { picked in
+                appState.currentTeamID = picked
+            }
+        }
     }
 
     private func archiveRow(_ match: MatchRecord) -> some View {

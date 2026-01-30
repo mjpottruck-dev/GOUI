@@ -9,10 +9,13 @@ struct HomePreMatchView: View {
     var onStartMatch: (UUID, GameTemplate?) -> Void
 
     @EnvironmentObject var roleManager: RoleManager
+    @EnvironmentObject var membershipStore: TeamMembershipStore
+    @EnvironmentObject var permissionService: PermissionService
 
     @State private var selectedTemplateID: String? = nil
     @State private var selectedSeasonID: UUID? = nil
     @State private var showPermissionAlert = false
+    @State private var showJoinTeam = false
 
     var body: some View {
         ZStack {
@@ -20,16 +23,22 @@ struct HomePreMatchView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
+                    if !activeTeams.isEmpty {
+                        teamSwitcher
+                    }
+
+                    myTeamsSection
+
                     VStack(alignment: .leading, spacing: 10) {
                         Text("TEAM")
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(.secondary)
 
                         Picker("Team", selection: Binding(
-                            get: { selectedTeamID ?? teamStore.teams.first?.id },
+                            get: { selectedTeamID ?? activeTeams.first?.id },
                             set: { selectedTeamID = $0 }
                         )) {
-                            ForEach(teamStore.teams) { team in
+                            ForEach(activeTeams) { team in
                                 Text(team.name).tag(Optional(team.id))
                             }
                         }
@@ -97,18 +106,18 @@ struct HomePreMatchView: View {
                     }
 
                     Button {
-                        guard roleManager.canLogGames() else {
+                        guard let teamID = selectedTeamID ?? activeTeams.first?.id else { return }
+                        guard permissionService.canLogMatches(teamID: teamID) else {
                             showPermissionAlert = true
                             return
                         }
-                        guard let tid = selectedTeamID ?? teamStore.teams.first?.id else { return }
-                        selectedTeamID = tid
+                        selectedTeamID = teamID
                         let template = GameTemplateCatalog.template(for: selectedTeam?.sportID ?? SportCatalog.defaultSportID, templateID: selectedTemplateID)
                         if var team = selectedTeam {
                             team.lastTemplateID = template?.id
                             teamStore.updateTeam(team)
                         }
-                        onStartMatch(tid, template)
+                        onStartMatch(teamID, template)
                     } label: {
                         Text(startMatchLabel)
                             .font(.system(size: 18, weight: .semibold))
@@ -121,7 +130,7 @@ struct HomePreMatchView: View {
                             )
                     }
                     .buttonStyle(.plain)
-                    .disabled(teamStore.teams.isEmpty || !roleManager.canLogGames())
+                    .disabled(activeTeams.isEmpty || !permissionService.canLogMatches(teamID: selectedTeamID ?? activeTeams.first?.id ?? UUID()))
 
                     VStack(spacing: 10) {
                         NavigationLink {
@@ -131,7 +140,7 @@ struct HomePreMatchView: View {
                         }
 
                         NavigationLink {
-                            if let teamID = selectedTeamID ?? teamStore.teams.first?.id {
+                            if let teamID = selectedTeamID ?? activeTeams.first?.id {
                                 TeamArchiveView(teamStore: teamStore, teamID: teamID)
                             } else {
                                 Text("Select a team")
@@ -141,7 +150,7 @@ struct HomePreMatchView: View {
                         }
 
                         NavigationLink {
-                            if let teamID = selectedTeamID ?? teamStore.teams.first?.id {
+                            if let teamID = selectedTeamID ?? activeTeams.first?.id {
                                 let sport = SportCatalog.sport(for: teamStore.teams.first(where: { $0.id == teamID })?.sportID)
                                 StatsView(teamStore: teamStore, teamID: teamID, sport: sport)
                             } else {
@@ -152,7 +161,7 @@ struct HomePreMatchView: View {
                         }
 
                         NavigationLink {
-                            if let teamID = selectedTeamID ?? teamStore.teams.first?.id,
+                            if let teamID = selectedTeamID ?? activeTeams.first?.id,
                                let team = teamStore.teams.first(where: { $0.id == teamID }) {
                                 TeamStatsView(team: team, sport: SportCatalog.sport(for: team.sportID))
                             } else {
@@ -160,6 +169,12 @@ struct HomePreMatchView: View {
                             }
                         } label: {
                             rowButton(title: "Player Stats", systemImage: "person.text.rectangle")
+                        }
+
+                        Button {
+                            showJoinTeam = true
+                        } label: {
+                            rowButton(title: "Join Team by Code", systemImage: "person.crop.circle.badge.plus")
                         }
                     }
                     .padding(.top, 10)
@@ -173,7 +188,7 @@ struct HomePreMatchView: View {
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             if selectedTeamID == nil {
-                selectedTeamID = teamStore.teams.first?.id
+                selectedTeamID = activeTeams.first?.id
             }
             syncTemplateSelection()
             syncSeasonSelection()
@@ -181,6 +196,9 @@ struct HomePreMatchView: View {
         .onChange(of: selectedTeamID) { _, _ in
             syncTemplateSelection()
             syncSeasonSelection()
+        }
+        .sheet(isPresented: $showJoinTeam) {
+            JoinTeamByCodeView(teamStore: teamStore)
         }
         .alert("Permission Required", isPresented: $showPermissionAlert) {
             Button("OK", role: .cancel) {}
@@ -190,7 +208,7 @@ struct HomePreMatchView: View {
     }
 
     private var selectedTeam: Team? {
-        guard let id = selectedTeamID ?? teamStore.teams.first?.id else { return nil }
+        guard let id = selectedTeamID ?? activeTeams.first?.id else { return nil }
         return teamStore.teams.first(where: { $0.id == id })
     }
 
@@ -241,26 +259,121 @@ struct HomePreMatchView: View {
         }
     }
 
-    private func rowButton(title: String, systemImage: String) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: systemImage)
-                .font(.system(size: 16, weight: .semibold))
-                .frame(width: 26)
+    private var activeTeams: [Team] {
+        let activeIDs = membershipStore.activeTeamIDs(for: roleManager.userID)
+        let resolved = activeIDs.isEmpty ? teamStore.teams : teamStore.teams.filter { activeIDs.contains($0.id) }
+        return resolved.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+    }
+
+    private var teamSwitcher: some View {
+        LiquidGlassContainer(cornerRadius: 22) {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("CURRENT TEAM")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.secondary)
+
+                Picker("Current Team", selection: Binding(
+                    get: { selectedTeamID ?? activeTeams.first?.id },
+                    set: { selectedTeamID = $0 }
+                )) {
+                    ForEach(activeTeams) { team in
+                        Text(team.name).tag(Optional(team.id))
+                    }
+                }
+                .pickerStyle(.menu)
+            }
+        }
+    }
+
+    private var myTeamsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("MY TEAMS")
+                .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(GoStatsTheme.primary)
 
-            Text(title)
-                .font(.system(size: 16, weight: .semibold))
-
-            Spacer()
-
-            Image(systemName: "chevron.right")
-                .foregroundStyle(.secondary)
+            if groupedTeams.isEmpty {
+                LiquidGlassContainer(cornerRadius: 22) {
+                    Text("No active teams yet.")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(GoStatsTheme.text2)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            } else {
+                ForEach(groupedTeams) { group in
+                    LiquidGlassContainer(cornerRadius: 22) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("\(group.sport.displayName) • \(group.seasonLabel)")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(GoStatsTheme.text2)
+                            ForEach(group.teams) { team in
+                                Button {
+                                    selectedTeamID = team.id
+                                } label: {
+                                    HStack {
+                                        Text(team.name)
+                                            .font(.system(size: 14, weight: .semibold))
+                                            .foregroundStyle(GoStatsTheme.text)
+                                        Spacer()
+                                        if selectedTeamID == team.id {
+                                            Image(systemName: "checkmark.circle.fill")
+                                                .foregroundStyle(GoStatsTheme.primary)
+                                        }
+                                    }
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                }
+            }
         }
-        .padding(14)
+    }
+
+    private var groupedTeams: [TeamGroup] {
+        let groups = Dictionary(grouping: activeTeams) { team in
+            let seasonLabel = teamStore.activeSeason(for: team.id)?.name ?? "Season TBD"
+            return "\(team.sportID)|\(seasonLabel)"
+        }
+
+        return groups.compactMap { key, teams in
+            guard let first = teams.first else { return nil }
+            let seasonLabel = teamStore.activeSeason(for: first.id)?.name ?? "Season TBD"
+            return TeamGroup(
+                id: key,
+                sport: SportCatalog.sport(for: first.sportID),
+                seasonLabel: seasonLabel,
+                teams: teams.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+            )
+        }
+        .sorted { lhs, rhs in
+            if lhs.sport.displayName == rhs.sport.displayName {
+                return lhs.seasonLabel < rhs.seasonLabel
+            }
+            return lhs.sport.displayName < rhs.sport.displayName
+        }
+    }
+
+    private func rowButton(title: String, systemImage: String) -> some View {
+        HStack {
+            Label(title, systemImage: systemImage)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(GoStatsTheme.text)
+            Spacer()
+            Image(systemName: "chevron.right")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(GoStatsTheme.text2)
+        }
+        .padding()
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .fill(Color(uiColor: .secondarySystemGroupedBackground))
         )
-        .foregroundStyle(Color.primary)
     }
+}
+
+private struct TeamGroup: Identifiable {
+    let id: String
+    let sport: any SportDefinition
+    let seasonLabel: String
+    let teams: [Team]
 }
