@@ -79,7 +79,7 @@ final class ClipStore: ObservableObject {
         clips.filter { $0.gameID == gameID }
     }
 
-    func clips(for playerID: UUID) -> [Clip] {
+    func clips(forPlayerID playerID: UUID) -> [Clip] {
         clips.filter { $0.linkedPlayerIDs.contains(playerID) }
     }
 

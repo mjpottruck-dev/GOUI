@@ -228,7 +228,7 @@ struct PlayerHighlightsView: View {
     }
 
     private func filteredPlayerClips(playerID: UUID) -> [Clip] {
-        let clips = clipStore.clips(for: playerID)
+        let clips = clipStore.clips(forPlayerID: playerID)
         guard let seasonID = selectedSeasonID else { return clips }
         let matches = teamStore.teams.first(where: { $0.id == teamID })?.matches ?? []
         let matchIDs = matches.filter { $0.seasonID == seasonID }.map { $0.id }
