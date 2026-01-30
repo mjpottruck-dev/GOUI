@@ -1,5 +1,6 @@
 import Foundation
 
+@MainActor
 final class PermissionService: ObservableObject {
     private let roleManager: RoleManager
     private let membershipStore: TeamMembershipStore

@@ -263,7 +263,7 @@ struct PlayerProfileEditorView: View {
             profile.publicProfileID = UUID().uuidString
         }
 
-        guard var team = teamStore.teams.first(where: { $0.id == teamID }),
+        guard let team = teamStore.teams.first(where: { $0.id == teamID }),
               let index = team.players.firstIndex(where: { $0.id == playerID })
         else { return }
 
