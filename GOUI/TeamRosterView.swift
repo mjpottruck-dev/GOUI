@@ -19,6 +19,7 @@ struct TeamRosterView: View {
     @EnvironmentObject var permissionService: PermissionService
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var roleManager: RoleManager
+    @EnvironmentObject var membershipStore: TeamMembershipStore
     @EnvironmentObject var statKeeperRequestStore: StatKeeperRequestStore
 
     private var sport: any SportDefinition {
