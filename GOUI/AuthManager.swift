@@ -110,7 +110,7 @@ final class AuthManager: NSObject, ObservableObject {
         let recordID = CKRecord.ID(recordName: userID)
         return try await withCheckedThrowingContinuation { continuation in
             database.fetch(withRecordID: recordID) { record, error in
-                if let error as? CKError, error.code == .unknownItem {
+                if let ckError = error as? CKError, ckError.code == .unknownItem {
                     continuation.resume(returning: nil)
                     return
                 }
@@ -168,7 +168,7 @@ final class AuthManager: NSObject, ObservableObject {
         }
     }
 
-    private static func decodeUser(from record: CKRecord) -> AuthUser? {
+    nonisolated private static func decodeUser(from record: CKRecord) -> AuthUser? {
         guard let displayName = record["displayName"] as? String,
               let roleRaw = record["role"] as? String,
               let role = UserRole(rawValue: roleRaw),
@@ -188,7 +188,7 @@ final class AuthManager: NSObject, ObservableObject {
 }
 
 extension AuthManager: ASAuthorizationControllerDelegate {
-    nonisolated func authorizationController(controller: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization) {
+    func authorizationController(controller: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization) {
         guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential else {
             signInContinuation?.resume(throwing: NSError(domain: "Auth", code: -1))
             signInContinuation = nil
@@ -198,14 +198,14 @@ extension AuthManager: ASAuthorizationControllerDelegate {
         signInContinuation = nil
     }
 
-    nonisolated func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
+    func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
         signInContinuation?.resume(throwing: error)
         signInContinuation = nil
     }
 }
 
 extension AuthManager: ASAuthorizationControllerPresentationContextProviding {
-    nonisolated func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
+    func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
         UIApplication.shared.connectedScenes
             .compactMap { $0 as? UIWindowScene }
             .flatMap { $0.windows }
