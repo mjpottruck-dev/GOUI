@@ -3,9 +3,17 @@ import SwiftUI
 struct MatchTimelineView: View {
 
     let events: [MatchEvent]
+    let clipStore: ClipStore?
+    let teamStore: TeamStore?
+    let teamID: UUID?
 
-    init(events: [MatchEvent] = []) {
+    @State private var selectedEvent: MatchEvent? = nil
+
+    init(events: [MatchEvent] = [], clipStore: ClipStore? = nil, teamStore: TeamStore? = nil, teamID: UUID? = nil) {
         self.events = events
+        self.clipStore = clipStore
+        self.teamStore = teamStore
+        self.teamID = teamID
     }
 
     var body: some View {
@@ -30,10 +38,26 @@ struct MatchTimelineView: View {
                 } else {
                     VStack(spacing: 10) {
                         ForEach(events.sorted(by: { $0.seconds > $1.seconds })) { e in
-                            row(e)
+                            Button {
+                                selectedEvent = e
+                            } label: {
+                                row(e)
+                            }
+                            .buttonStyle(.plain)
                         }
                     }
                 }
+            }
+        }
+        .sheet(item: $selectedEvent) { event in
+            if let clipStore, let teamStore, let teamID {
+                ClipListView(
+                    title: "Linked Clips",
+                    clips: clipStore.linkedClips(for: event.id),
+                    clipStore: clipStore,
+                    teamStore: teamStore,
+                    teamID: teamID
+                )
             }
         }
     }
@@ -58,6 +82,12 @@ struct MatchTimelineView: View {
             }
 
             Spacer()
+
+            if let clipStore, clipStore.linkedClips(for: e.id).isEmpty == false {
+                Image(systemName: "film")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(GoStatsTheme.primary)
+            }
 
             Text(e.label)
                 .font(.system(size: 12, weight: .semibold))

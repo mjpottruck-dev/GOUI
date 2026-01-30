@@ -4,6 +4,7 @@ import SwiftUI
 struct MainTabsView: View {
 
     @ObservedObject var store: MatchStore
+    @ObservedObject var clipStore: ClipStore
     @Bindable var teamStore: TeamStore
     let teamID: UUID
 
@@ -19,6 +20,7 @@ struct MainTabsView: View {
             TabView {
                 MatchView(
                     store: store,
+                    clipStore: clipStore,
                     teamStore: teamStore,
                     teamID: teamID
                 )
@@ -30,7 +32,15 @@ struct MainTabsView: View {
                 StatsView(teamStore: teamStore, teamID: teamID, sport: sport)
                     .tabItem { Label("Stats", systemImage: "chart.bar") }
 
-                SettingsView(teamStore: teamStore)
+                HighlightsHubView(
+                    matchStore: store,
+                    clipStore: clipStore,
+                    teamStore: teamStore,
+                    teamID: teamID
+                )
+                .tabItem { Label("Highlights", systemImage: "film") }
+
+                SettingsView(teamStore: teamStore, clipStore: clipStore)
                     .tabItem { Label("Settings", systemImage: "gearshape") }
             }
         }

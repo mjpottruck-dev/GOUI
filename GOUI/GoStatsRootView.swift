@@ -3,6 +3,7 @@ import SwiftUI
 struct GoStatsRootView: View {
 
     @StateObject private var store = MatchStore()
+    @StateObject private var clipStore = ClipStore()
 
     @State private var teamStore = TeamStore()
 
@@ -36,6 +37,7 @@ struct GoStatsRootView: View {
                     if let tid = selectedTeamID {
                         MainTabsView(
                             store: store,
+                            clipStore: clipStore,
                             teamStore: teamStore,
                             teamID: tid
                         )

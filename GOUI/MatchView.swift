@@ -3,6 +3,7 @@ import SwiftUI
 struct MatchView: View {
 
     @ObservedObject var store: MatchStore
+    @ObservedObject var clipStore: ClipStore
     var teamStore: TeamStore
     let teamID: UUID
 
@@ -26,9 +27,23 @@ struct MatchView: View {
     @State private var showAssistPickerSheet = false
     @State private var showHoleEntrySheet = false
     @State private var pendingHolePlayer: Player? = nil
+    @State private var showTagPrompt = false
+    @State private var pendingTaggedEvent: MatchEvent? = nil
+    @State private var showTagClipSheet = false
+    @State private var recordingError: String? = nil
+
+    @StateObject private var videoCaptureService: VideoCaptureService
 
     private var resolvedFormation: Formation {
         store.formation ?? Formation.allCases.first!
+    }
+
+    init(store: MatchStore, clipStore: ClipStore, teamStore: TeamStore, teamID: UUID) {
+        self.store = store
+        self.clipStore = clipStore
+        self.teamStore = teamStore
+        self.teamID = teamID
+        _videoCaptureService = StateObject(wrappedValue: VideoCaptureService(clipStore: clipStore))
     }
 
     var body: some View {
@@ -39,10 +54,16 @@ struct MatchView: View {
                 VStack(spacing: 16) {
                     scoreCard
                     controlRow
+                    recordingCard
                     quickEventsTeam
                     quickEventsKeeper
                     fieldCard
-                    MatchTimelineView(events: store.events)
+                    MatchTimelineView(
+                        events: store.events,
+                        clipStore: clipStore,
+                        teamStore: teamStore,
+                        teamID: teamID
+                    )
 
                     Spacer(minLength: 140)
                 }
@@ -135,7 +156,8 @@ struct MatchView: View {
         }) {
             if let eventType = pendingEventType, let scorer = pendingScorer {
                 PlayerFieldPicker(store: store, title: "Assist • \(eventType.label)") { player in
-                    store.recordEvent(eventType: eventType, primaryPlayer: scorer, secondaryPlayer: player)
+                    let event = store.recordEvent(eventType: eventType, primaryPlayer: scorer, secondaryPlayer: player)
+                    handleEventRecorded(event)
                     pendingScorer = nil
                     pendingEventType = nil
                     showAssistPickerSheet = false
@@ -150,11 +172,42 @@ struct MatchView: View {
                 }
             }
         }
+        .confirmationDialog("Tag clip for this event?", isPresented: $showTagPrompt, titleVisibility: .visible) {
+            Button("Tag Clip") {
+                showTagClipSheet = true
+            }
+            Button("Not Now", role: .cancel) {
+                pendingTaggedEvent = nil
+            }
+        }
+        .sheet(isPresented: $showTagClipSheet, onDismiss: {
+            pendingTaggedEvent = nil
+        }) {
+            if let event = pendingTaggedEvent {
+                ClipTaggingSheet(
+                    clipStore: clipStore,
+                    event: event,
+                    gameID: store.currentMatchID,
+                    players: store.players,
+                    periodLabel: store.currentPeriodLabel(),
+                    activeRecordingElapsed: videoCaptureService.elapsedTime
+                )
+            }
+        }
         .onAppear { store.loadSampleIfEmpty() }
         .onChange(of: scenePhase) { _, newValue in
             if newValue == .active {
                 store.refreshElapsedFromClock()
             }
+            videoCaptureService.handleScenePhase(newValue)
+        }
+        .onChange(of: videoCaptureService.lastError) { _, newValue in
+            recordingError = newValue
+        }
+        .alert("Recording Error", isPresented: Binding(get: { recordingError != nil }, set: { _ in recordingError = nil })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(recordingError ?? "")
         }
     }
 
@@ -302,6 +355,47 @@ struct MatchView: View {
         }
     }
 
+    private var recordingCard: some View {
+        LiquidGlassContainer {
+            HStack(spacing: 12) {
+                Circle()
+                    .fill(videoCaptureService.isRecording ? Color.red : Color.gray.opacity(0.4))
+                    .frame(width: 10, height: 10)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(videoCaptureService.isRecording ? "Recording" : "Not Recording")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(GoStatsTheme.text)
+
+                    Text(recordingElapsedString)
+                        .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(GoStatsTheme.text2)
+                }
+
+                Spacer()
+
+                Button {
+                    if videoCaptureService.isRecording {
+                        videoCaptureService.stopRecording()
+                    } else {
+                        videoCaptureService.startRecording(gameID: store.currentMatchID)
+                    }
+                } label: {
+                    Text(videoCaptureService.isRecording ? "Stop" : "Record")
+                        .font(.system(size: 14, weight: .semibold))
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .fill(videoCaptureService.isRecording ? Color.red.opacity(0.9) : GoStatsTheme.primary.opacity(0.95))
+                        )
+                        .foregroundStyle(.white)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
     private var teamEventTypes: [EventType] {
         store.sport.eventTypes.filter { !$0.isGoalieOnly }
     }
@@ -309,6 +403,13 @@ struct MatchView: View {
     private var goalieEventTypes: [EventType] {
         guard store.sport.supportsGoalie else { return [] }
         return store.sport.eventTypes.filter { $0.isGoalieOnly }
+    }
+
+    private var recordingElapsedString: String {
+        let totalSeconds = Int(videoCaptureService.elapsedTime)
+        let minutes = totalSeconds / 60
+        let seconds = totalSeconds % 60
+        return String(format: "%02d:%02d", minutes, seconds)
     }
 
     // MARK: - Quick Events
@@ -440,7 +541,8 @@ struct MatchView: View {
 
                         FieldView1443(store: store, onSelectPlayer: { player in
                             if let eventType = pendingEventType {
-                                store.recordEvent(eventType: eventType, primaryPlayer: scorer, secondaryPlayer: player)
+                                let event = store.recordEvent(eventType: eventType, primaryPlayer: scorer, secondaryPlayer: player)
+                                handleEventRecorded(event)
                             }
                             pendingScorer = nil
                             showAssistPicker = false
@@ -450,7 +552,8 @@ struct MatchView: View {
 
                         Button {
                             if let eventType = pendingEventType {
-                                store.recordEvent(eventType: eventType, primaryPlayer: scorer, secondaryPlayer: nil)
+                                let event = store.recordEvent(eventType: eventType, primaryPlayer: scorer, secondaryPlayer: nil)
+                                handleEventRecorded(event)
                             }
                             pendingScorer = nil
                             showAssistPicker = false
@@ -490,7 +593,8 @@ struct MatchView: View {
                 showPlayerPicker = true
             }
         } else {
-            store.recordEvent(eventType: eventType)
+            let event = store.recordEvent(eventType: eventType)
+            handleEventRecorded(event)
             pendingEventType = nil
         }
     }
@@ -523,7 +627,8 @@ struct MatchView: View {
             pendingHolePlayer = player
             showHoleEntrySheet = true
         case .direct:
-            store.recordEvent(eventType: eventType, primaryPlayer: player)
+            let event = store.recordEvent(eventType: eventType, primaryPlayer: player)
+            handleEventRecorded(event)
             pendingEventType = nil
         }
         activeQuickEvent = nil
@@ -531,17 +636,24 @@ struct MatchView: View {
 
     private func confirmShot(onTarget: Bool) {
         guard let player = pendingPlayer, let eventType = pendingEventType else { return }
-        store.recordEvent(eventType: eventType, primaryPlayer: player, shotOnTarget: onTarget)
+        let event = store.recordEvent(eventType: eventType, primaryPlayer: player, shotOnTarget: onTarget)
+        handleEventRecorded(event)
         pendingPlayer = nil
         pendingEventType = nil
     }
 
     private func confirmCard(type: CardType) {
         if let player = pendingPlayer, let eventType = pendingEventType {
-            store.recordEvent(eventType: eventType, primaryPlayer: player, cardType: type)
+            let event = store.recordEvent(eventType: eventType, primaryPlayer: player, cardType: type)
+            handleEventRecorded(event)
         }
         pendingPlayer = nil
         pendingEventType = nil
+    }
+
+    private func handleEventRecorded(_ event: MatchEvent) {
+        pendingTaggedEvent = event
+        showTagPrompt = true
     }
 
     // MARK: - Substitution
