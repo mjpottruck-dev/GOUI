@@ -70,7 +70,7 @@ final class JoinRequestStore: ObservableObject {
 
     private func fetchRecords(query: CKQuery) async throws -> [CKRecord] {
         guard let database else { throw CloudKitUnavailableError() }
-        try await withCheckedThrowingContinuation { continuation in
+        return try await withCheckedThrowingContinuation { continuation in
             var records: [CKRecord] = []
             var recordError: Error?
             let operation = CKQueryOperation(query: query)
@@ -100,7 +100,7 @@ final class JoinRequestStore: ObservableObject {
 
     private func saveRecord(_ record: CKRecord) async throws -> CKRecord {
         guard let database else { throw CloudKitUnavailableError() }
-        try await withCheckedThrowingContinuation { continuation in
+        return try await withCheckedThrowingContinuation { continuation in
             database.save(record) { saved, error in
                 if let error {
                     continuation.resume(throwing: error)

@@ -61,7 +61,7 @@ final class SharingService: ObservableObject {
 
     private func fetchShare(recordID: CKRecord.ID) async throws -> CKShare {
         guard let database else { throw CloudKitUnavailableError() }
-        try await withCheckedThrowingContinuation { continuation in
+        return try await withCheckedThrowingContinuation { continuation in
             database.fetch(withRecordID: recordID) { record, error in
                 if let error {
                     continuation.resume(throwing: error)
@@ -78,7 +78,7 @@ final class SharingService: ObservableObject {
 
     private func fetchParticipant(userRecordID: CKRecord.ID) async throws -> CKShare.Participant {
         guard let container else { throw CloudKitUnavailableError() }
-        try await withCheckedThrowingContinuation { continuation in
+        return try await withCheckedThrowingContinuation { continuation in
             container.fetchShareParticipant(withUserRecordID: userRecordID) { participant, error in
                 if let error {
                     continuation.resume(throwing: error)
@@ -93,7 +93,7 @@ final class SharingService: ObservableObject {
 
     private func modifyRecords(recordsToSave: [CKRecord]) async throws {
         guard let database else { throw CloudKitUnavailableError() }
-        try await withCheckedThrowingContinuation { continuation in
+        return try await withCheckedThrowingContinuation { continuation in
             let operation = CKModifyRecordsOperation(recordsToSave: recordsToSave, recordIDsToDelete: nil)
             operation.savePolicy = .allKeys
             operation.modifyRecordsResultBlock = { result in
