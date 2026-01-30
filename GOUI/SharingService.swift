@@ -48,7 +48,11 @@ final class SharingService: ObservableObject {
     ) async throws {
         let shareID = CKRecord.ID(recordName: shareRecordName)
         let share = try await fetchShare(recordID: shareID)
-        share.participants.removeAll { $0.userIdentity.userRecordID?.recordName == userRecordName }
+        if let participant = share.participants.first(where: {
+            $0.userIdentity.userRecordID?.recordName == userRecordName
+        }) {
+            share.removeParticipant(participant)
+        }
         try await modifyRecords(recordsToSave: [share])
     }
 
