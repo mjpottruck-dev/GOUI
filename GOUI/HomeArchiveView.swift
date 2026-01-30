@@ -184,7 +184,7 @@ struct HomeArchiveView: View {
         HStack(spacing: 12) {
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(match.opponent.isEmpty ? "Opponent" : match.opponent)
+                Text(primaryMatchLabel(match))
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(GoStatsTheme.text)
 
@@ -215,6 +215,16 @@ struct HomeArchiveView: View {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(Color(uiColor: .secondarySystemGroupedBackground).opacity(0.50))
         )
+    }
+
+    private func primaryMatchLabel(_ match: MatchRecord) -> String {
+        if !match.opponent.isEmpty {
+            return match.opponent
+        }
+        if !match.title.isEmpty {
+            return match.title
+        }
+        return "Meet"
     }
 
     private func delete(_ match: MatchRecord) {

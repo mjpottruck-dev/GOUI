@@ -139,12 +139,23 @@ enum Formation: String, CaseIterable, Identifiable, Codable {
 
 struct Season: Identifiable, Codable, Hashable {
     var id: UUID = UUID()
+    var teamID: UUID = UUID()
+    var sportID: String = SportCatalog.defaultSportID
     var name: String
     var startDate: Date
     var endDate: Date
 
-    init(id: UUID = UUID(), name: String, startDate: Date = Date(), endDate: Date = Date()) {
+    init(
+        id: UUID = UUID(),
+        teamID: UUID,
+        sportID: String,
+        name: String,
+        startDate: Date = Date(),
+        endDate: Date = Date()
+    ) {
         self.id = id
+        self.teamID = teamID
+        self.sportID = sportID
         self.name = name
         self.startDate = startDate
         self.endDate = endDate
@@ -349,6 +360,9 @@ struct MatchRecord: Identifiable, Codable, Hashable {
     var opponent: String = ""
     var title: String = ""
     var notes: String = ""
+    var location: String = ""
+    var seasonName: String = ""
+    var meetEvents: [String] = []
 
     var goalsFor: Int = 0
     var goalsAgainst: Int = 0

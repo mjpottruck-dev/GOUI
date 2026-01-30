@@ -25,7 +25,7 @@ struct GoStatsRootView: View {
                             store.resetForNewMatch(
                                 team: team,
                                 formation: team.primaryFormation,
-                                seasonID: teamStore.activeSeasonID,
+                                seasonID: teamStore.activeSeasonID(for: teamID),
                                 template: template
                             )
                         }

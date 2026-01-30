@@ -15,6 +15,9 @@ struct EndMatchSheet: View {
     @State private var opponent: String = ""
     @State private var title: String = ""
     @State private var notes: String = ""
+    @State private var location: String = ""
+    @State private var matchDate: Date = Date()
+    @State private var meetEventsText: String = ""
     @State private var shareSheetPayload: ShareSheetPayload? = nil
     @State private var exportError: String? = nil
 
@@ -49,11 +52,49 @@ struct EndMatchSheet: View {
                     }
                 }
 
-                Section("Match Info") {
+                Section(infoSectionTitle) {
+                    DatePicker("Date & Time", selection: $matchDate, displayedComponents: [.date, .hourAndMinute])
                     TextField("Opponent", text: $opponent)
+                    TextField("Location (optional)", text: $location)
                     TextField("Title (optional)", text: $title)
                     TextField("Notes (optional)", text: $notes, axis: .vertical)
                         .lineLimit(3...8)
+                }
+
+                if isMeetSport {
+                    Section("Meet Events (optional)") {
+                        TextField("One event per line", text: $meetEventsText, axis: .vertical)
+                            .lineLimit(3...8)
+                    }
+
+                    if !meetStatIDs.isEmpty {
+                        Section("Results") {
+                            ForEach($store.players) { $player in
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("#\(player.number) \(player.name)")
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundStyle(.primary)
+
+                                    HStack(spacing: 12) {
+                                        if meetStatIDs.contains("timeSeconds") {
+                                            statField(player: $player, statID: "timeSeconds", label: "Time (sec)")
+                                        }
+                                        if meetStatIDs.contains("distanceMeters") {
+                                            statField(player: $player, statID: "distanceMeters", label: "Distance (m)")
+                                        }
+                                        if meetStatIDs.contains("place") {
+                                            statField(player: $player, statID: "place", label: "Place")
+                                        }
+                                    }
+
+                                    if meetStatIDs.contains("personalRecord") {
+                                        Toggle("PR", isOn: prBinding(for: $player))
+                                    }
+                                }
+                                .padding(.vertical, 6)
+                            }
+                        }
+                    }
                 }
 
                 Section {
@@ -63,15 +104,14 @@ struct EndMatchSheet: View {
                         }
                     }
 
-                    Button("Save Match") { saveMatch() }
-                        .disabled(opponent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    Button(isMeetSport ? "Save Meet" : "Save Match") { saveMatch() }
 
                     Button("Discard Match", role: .destructive) {
                         discardMatch()
                     }
                 }
             }
-            .navigationTitle("End Match")
+            .navigationTitle(isMeetSport ? "End Meet" : "End Match")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -93,7 +133,11 @@ struct EndMatchSheet: View {
         let record = store.buildMatchRecord(
             opponent: opponent,
             title: title,
-            notes: notes
+            notes: notes,
+            date: matchDate,
+            location: location,
+            meetEvents: parsedMeetEvents(),
+            seasonName: teamStore.activeSeason(for: teamID)?.name ?? ""
         )
 
         teamStore.addMatchRecord(teamID: teamID, record: record)
@@ -101,7 +145,7 @@ struct EndMatchSheet: View {
         store.resetForNewMatch(
             team: team,
             formation: formation,
-            seasonID: teamStore.activeSeasonID,
+            seasonID: teamStore.activeSeasonID(for: teamID),
             template: store.activeTemplate
         )
 
@@ -112,7 +156,7 @@ struct EndMatchSheet: View {
         store.resetForNewMatch(
             team: team,
             formation: formation,
-            seasonID: teamStore.activeSeasonID,
+            seasonID: teamStore.activeSeasonID(for: teamID),
             template: store.activeTemplate
         )
         dismiss()
@@ -122,7 +166,11 @@ struct EndMatchSheet: View {
         let record = store.buildMatchRecord(
             opponent: opponent,
             title: title,
-            notes: notes
+            notes: notes,
+            date: matchDate,
+            location: location,
+            meetEvents: parsedMeetEvents(),
+            seasonName: teamStore.activeSeason(for: teamID)?.name ?? ""
         )
         let matchName = title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             ? opponent
@@ -162,6 +210,68 @@ struct EndMatchSheet: View {
         } catch {
             exportError = error.localizedDescription
         }
+    }
+
+    private var isMeetSport: Bool {
+        switch store.sport.id {
+        case SportCatalog.swimmingID,
+             SportCatalog.trackID,
+             SportCatalog.crossCountryID,
+             SportCatalog.golfID:
+            return true
+        default:
+            return false
+        }
+    }
+
+    private var infoSectionTitle: String {
+        isMeetSport ? "Meet Info" : "Match Info"
+    }
+
+    private var meetStatIDs: [String] {
+        switch store.sport.id {
+        case SportCatalog.swimmingID:
+            return ["timeSeconds", "place", "personalRecord"]
+        case SportCatalog.trackID:
+            return ["timeSeconds", "distanceMeters", "place", "personalRecord"]
+        case SportCatalog.crossCountryID:
+            return ["timeSeconds", "place", "personalRecord"]
+        default:
+            return []
+        }
+    }
+
+    private func statField(player: Binding<Player>, statID: String, label: String) -> some View {
+        let binding = Binding<String>(
+            get: {
+                let value = player.wrappedValue.statValue(for: statID)
+                return value == 0 ? "" : "\(value)"
+            },
+            set: { newValue in
+                let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                let value = Int(trimmed) ?? 0
+                player.wrappedValue.setStatValue(value, for: statID)
+            }
+        )
+
+        return TextField(label, text: binding)
+            .keyboardType(.numberPad)
+    }
+
+    private func prBinding(for player: Binding<Player>) -> Binding<Bool> {
+        Binding<Bool>(
+            get: { player.wrappedValue.statValue(for: "personalRecord") > 0 },
+            set: { newValue in
+                player.wrappedValue.setStatValue(newValue ? 1 : 0, for: "personalRecord")
+            }
+        )
+    }
+
+    private func parsedMeetEvents() -> [String] {
+        meetEventsText
+            .split(whereSeparator: \.isNewline)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
     }
 
     private struct ShareSheetPayload: Identifiable {

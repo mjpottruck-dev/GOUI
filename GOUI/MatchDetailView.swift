@@ -19,7 +19,7 @@ struct MatchDetailView: View {
                         VStack(alignment: .leading, spacing: 12) {
                             HStack {
                                 VStack(alignment: .leading, spacing: 4) {
-                                    Text(match.opponent.isEmpty ? "Opponent" : match.opponent)
+                                    Text(primaryMatchLabel)
                                         .font(.system(size: 20, weight: .semibold))
                                         .foregroundStyle(GoStatsTheme.text)
 
@@ -49,8 +49,14 @@ struct MatchDetailView: View {
                                     chip("Field", "\(match.fieldSize)v\(match.fieldSize)")
                                 }
                                 chip("Sport", sport.displayName)
+                                if !match.seasonName.isEmpty {
+                                    chip("Season", match.seasonName)
+                                }
                                 if let templateName = match.templateName, !templateName.isEmpty {
                                     chip("Template", templateName)
+                                }
+                                if !match.location.isEmpty {
+                                    chip("Location", match.location)
                                 }
                             }
 
@@ -65,6 +71,17 @@ struct MatchDetailView: View {
                                     Text(match.notes)
                                         .font(.system(size: 13))
                                         .foregroundStyle(GoStatsTheme.text2)
+                                }
+                            }
+                            if !match.meetEvents.isEmpty {
+                                Divider().opacity(0.55)
+                                Text("Events")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundStyle(GoStatsTheme.text2)
+                                ForEach(match.meetEvents, id: \.self) { event in
+                                    Text(event)
+                                        .font(.system(size: 13))
+                                        .foregroundStyle(GoStatsTheme.text)
                                 }
                             }
                         }
@@ -91,12 +108,12 @@ struct MatchDetailView: View {
                     }
                     .padding(.horizontal, 16)
 
-                    if sport.id == SportCatalog.defaultSportID {
+                    VStack(spacing: 12) {
                         LiquidGlassContainer(cornerRadius: 22) {
-                            Button(action: exportMaxPreps) {
+                            Button(action: exportCSV) {
                                 HStack(spacing: 10) {
                                     Image(systemName: "square.and.arrow.up")
-                                    Text("Export → MaxPreps (.txt)")
+                                    Text("Export → CSV")
                                         .font(.system(size: 15, weight: .semibold))
                                     Spacer()
                                 }
@@ -106,6 +123,40 @@ struct MatchDetailView: View {
                             .buttonStyle(.plain)
                         }
                         .padding(.horizontal, 16)
+
+                        if sport.id == SportCatalog.wrestlingID {
+                            LiquidGlassContainer(cornerRadius: 22) {
+                                Button(action: exportWrestlingSummary) {
+                                    HStack(spacing: 10) {
+                                        Image(systemName: "doc.text")
+                                        Text("Export → Bout Summary (.txt)")
+                                            .font(.system(size: 15, weight: .semibold))
+                                        Spacer()
+                                    }
+                                    .foregroundStyle(GoStatsTheme.text)
+                                    .padding(.vertical, 6)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                            .padding(.horizontal, 16)
+                        }
+
+                        if sport.id == SportCatalog.defaultSportID {
+                            LiquidGlassContainer(cornerRadius: 22) {
+                                Button(action: exportMaxPreps) {
+                                    HStack(spacing: 10) {
+                                        Image(systemName: "square.and.arrow.up")
+                                        Text("Export → MaxPreps (.txt)")
+                                            .font(.system(size: 15, weight: .semibold))
+                                        Spacer()
+                                    }
+                                    .foregroundStyle(GoStatsTheme.text)
+                                    .padding(.vertical, 6)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                            .padding(.horizontal, 16)
+                        }
                     }
 
                     Spacer(minLength: 20)
@@ -176,6 +227,16 @@ struct MatchDetailView: View {
         let appearedIDs = Set(match.playerSeconds.keys)
         let appeared = team.players.filter { appearedIDs.contains($0.id) }
         return appeared.sorted { ($0.number, $0.name) < ($1.number, $1.name) }
+    }
+
+    private var primaryMatchLabel: String {
+        if !match.opponent.isEmpty {
+            return match.opponent
+        }
+        if !match.title.isEmpty {
+            return match.title
+        }
+        return "Meet"
     }
 
     private func playerRow(player: Player, line: PlayerStatLine, seconds: Int) -> some View {
@@ -286,6 +347,22 @@ struct MatchDetailView: View {
         sport.statSchema.filter { $0.countsForPlayer }
     }
 
+    private func exportCSV() {
+        let csv = CSVExporter.matchCSV(team: team, match: match, sport: sport)
+        let matchName = match.title.isEmpty ? match.opponent : match.title
+        let safeName = MaxPrepsExport.sanitizedFilename(matchName.isEmpty ? "Match" : matchName)
+
+        do {
+            let url = try CSVExporter.writeTempCSV(
+                filename: "GoStats_\(safeName)",
+                contents: csv
+            )
+            shareSheetPayload = ShareSheetPayload(items: [url])
+        } catch {
+            exportError = error.localizedDescription
+        }
+    }
+
     private func exportMaxPreps() {
         let roster = team.players.filter { match.playerSeconds.keys.contains($0.id) }
         let matchName = match.title.isEmpty ? match.opponent : match.title
@@ -321,6 +398,37 @@ struct MatchDetailView: View {
             }
 
             shareSheetPayload = ShareSheetPayload(items: urls)
+        } catch {
+            exportError = error.localizedDescription
+        }
+    }
+
+    private func exportWrestlingSummary() {
+        let matchName = match.title.isEmpty ? match.opponent : match.title
+        let safeName = MaxPrepsExport.sanitizedFilename(matchName.isEmpty ? "Bout" : matchName)
+        let roster = team.players.filter { match.playerStats.keys.contains($0.id) }
+
+        var lines: [String] = [
+            "Bout Summary",
+            "Team: \(team.name)",
+            "Opponent: \(match.opponent.isEmpty ? "N/A" : match.opponent)",
+            "Date: \(match.date.formatted(date: .abbreviated, time: .shortened))",
+            "Season: \(match.seasonName.isEmpty ? "N/A" : match.seasonName)",
+            ""
+        ]
+
+        for player in roster {
+            let line = match.playerStats[player.id] ?? PlayerStatLine()
+            lines.append("#\(player.number) \(player.name)")
+            lines.append("Points: \(line.value(for: "matchPoints")) | TD: \(line.value(for: "takedown")) | ESC: \(line.value(for: "escape")) | REV: \(line.value(for: "reversal")) | NF: \(line.value(for: "nearFall")) | PEN: \(line.value(for: "penalty")) | PIN: \(line.value(for: "pins"))")
+            lines.append("")
+        }
+
+        let summary = lines.joined(separator: "\n")
+
+        do {
+            let url = try MaxPrepsExport.writeTempTXT(filename: "Bout_\(safeName)", contents: summary)
+            shareSheetPayload = ShareSheetPayload(items: [url])
         } catch {
             exportError = error.localizedDescription
         }

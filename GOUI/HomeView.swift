@@ -261,6 +261,19 @@ struct HomeView: View {
             return 2
         case SportCatalog.golfID:
             return 1
+        case SportCatalog.crossCountryID,
+             SportCatalog.swimmingID,
+             SportCatalog.trackID:
+            return 1
+        case SportCatalog.footballID:
+            return 11
+        case SportCatalog.baseballID,
+             SportCatalog.softballID:
+            return 9
+        case SportCatalog.fieldHockeyID,
+             SportCatalog.iceHockeyID,
+             SportCatalog.lacrosseID:
+            return 11
         default:
             return 7
         }

@@ -2,12 +2,23 @@ import Foundation
 
 extension MatchStore {
 
-    func buildMatchRecord(opponent: String, title: String = "", notes: String = "") -> MatchRecord {
+    func buildMatchRecord(
+        opponent: String,
+        title: String = "",
+        notes: String = "",
+        date: Date = Date(),
+        location: String = "",
+        meetEvents: [String] = [],
+        seasonName: String = ""
+    ) -> MatchRecord {
         var rec = MatchRecord()
-        rec.date = Date()
+        rec.date = date
         rec.opponent = opponent
         rec.title = title
         rec.notes = notes
+        rec.location = location
+        rec.meetEvents = meetEvents
+        rec.seasonName = seasonName
 
         rec.goalsFor = goalsFor
         rec.goalsAgainst = goalsAgainst

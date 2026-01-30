@@ -9,6 +9,31 @@ struct TeamArchiveView: View {
         teamStore.teams.first(where: { $0.id == teamID })
     }
 
+    private var seasons: [Season] {
+        teamStore.seasons(for: teamID)
+    }
+
+    private var activeSeasonID: UUID? {
+        teamStore.activeSeasonID(for: teamID)
+    }
+
+    private var filteredMatches: [MatchRecord] {
+        guard let team else { return [] }
+        guard let activeSeasonID else { return team.matches }
+        return team.matches.filter { $0.seasonID == activeSeasonID }
+    }
+
+    private var groupedMatches: [(month: Date, matches: [MatchRecord])] {
+        let calendar = Calendar.current
+        let grouped = Dictionary(grouping: filteredMatches) { match -> Date in
+            let components = calendar.dateComponents([.year, .month], from: match.date)
+            return calendar.date(from: components) ?? match.date
+        }
+        return grouped
+            .map { (month: $0.key, matches: $0.value.sorted { $0.date > $1.date }) }
+            .sorted { $0.month > $1.month }
+    }
+
     var body: some View {
         ZStack {
             Color(uiColor: .systemGroupedBackground).ignoresSafeArea()
@@ -21,16 +46,37 @@ struct TeamArchiveView: View {
                         .foregroundStyle(.secondary)
                         .listRowBackground(Color.clear)
 
-                    if team.matches.isEmpty {
+                    if !seasons.isEmpty {
+                        Picker("Season", selection: Binding(
+                            get: { activeSeasonID ?? seasons.first?.id },
+                            set: { newValue in
+                                if let newValue {
+                                    teamStore.setActiveSeason(newValue, for: teamID)
+                                }
+                            }
+                        )) {
+                            ForEach(seasons) { season in
+                                Text(season.name).tag(Optional(season.id))
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .listRowBackground(Color.clear)
+                    }
+
+                    if filteredMatches.isEmpty {
                         Text("No saved matches yet.")
                             .foregroundStyle(.secondary)
                             .listRowBackground(Color.clear)
                     } else {
-                        ForEach(team.matches) { match in
-                            NavigationLink {
-                                MatchDetailView(match: match, team: team, sport: SportCatalog.sport(for: team.sportID))
-                            } label: {
-                                archiveRow(match)
+                        ForEach(groupedMatches, id: \.month) { group in
+                            Section(group.month.formatted(.dateTime.month(.wide).year())) {
+                                ForEach(group.matches) { match in
+                                    NavigationLink {
+                                        MatchDetailView(match: match, team: team, sport: SportCatalog.sport(for: team.sportID))
+                                    } label: {
+                                        archiveRow(match)
+                                    }
+                                }
                             }
                         }
                     }
@@ -60,7 +106,7 @@ struct TeamArchiveView: View {
     private func archiveRow(_ match: MatchRecord) -> some View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 3) {
-                Text(match.opponent.isEmpty ? "Opponent" : match.opponent)
+                Text(primaryMatchLabel(match))
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(.primary)
 
@@ -76,5 +122,15 @@ struct TeamArchiveView: View {
                 .foregroundStyle(.primary)
         }
         .padding(.vertical, 6)
+    }
+
+    private func primaryMatchLabel(_ match: MatchRecord) -> String {
+        if !match.opponent.isEmpty {
+            return match.opponent
+        }
+        if !match.title.isEmpty {
+            return match.title
+        }
+        return "Meet"
     }
 }

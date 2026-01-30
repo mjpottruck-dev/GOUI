@@ -116,6 +116,16 @@ enum SportCatalog {
     static let volleyballID = "volleyball"
     static let tennisID = "tennis"
     static let golfID = "golf"
+    static let footballID = "football"
+    static let fieldHockeyID = "field_hockey"
+    static let crossCountryID = "cross_country"
+    static let wrestlingID = "wrestling"
+    static let swimmingID = "swimming"
+    static let iceHockeyID = "ice_hockey"
+    static let baseballID = "baseball"
+    static let softballID = "softball"
+    static let lacrosseID = "lacrosse"
+    static let trackID = "track"
     static let defaultSportID = soccerID
     private static var registry: [String: any SportDefinition] = [:]
 
