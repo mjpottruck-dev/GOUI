@@ -22,8 +22,8 @@ final class ThumbnailService {
             let generator = AVAssetImageGenerator(asset: asset)
             generator.appliesPreferredTrackTransform = true
             let time = CMTime(seconds: clip.startOffset, preferredTimescale: 600)
-            generator.generateCGImageAsynchronously(for: time) { _, imageRef, _, result, _ in
-                guard result == .succeeded, let imageRef else {
+            generator.generateCGImageAsynchronously(for: time) { imageRef, _, error in
+                guard error == nil, let imageRef else {
                     DispatchQueue.main.async { completion(nil) }
                     return
                 }
