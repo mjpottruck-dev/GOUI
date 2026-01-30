@@ -8,6 +8,9 @@ struct MatchView: View {
     let teamID: UUID
 
     @Environment(\.scenePhase) private var scenePhase
+    @EnvironmentObject var subscriptionManager: SubscriptionManager
+    @EnvironmentObject var roleManager: RoleManager
+    @EnvironmentObject var analytics: AnalyticsService
 
     @State private var showingEndSheet = false
     @State private var showHaptics = true
@@ -31,6 +34,8 @@ struct MatchView: View {
     @State private var pendingTaggedEvent: MatchEvent? = nil
     @State private var showTagClipSheet = false
     @State private var recordingError: String? = nil
+    @State private var showPricing = false
+    @State private var showPermissionAlert = false
 
     @StateObject private var videoCaptureService: VideoCaptureService
 
@@ -209,6 +214,15 @@ struct MatchView: View {
         } message: {
             Text(recordingError ?? "")
         }
+        .alert("Permission Required", isPresented: $showPermissionAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Coach access is required to log games and edit matches.")
+        }
+        .sheet(isPresented: $showPricing) {
+            PricingView()
+                .environmentObject(subscriptionManager)
+        }
     }
 
     // MARK: - Cards
@@ -230,6 +244,7 @@ struct MatchView: View {
                                 .foregroundStyle(.white)
                         }
                         .buttonStyle(.plain)
+                        .disabled(!roleManager.canLogGames())
                     } else if store.sport.supportsPeriods {
                         Button(action: handleAdvancePeriod) {
                             Text("Next Set")
@@ -243,7 +258,7 @@ struct MatchView: View {
                                 .foregroundStyle(.white)
                         }
                         .buttonStyle(.plain)
-                        .disabled(!store.hasNextPeriod())
+                        .disabled(!store.hasNextPeriod() || !roleManager.canLogGames())
                     }
 
                     Spacer()
@@ -350,6 +365,7 @@ struct MatchView: View {
                         .font(.system(size: 16, weight: .semibold))
                     }
                     .buttonStyle(GlassPillButtonStyle(fill: GoStatsTheme.primary.opacity(0.95)))
+                    .disabled(!roleManager.canLogGames())
                 }
             }
         }
@@ -375,6 +391,10 @@ struct MatchView: View {
                 Spacer()
 
                 Button {
+                    guard roleManager.canLogGames() else {
+                        showPermissionAlert = true
+                        return
+                    }
                     if videoCaptureService.isRecording {
                         videoCaptureService.stopRecording()
                     } else {
@@ -392,6 +412,7 @@ struct MatchView: View {
                         .foregroundStyle(.white)
                 }
                 .buttonStyle(.plain)
+                .disabled(!roleManager.canLogGames())
             }
         }
     }
@@ -584,6 +605,10 @@ struct MatchView: View {
     // MARK: - Quick Event Flow
 
     private func startQuickEvent(_ eventType: EventType) {
+        guard roleManager.canLogGames() else {
+            showPermissionAlert = true
+            return
+        }
         pendingEventType = eventType
         if eventType.requiresPlayer {
             if store.sport.supportsCourtOverlay {
@@ -652,6 +677,11 @@ struct MatchView: View {
     }
 
     private func handleEventRecorded(_ event: MatchEvent) {
+        analytics.log(.loggedEvent, metadata: ["event": event.eventTypeID])
+        guard subscriptionManager.canCreateClip(existingCount: clipStore.clips(for: store.currentMatchID).count) else {
+            showPricing = true
+            return
+        }
         pendingTaggedEvent = event
         showTagPrompt = true
     }
@@ -689,6 +719,10 @@ struct MatchView: View {
     }
 
     private func handleStartPause() {
+        guard roleManager.canLogGames() else {
+            showPermissionAlert = true
+            return
+        }
         haptic(.light)
         if store.isRunning {
             store.pauseGame()
@@ -699,10 +733,15 @@ struct MatchView: View {
             }
         } else {
             store.startGame()
+            analytics.log(.startedGame, metadata: ["matchID": store.currentMatchID.uuidString])
         }
     }
 
     private func handleAdvancePeriod() {
+        guard roleManager.canLogGames() else {
+            showPermissionAlert = true
+            return
+        }
         haptic(.light)
         store.advancePeriodAndResume()
     }

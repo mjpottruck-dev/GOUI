@@ -7,6 +7,7 @@ struct MainTabsView: View {
     @ObservedObject var clipStore: ClipStore
     @Bindable var teamStore: TeamStore
     let teamID: UUID
+    @EnvironmentObject var roleManager: RoleManager
 
     private var sport: any SportDefinition {
         let team = teamStore.teams.first(where: { $0.id == teamID })
@@ -39,6 +40,11 @@ struct MainTabsView: View {
                     teamID: teamID
                 )
                 .tabItem { Label("Highlights", systemImage: "film") }
+
+                if roleManager.role == .clubAdmin {
+                    ClubDashboardView(teamStore: teamStore)
+                        .tabItem { Label("Club", systemImage: "building.2") }
+                }
 
                 SettingsView(teamStore: teamStore, clipStore: clipStore)
                     .tabItem { Label("Settings", systemImage: "gearshape") }

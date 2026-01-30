@@ -10,6 +10,9 @@ struct TeamRosterView: View {
     @State private var selectedFilter: RosterFilter = .all
     @State private var displayedPlayers: [Player] = []
     @State private var refreshTask: Task<Void, Never>? = nil
+    @State private var showPermissionAlert = false
+
+    @EnvironmentObject var roleManager: RoleManager
 
     private var sport: any SportDefinition {
         SportCatalog.sport(for: team?.sportID)
@@ -48,13 +51,19 @@ struct TeamRosterView: View {
                                 )
                                 .equatable()
                                 .onTapGesture {
+                                    guard roleManager.canEditRoster() else {
+                                        showPermissionAlert = true
+                                        return
+                                    }
                                     editingPlayer = player
                                 }
                                 .swipeActions(edge: .trailing) {
-                                    Button(role: .destructive) {
-                                        deletePlayer(player)
-                                    } label: {
-                                        Label("Delete", systemImage: "trash")
+                                    if roleManager.canEditRoster() {
+                                        Button(role: .destructive) {
+                                            deletePlayer(player)
+                                        } label: {
+                                            Label("Delete", systemImage: "trash")
+                                        }
                                     }
                                 }
                             }
@@ -88,6 +97,11 @@ struct TeamRosterView: View {
             .onChange(of: teamStore.teams) { _, _ in
                 refreshPlayers()
             }
+            .alert("Permission Required", isPresented: $showPermissionAlert) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("Coach access is required to edit the roster.")
+            }
         }
     }
 
@@ -99,18 +113,22 @@ struct TeamRosterView: View {
                         Text("Roster")
                             .font(.system(size: 20, weight: .semibold))
                             .foregroundStyle(GoStatsTheme.text)
-                        Text("\(team?.players.count ?? 0) players")
-                            .font(.footnote)
-                            .foregroundStyle(GoStatsTheme.text2)
-                    }
-                    Spacer()
-                    Button {
-                        showingAddPlayer = true
-                    } label: {
-                        Label("Add Player", systemImage: "plus")
-                    }
-                    .buttonStyle(GlassPillButtonStyle(fill: GoStatsTheme.primary))
+                Text("\(team?.players.count ?? 0) players")
+                    .font(.footnote)
+                    .foregroundStyle(GoStatsTheme.text2)
+            }
+            Spacer()
+            Button {
+                guard roleManager.canEditRoster() else {
+                    showPermissionAlert = true
+                    return
                 }
+                showingAddPlayer = true
+            } label: {
+                Label("Add Player", systemImage: "plus")
+            }
+            .buttonStyle(GlassPillButtonStyle(fill: GoStatsTheme.primary))
+        }
             }
         }
     }

@@ -16,6 +16,9 @@ struct HighlightsHubView: View {
 
     @State private var mode: Mode = .game
     @State private var selectedGameID: UUID? = nil
+    @State private var showPricing = false
+
+    @EnvironmentObject var subscriptionManager: SubscriptionManager
 
     var body: some View {
         ZStack {
@@ -28,7 +31,17 @@ struct HighlightsHubView: View {
                     if mode == .game {
                         gameHighlights
                     } else {
-                        playerHighlights
+                        if subscriptionManager.entitlements.playerHighlights {
+                            playerHighlights
+                        } else {
+                            UpgradePromptView(
+                                title: "Player Highlights",
+                                message: "Upgrade to Pro to unlock player-specific highlight reels.",
+                                buttonTitle: "Upgrade"
+                            ) {
+                                showPricing = true
+                            }
+                        }
                     }
 
                     Spacer(minLength: 20)
@@ -44,6 +57,10 @@ struct HighlightsHubView: View {
             if selectedGameID == nil {
                 selectedGameID = matchStore.currentMatchID
             }
+        }
+        .sheet(isPresented: $showPricing) {
+            PricingView()
+                .environmentObject(subscriptionManager)
         }
     }
 
@@ -370,9 +387,13 @@ struct ClipDetailSheet: View {
     let recording: VideoRecording?
     let playerNames: [String]
 
+    @EnvironmentObject var subscriptionManager: SubscriptionManager
+    @EnvironmentObject var analytics: AnalyticsService
+
     @State private var shareSheetPayload: ShareSheetPayload? = nil
     @State private var exportError: String? = nil
     @State private var isExporting = false
+    @State private var showPricing = false
 
     private let exportService = ClipExportService()
     private let uploadService: UploadClipService = StubUploadClipService()
@@ -465,9 +486,14 @@ struct ClipDetailSheet: View {
         } message: {
             Text(exportError ?? "")
         }
+        .sheet(isPresented: $showPricing) {
+            PricingView()
+                .environmentObject(subscriptionManager)
+        }
     }
 
     private func exportAndShare() {
+        guard canExportClip() else { return }
         guard let recording else {
             exportError = "Recording missing."
             return
@@ -477,6 +503,7 @@ struct ClipDetailSheet: View {
             isExporting = false
             switch result {
             case .success(let url):
+                subscriptionManager.recordExport()
                 shareSheetPayload = ShareSheetPayload(items: [url])
             case .failure(let error):
                 exportError = error.localizedDescription
@@ -485,6 +512,7 @@ struct ClipDetailSheet: View {
     }
 
     private func saveToPhotos() {
+        guard canExportClip() else { return }
         guard let recording else {
             exportError = "Recording missing."
             return
@@ -493,6 +521,7 @@ struct ClipDetailSheet: View {
         exportService.exportClip(clip: clip, recording: recording) { result in
             switch result {
             case .success(let url):
+                subscriptionManager.recordExport()
                 PHPhotoLibrary.requestAuthorization { status in
                     guard status == .authorized || status == .limited else {
                         DispatchQueue.main.async {
@@ -522,6 +551,7 @@ struct ClipDetailSheet: View {
     }
 
     private func createShareLink() {
+        guard canExportClip() else { return }
         guard let recording else {
             exportError = "Recording missing."
             return
@@ -530,6 +560,7 @@ struct ClipDetailSheet: View {
         exportService.exportClip(clip: clip, recording: recording) { result in
             switch result {
             case .success(let url):
+                subscriptionManager.recordExport()
                 uploadService.uploadClip(fileURL: url) { result in
                     DispatchQueue.main.async {
                         isExporting = false
@@ -543,6 +574,15 @@ struct ClipDetailSheet: View {
                 exportError = error.localizedDescription
             }
         }
+    }
+
+    private func canExportClip() -> Bool {
+        analytics.log(.tappedExport, metadata: ["source": "clip"])
+        if subscriptionManager.canExport() {
+            return true
+        }
+        showPricing = true
+        return false
     }
 
     private struct ShareSheetPayload: Identifiable {

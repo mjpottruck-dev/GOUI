@@ -7,6 +7,12 @@ struct MatchDetailView: View {
     @State private var selectedPlayerDetail: PlayerDetail? = nil
     @State private var shareSheetPayload: ShareSheetPayload? = nil
     @State private var exportError: String? = nil
+    @State private var showPricing = false
+    @State private var showPermissionAlert = false
+
+    @EnvironmentObject var subscriptionManager: SubscriptionManager
+    @EnvironmentObject var roleManager: RoleManager
+    @EnvironmentObject var analytics: AnalyticsService
 
     var body: some View {
         ZStack {
@@ -221,6 +227,15 @@ struct MatchDetailView: View {
         } message: {
             Text(exportError ?? "")
         }
+        .alert("Permission Required", isPresented: $showPermissionAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Coach access is required to export.")
+        }
+        .sheet(isPresented: $showPricing) {
+            PricingView()
+                .environmentObject(subscriptionManager)
+        }
     }
 
     private var sortedPlayersForMatch: [Player] {
@@ -348,6 +363,7 @@ struct MatchDetailView: View {
     }
 
     private func exportCSV() {
+        guard canExport() else { return }
         let csv = CSVExporter.matchCSV(team: team, match: match, sport: sport)
         let matchName = match.title.isEmpty ? match.opponent : match.title
         let safeName = MaxPrepsExport.sanitizedFilename(matchName.isEmpty ? "Match" : matchName)
@@ -358,12 +374,14 @@ struct MatchDetailView: View {
                 contents: csv
             )
             shareSheetPayload = ShareSheetPayload(items: [url])
+            subscriptionManager.recordExport()
         } catch {
             exportError = error.localizedDescription
         }
     }
 
     private func exportMaxPreps() {
+        guard canExport() else { return }
         let roster = team.players.filter { match.playerSeconds.keys.contains($0.id) }
         let matchName = match.title.isEmpty ? match.opponent : match.title
         let safeName = MaxPrepsExport.sanitizedFilename(matchName.isEmpty ? "Match" : matchName)
@@ -398,12 +416,14 @@ struct MatchDetailView: View {
             }
 
             shareSheetPayload = ShareSheetPayload(items: urls)
+            subscriptionManager.recordExport()
         } catch {
             exportError = error.localizedDescription
         }
     }
 
     private func exportWrestlingSummary() {
+        guard canExport() else { return }
         let matchName = match.title.isEmpty ? match.opponent : match.title
         let safeName = MaxPrepsExport.sanitizedFilename(matchName.isEmpty ? "Bout" : matchName)
         let roster = team.players.filter { match.playerStats.keys.contains($0.id) }
@@ -429,9 +449,23 @@ struct MatchDetailView: View {
         do {
             let url = try MaxPrepsExport.writeTempTXT(filename: "Bout_\(safeName)", contents: summary)
             shareSheetPayload = ShareSheetPayload(items: [url])
+            subscriptionManager.recordExport()
         } catch {
             exportError = error.localizedDescription
         }
+    }
+
+    private func canExport() -> Bool {
+        analytics.log(.tappedExport, metadata: ["source": "match_detail"])
+        guard roleManager.canExport() else {
+            showPermissionAlert = true
+            return false
+        }
+        if subscriptionManager.canExport() {
+            return true
+        }
+        showPricing = true
+        return false
     }
 
     private struct PlayerDetail: Identifiable {

@@ -8,8 +8,11 @@ struct HomePreMatchView: View {
     @Binding var selectedTeamID: UUID?
     var onStartMatch: (UUID, GameTemplate?) -> Void
 
+    @EnvironmentObject var roleManager: RoleManager
+
     @State private var selectedTemplateID: String? = nil
     @State private var selectedSeasonID: UUID? = nil
+    @State private var showPermissionAlert = false
 
     var body: some View {
         ZStack {
@@ -94,6 +97,10 @@ struct HomePreMatchView: View {
                     }
 
                     Button {
+                        guard roleManager.canLogGames() else {
+                            showPermissionAlert = true
+                            return
+                        }
                         guard let tid = selectedTeamID ?? teamStore.teams.first?.id else { return }
                         selectedTeamID = tid
                         let template = GameTemplateCatalog.template(for: selectedTeam?.sportID ?? SportCatalog.defaultSportID, templateID: selectedTemplateID)
@@ -114,7 +121,7 @@ struct HomePreMatchView: View {
                             )
                     }
                     .buttonStyle(.plain)
-                    .disabled(teamStore.teams.isEmpty)
+                    .disabled(teamStore.teams.isEmpty || !roleManager.canLogGames())
 
                     VStack(spacing: 10) {
                         NavigationLink {
@@ -174,6 +181,11 @@ struct HomePreMatchView: View {
         .onChange(of: selectedTeamID) { _, _ in
             syncTemplateSelection()
             syncSeasonSelection()
+        }
+        .alert("Permission Required", isPresented: $showPermissionAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Coach access is required to start a match.")
         }
     }
 
