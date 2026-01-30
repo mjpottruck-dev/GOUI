@@ -105,7 +105,7 @@ final class AuthManager: NSObject, ObservableObject {
 
     private func fetchUserRecordID() async throws -> CKRecord.ID? {
         guard let container else { throw CloudKitUnavailableError() }
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<CKRecord.ID?, Error>) in
+        return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<CKRecord.ID?, Error>) in
             container.fetchUserRecordID { recordID, error in
                 if let error {
                     continuation.resume(throwing: error)

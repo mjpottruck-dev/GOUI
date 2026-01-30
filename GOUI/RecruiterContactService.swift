@@ -19,7 +19,7 @@ final class RecruiterContactService {
 
     private func saveRecord(_ record: CKRecord) async throws -> CKRecord {
         guard let database else { throw CloudKitUnavailableError() }
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<CKRecord, Error>) in
+        return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<CKRecord, Error>) in
             database.save(record) { saved, error in
                 if let error {
                     continuation.resume(throwing: error)
