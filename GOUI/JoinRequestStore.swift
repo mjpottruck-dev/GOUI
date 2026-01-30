@@ -5,15 +5,19 @@ import Foundation
 final class JoinRequestStore: ObservableObject {
     @Published private(set) var requests: [JoinRequest] = []
 
-    private let container: CKContainer
-    private let database: CKDatabase
+    private let container: CKContainer?
+    private let database: CKDatabase?
 
-    init(container: CKContainer = CKContainer.default()) {
+    init(container: CKContainer? = CloudKitAvailability.defaultContainer()) {
         self.container = container
-        self.database = container.publicCloudDatabase
+        self.database = container?.publicCloudDatabase
     }
 
     func refreshRequests(for teamID: UUID) async {
+        guard cloudKitAvailable else {
+            requests = []
+            return
+        }
         do {
             let predicate = NSPredicate(format: "teamID == %@", teamID.uuidString)
             let query = CKQuery(recordType: CloudRecordType.joinRequest, predicate: predicate)
@@ -25,6 +29,7 @@ final class JoinRequestStore: ObservableObject {
     }
 
     func submitJoinRequest(_ request: JoinRequest) async throws {
+        guard cloudKitAvailable else { throw CloudKitUnavailableError() }
         let recordID = CKRecord.ID(recordName: request.id.uuidString)
         let record = CKRecord(recordType: CloudRecordType.joinRequest, recordID: recordID)
         record["teamID"] = request.teamID.uuidString as CKRecordValue
@@ -42,6 +47,7 @@ final class JoinRequestStore: ObservableObject {
     }
 
     func updateRequest(_ request: JoinRequest, status: JoinRequestStatus) async throws {
+        guard cloudKitAvailable else { throw CloudKitUnavailableError() }
         let recordID = CKRecord.ID(recordName: request.id.uuidString)
         let record = CKRecord(recordType: CloudRecordType.joinRequest, recordID: recordID)
         record["teamID"] = request.teamID.uuidString as CKRecordValue
@@ -63,6 +69,7 @@ final class JoinRequestStore: ObservableObject {
     }
 
     private func fetchRecords(query: CKQuery) async throws -> [CKRecord] {
+        guard let database else { throw CloudKitUnavailableError() }
         try await withCheckedThrowingContinuation { continuation in
             var records: [CKRecord] = []
             var recordError: Error?
@@ -92,6 +99,7 @@ final class JoinRequestStore: ObservableObject {
     }
 
     private func saveRecord(_ record: CKRecord) async throws -> CKRecord {
+        guard let database else { throw CloudKitUnavailableError() }
         try await withCheckedThrowingContinuation { continuation in
             database.save(record) { saved, error in
                 if let error {
@@ -144,5 +152,9 @@ final class JoinRequestStore: ObservableObject {
             createdAt: createdAt,
             updatedAt: updatedAt
         )
+    }
+
+    private var cloudKitAvailable: Bool {
+        container != nil && database != nil
     }
 }

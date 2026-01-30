@@ -10,12 +10,12 @@ final class AuthManager: NSObject, ObservableObject {
     @Published private(set) var lastErrorMessage: String?
 
     private let userIDKey = "gostats.auth.userID"
-    private let container: CKContainer
-    private let database: CKDatabase
+    private let container: CKContainer?
+    private let database: CKDatabase?
 
     override init() {
-        container = CKContainer.default()
-        database = container.privateCloudDatabase
+        container = CloudKitAvailability.defaultContainer()
+        database = container?.privateCloudDatabase
         super.init()
         Task {
             await restoreSession()
@@ -27,6 +27,10 @@ final class AuthManager: NSObject, ObservableObject {
     }
 
     func signIn() async {
+        guard cloudKitAvailable else {
+            lastErrorMessage = CloudKitUnavailableError().localizedDescription
+            return
+        }
         guard !isSigningIn else { return }
         isSigningIn = true
         lastErrorMessage = nil
@@ -57,6 +61,7 @@ final class AuthManager: NSObject, ObservableObject {
     }
 
     func restoreSession() async {
+        guard cloudKitAvailable else { return }
         guard let storedUserID = KeychainHelper.read(userIDKey) else { return }
         do {
             let userRecordID = try await fetchUserRecordID()
@@ -94,7 +99,12 @@ final class AuthManager: NSObject, ObservableObject {
 
     private var signInContinuation: CheckedContinuation<ASAuthorizationAppleIDCredential, Error>?
 
+    private var cloudKitAvailable: Bool {
+        container != nil && database != nil
+    }
+
     private func fetchUserRecordID() async throws -> CKRecord.ID? {
+        guard let container else { throw CloudKitUnavailableError() }
         try await withCheckedThrowingContinuation { continuation in
             container.fetchUserRecordID { recordID, error in
                 if let error {
@@ -107,6 +117,7 @@ final class AuthManager: NSObject, ObservableObject {
     }
 
     private func fetchUser(userID: String) async throws -> AuthUser? {
+        guard let database else { throw CloudKitUnavailableError() }
         let recordID = CKRecord.ID(recordName: userID)
         return try await withCheckedThrowingContinuation { continuation in
             database.fetch(withRecordID: recordID) { record, error in
@@ -147,6 +158,7 @@ final class AuthManager: NSObject, ObservableObject {
     }
 
     private func saveUser(_ user: AuthUser) async throws -> AuthUser {
+        guard let database else { throw CloudKitUnavailableError() }
         let recordID = CKRecord.ID(recordName: user.userID)
         let record = CKRecord(recordType: CloudRecordType.user, recordID: recordID)
         record["displayName"] = user.displayName as CKRecordValue

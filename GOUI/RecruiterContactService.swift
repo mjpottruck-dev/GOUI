@@ -2,13 +2,14 @@ import CloudKit
 import Foundation
 
 final class RecruiterContactService {
-    private let database: CKDatabase
+    private let database: CKDatabase?
 
-    init(container: CKContainer = CKContainer.default()) {
-        database = container.privateCloudDatabase
+    init(container: CKContainer? = CloudKitAvailability.defaultContainer()) {
+        database = container?.privateCloudDatabase
     }
 
     func sendContactRequest(teamID: UUID, playerID: UUID, recruiterUserID: String) async throws {
+        guard let database else { throw CloudKitUnavailableError() }
         let record = CKRecord(recordType: CloudRecordType.recruiterNotification)
         record["teamID"] = teamID.uuidString as CKRecordValue
         record["playerID"] = playerID.uuidString as CKRecordValue
@@ -18,6 +19,7 @@ final class RecruiterContactService {
     }
 
     private func saveRecord(_ record: CKRecord) async throws -> CKRecord {
+        guard let database else { throw CloudKitUnavailableError() }
         try await withCheckedThrowingContinuation { continuation in
             database.save(record) { saved, error in
                 if let error {
