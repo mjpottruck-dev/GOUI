@@ -3,6 +3,8 @@ import SwiftUI
 struct RecruiterPortalView: View {
     @Bindable var teamStore: TeamStore
     @ObservedObject var clipStore: ClipStore
+    @EnvironmentObject var authManager: AuthManager
+    @EnvironmentObject var roleManager: RoleManager
 
     @State private var searchText: String = ""
     @State private var selectedSportID: String? = nil
@@ -15,31 +17,45 @@ struct RecruiterPortalView: View {
             ZStack {
                 GoStatsTheme.bg.ignoresSafeArea()
 
-                ScrollView {
-                    VStack(spacing: 12) {
-                        filterCard
+                if !authManager.isSignedIn {
+                    Text("Sign in with Apple to access recruiter profiles.")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(GoStatsTheme.text2)
+                        .multilineTextAlignment(.center)
+                        .padding(24)
+                } else if roleManager.role != .recruiter {
+                    Text("Recruiter accounts only. Update your role in settings.")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(GoStatsTheme.text2)
+                        .multilineTextAlignment(.center)
+                        .padding(24)
+                } else {
+                    ScrollView {
+                        VStack(spacing: 12) {
+                            filterCard
 
-                        ForEach(filteredPlayers) { entry in
-                            NavigationLink {
-                                RecruiterPlayerProfileView(entry: entry, clipStore: clipStore)
-                            } label: {
-                                playerCard(entry)
+                            ForEach(filteredPlayers) { entry in
+                                NavigationLink {
+                                    RecruiterPlayerProfileView(entry: entry, clipStore: clipStore)
+                                } label: {
+                                    playerCard(entry)
+                                }
+                                .buttonStyle(.plain)
                             }
-                            .buttonStyle(.plain)
-                        }
 
-                        if filteredPlayers.isEmpty {
-                            LiquidGlassContainer(cornerRadius: 22) {
-                                Text("No recruiter-visible players found.")
-                                    .font(.system(size: 14, weight: .semibold))
-                                    .foregroundStyle(GoStatsTheme.text2)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            if filteredPlayers.isEmpty {
+                                LiquidGlassContainer(cornerRadius: 22) {
+                                    Text("No recruiter-visible players found.")
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundStyle(GoStatsTheme.text2)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                }
                             }
                         }
+                        .padding(.horizontal, 16)
+                        .padding(.top, 16)
+                        .padding(.bottom, 120)
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.top, 16)
-                    .padding(.bottom, 120)
                 }
             }
             .navigationTitle("Recruiter Portal")
@@ -146,6 +162,11 @@ struct RecruiterPortalView: View {
 struct RecruiterPlayerProfileView: View {
     let entry: RecruiterPlayerEntry
     @ObservedObject var clipStore: ClipStore
+    @EnvironmentObject var authManager: AuthManager
+
+    @State private var contactMessage: String? = nil
+    @State private var contactTaskActive = false
+    private let contactService = RecruiterContactService()
 
     var body: some View {
         ZStack {
@@ -158,6 +179,7 @@ struct RecruiterPlayerProfileView: View {
                     statsCard
                     highlightsCard
                     teamCard
+                    contactCard
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 16)
@@ -268,6 +290,53 @@ struct RecruiterPlayerProfileView: View {
                 }
                 .font(.system(size: 13, weight: .semibold))
             }
+        }
+    }
+
+    private var contactCard: some View {
+        LiquidGlassContainer(cornerRadius: 22) {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("REQUEST CONTACT")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(GoStatsTheme.primary)
+                Text("Send a message request to the team manager. No email or SMS is sent yet.")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(GoStatsTheme.text2)
+                Button {
+                    Task { await sendContactRequest() }
+                } label: {
+                    Text(contactTaskActive ? "Sending..." : "Request Contact")
+                        .font(.system(size: 14, weight: .semibold))
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(contactTaskActive || authManager.currentUser == nil)
+
+                if let contactMessage {
+                    Text(contactMessage)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(GoStatsTheme.text2)
+                }
+            }
+        }
+    }
+
+    private func sendContactRequest() async {
+        guard let recruiter = authManager.currentUser else {
+            contactMessage = "Sign in to send a request."
+            return
+        }
+        contactTaskActive = true
+        defer { contactTaskActive = false }
+        do {
+            try await contactService.sendContactRequest(
+                teamID: entry.team.id,
+                playerID: entry.player.id,
+                recruiterUserID: recruiter.userID
+            )
+            contactMessage = "Request sent."
+        } catch {
+            contactMessage = "Could not send request."
         }
     }
 

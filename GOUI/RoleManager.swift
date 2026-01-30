@@ -50,6 +50,8 @@ final class RoleManager: ObservableObject {
         didSet { save() }
     }
 
+    private var authUserID: String? = nil
+
     @Published var hasCompletedOnboarding: Bool {
         didSet { UserDefaults.standard.set(hasCompletedOnboarding, forKey: onboardingKey) }
     }
@@ -66,6 +68,9 @@ final class RoleManager: ObservableObject {
     }
 
     var userID: String {
+        if let authUserID {
+            return authUserID
+        }
         if let stored = KeychainHelper.read(userIDKey) {
             return stored
         }
@@ -92,6 +97,23 @@ final class RoleManager: ObservableObject {
             createdAt: Date()
         )
         updated.role = role
+        profile = updated
+    }
+
+    func applyAuthUser(_ authUser: AuthUser?) {
+        authUserID = authUser?.userID
+        guard let authUser else {
+            profile = nil
+            return
+        }
+        let updated = UserProfile(
+            userID: authUser.userID,
+            displayName: authUser.displayName,
+            role: authUser.role,
+            affiliatedTeamIDs: profile?.affiliatedTeamIDs ?? [],
+            affiliatedClubID: profile?.affiliatedClubID,
+            createdAt: profile?.createdAt ?? authUser.createdAt
+        )
         profile = updated
     }
 

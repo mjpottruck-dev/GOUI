@@ -32,4 +32,14 @@ enum KeychainHelper {
         else { return nil }
         return value
     }
+
+    @discardableResult
+    static func delete(_ key: String) -> Bool {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: key
+        ]
+        let status = SecItemDelete(query as CFDictionary)
+        return status == errSecSuccess || status == errSecItemNotFound
+    }
 }

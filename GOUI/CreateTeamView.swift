@@ -10,6 +10,8 @@ struct CreateTeamView: View {
     @EnvironmentObject var membershipStore: TeamMembershipStore
     @EnvironmentObject var roleManager: RoleManager
     @EnvironmentObject var permissionService: PermissionService
+    @EnvironmentObject var authManager: AuthManager
+    @EnvironmentObject var sharingService: SharingService
 
     @State private var name: String = ""
     @State private var fieldSize: Int = 11
@@ -18,6 +20,7 @@ struct CreateTeamView: View {
     @State private var showAddPlayer = false
     @State private var sportID: String = SportCatalog.defaultSportID
     @State private var showCoachLimitAlert = false
+    @State private var authAlertMessage: String? = nil
 
     private var sport: any SportDefinition {
         SportCatalog.sport(for: sportID)
@@ -143,6 +146,15 @@ struct CreateTeamView: View {
         } message: {
             Text(permissionService.coachLimitMessage())
         }
+        .alert("Sign In Required", isPresented: Binding(get: {
+            authAlertMessage != nil
+        }, set: { _ in
+            authAlertMessage = nil
+        })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(authAlertMessage ?? "")
+        }
         .onChange(of: sportID) { _, _ in
             if let first = fieldSizeOptions.first {
                 fieldSize = first
@@ -151,6 +163,10 @@ struct CreateTeamView: View {
     }
 
     private func create() {
+        guard authManager.isSignedIn else {
+            authAlertMessage = "Sign in with Apple to create a team."
+            return
+        }
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
@@ -183,6 +199,14 @@ struct CreateTeamView: View {
                 membershipStore.approveMembership(pending)
             }
             showCoachLimitAlert = true
+        }
+        Task {
+            do {
+                let share = try await sharingService.createShare(for: team)
+                teamStore.updateShareRecordName(teamID: team.id, shareRecordName: share.recordID.recordName)
+            } catch {
+                print("❌ Share creation failed:", error)
+            }
         }
         onCreated(team.id)
         dismiss()
