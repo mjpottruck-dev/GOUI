@@ -7,7 +7,7 @@ final class ClipExportService {
     }
 
     func exportClip(clip: Clip, recording: VideoRecording, completion: @escaping (Result<URL, Error>) -> Void) {
-        let asset = AVAsset(url: recording.fileURL)
+        let asset = AVURLAsset(url: recording.fileURL)
         guard clip.endOffset > clip.startOffset else {
             completion(.failure(ExportError.invalidRange))
             return
@@ -22,16 +22,17 @@ final class ClipExportService {
         }
 
         let outputURL = FileManager.default.temporaryDirectory.appendingPathComponent("clip-\(UUID().uuidString).mp4")
-        export.outputURL = outputURL
-        export.outputFileType = .mp4
         export.timeRange = timeRange
 
-        export.exportAsynchronously {
-            DispatchQueue.main.async {
-                if export.status == .completed {
+        Task {
+            do {
+                try await export.export(to: outputURL, as: .mp4)
+                await MainActor.run {
                     completion(.success(outputURL))
-                } else {
-                    completion(.failure(export.error ?? ExportError.exportFailed))
+                }
+            } catch {
+                await MainActor.run {
+                    completion(.failure(error))
                 }
             }
         }

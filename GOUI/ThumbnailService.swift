@@ -18,19 +18,20 @@ final class ThumbnailService {
         }
 
         queue.async {
-            let asset = AVAsset(url: recording.fileURL)
+            let asset = AVURLAsset(url: recording.fileURL)
             let generator = AVAssetImageGenerator(asset: asset)
             generator.appliesPreferredTrackTransform = true
             let time = CMTime(seconds: clip.startOffset, preferredTimescale: 600)
-            var actualTime = CMTime.zero
-            guard let imageRef = try? generator.copyCGImage(at: time, actualTime: &actualTime) else {
-                DispatchQueue.main.async { completion(nil) }
-                return
-            }
-            let image = UIImage(cgImage: imageRef)
-            self.cache.setObject(image, forKey: cacheKey)
-            DispatchQueue.main.async {
-                completion(image)
+            generator.generateCGImageAsynchronously(for: time) { _, imageRef, _, result, _ in
+                guard result == .succeeded, let imageRef else {
+                    DispatchQueue.main.async { completion(nil) }
+                    return
+                }
+                let image = UIImage(cgImage: imageRef)
+                self.cache.setObject(image, forKey: cacheKey)
+                DispatchQueue.main.async {
+                    completion(image)
+                }
             }
         }
     }

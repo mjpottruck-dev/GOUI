@@ -109,7 +109,6 @@ final class VideoCaptureService: NSObject, ObservableObject {
     private func requestPermissions(completion: @escaping (Bool) -> Void) {
         let group = DispatchGroup()
         var videoGranted = false
-        var audioGranted = false
 
         group.enter()
         AVCaptureDevice.requestAccess(for: .video) { granted in
@@ -119,7 +118,6 @@ final class VideoCaptureService: NSObject, ObservableObject {
 
         group.enter()
         AVCaptureDevice.requestAccess(for: .audio) { granted in
-            audioGranted = granted
             group.leave()
         }
 
@@ -163,9 +161,19 @@ extension VideoCaptureService: AVCaptureFileOutputRecordingDelegate {
         from connections: [AVCaptureConnection],
         error: Error?
     ) {
-        let duration = AVAsset(url: outputFileURL).duration.seconds
-        if let currentRecordingID {
-            clipStore?.finalizeRecording(id: currentRecordingID, duration: duration)
+        let recordingID = currentRecordingID
+        Task {
+            let asset = AVURLAsset(url: outputFileURL)
+            do {
+                let duration = try await asset.load(.duration).seconds
+                if let recordingID {
+                    clipStore?.finalizeRecording(id: recordingID, duration: duration)
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    self.lastError = error.localizedDescription
+                }
+            }
         }
         DispatchQueue.main.async {
             if let error {
