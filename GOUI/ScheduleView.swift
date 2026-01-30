@@ -15,7 +15,7 @@ struct ScheduleView: View {
         NavigationStack {
             List {
                 if let team {
-                    Section(team.name) {
+                    Section("Scheduled Events") {
                         ForEach(team.matches) { match in
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(match.title.isEmpty ? "Game vs \(match.opponent)" : match.title)
@@ -26,12 +26,12 @@ struct ScheduleView: View {
                             }
                         }
                         if team.matches.isEmpty {
-                            Text("No games scheduled yet.")
+                            Text("No games, practices, or events scheduled yet.")
                                 .foregroundStyle(.secondary)
                         }
                     }
                 } else {
-                    Text("Select a team to see its schedule.")
+                    Text("Select a team to see games, practices, and events.")
                         .foregroundStyle(.secondary)
                 }
             }
