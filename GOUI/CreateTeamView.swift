@@ -10,7 +10,6 @@ struct CreateTeamView: View {
     @EnvironmentObject var membershipStore: TeamMembershipStore
     @EnvironmentObject var roleManager: RoleManager
     @EnvironmentObject var permissionService: PermissionService
-    @EnvironmentObject var authManager: AuthManager
     @EnvironmentObject var sharingService: SharingService
 
     @State private var name: String = ""
@@ -20,7 +19,6 @@ struct CreateTeamView: View {
     @State private var showAddPlayer = false
     @State private var sportID: String = SportCatalog.defaultSportID
     @State private var showCoachLimitAlert = false
-    @State private var authAlertMessage: String? = nil
 
     private var sport: any SportDefinition {
         SportCatalog.sport(for: sportID)
@@ -146,15 +144,6 @@ struct CreateTeamView: View {
         } message: {
             Text(permissionService.coachLimitMessage())
         }
-        .alert("Sign In Required", isPresented: Binding(get: {
-            authAlertMessage != nil
-        }, set: { _ in
-            authAlertMessage = nil
-        })) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(authAlertMessage ?? "")
-        }
         .onChange(of: sportID) { _, _ in
             if let first = fieldSizeOptions.first {
                 fieldSize = first
@@ -163,10 +152,6 @@ struct CreateTeamView: View {
     }
 
     private func create() {
-        guard authManager.isSignedIn else {
-            authAlertMessage = "Sign in with Apple to create a team."
-            return
-        }
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
@@ -183,18 +168,19 @@ struct CreateTeamView: View {
             secondaryGoalkeeperID: sport.supportsGoalie ? goalkeeperDepth.secondary : nil,
             thirdGoalkeeperID: sport.supportsGoalie ? goalkeeperDepth.third : nil,
             sportID: sportID,
+            managerUserID: roleManager.userID,
             matches: []
         )
 
         teamStore.addTeam(team)
         analytics.log(.createdTeam, metadata: ["teamID": team.id.uuidString])
-        if permissionService.canAssignCoachRole(teamID: team.id, role: .coachManager) {
-            membershipStore.requestJoin(teamID: team.id, userID: roleManager.userID, role: .coachManager)
+        if permissionService.canAssignCoachRole(teamID: team.id, role: .manager) {
+            membershipStore.requestJoin(teamID: team.id, userID: roleManager.userID, memberType: .coach, permissionRole: .manager)
             if let pending = membershipStore.membershipRecord(for: team.id, userID: roleManager.userID) {
                 membershipStore.approveMembership(pending)
             }
         } else {
-            membershipStore.requestJoin(teamID: team.id, userID: roleManager.userID, role: .viewer)
+            membershipStore.requestJoin(teamID: team.id, userID: roleManager.userID, memberType: .athlete, permissionRole: .viewer)
             if let pending = membershipStore.membershipRecord(for: team.id, userID: roleManager.userID) {
                 membershipStore.approveMembership(pending)
             }

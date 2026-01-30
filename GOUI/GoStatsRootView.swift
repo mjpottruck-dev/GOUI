@@ -14,10 +14,11 @@ struct GoStatsRootView: View {
     @StateObject private var clubStore = ClubStore()
     @StateObject private var analytics = AnalyticsService.shared
     @StateObject private var joinRequestStore = JoinRequestStore()
+    @StateObject private var statKeeperRequestStore = StatKeeperRequestStore()
+    @StateObject private var chatStore = ChatStore()
     @StateObject private var sharingService = SharingService()
 
     @StateObject private var appState: AppState
-    @State private var goToTabs = false
     @State private var showSplash = true
     @State private var showOnboarding = false
     @State private var demoModeEnabled = false
@@ -43,36 +44,11 @@ struct GoStatsRootView: View {
         ZStack {
             GoStatsTheme.bg.ignoresSafeArea()
 
-            NavigationStack {
-                HomePreMatchView(
-                    store: store,
-                    teamStore: teamStore,
-                    selectedTeamID: $appState.currentTeamID,
-                    onStartMatch: { teamID, template in
-                        appState.currentTeamID = teamID
-                        if let team = teamStore.teams.first(where: { $0.id == teamID }) {
-                            store.resetForNewMatch(
-                                team: team,
-                                formation: team.primaryFormation,
-                                seasonID: teamStore.activeSeasonID(for: teamID),
-                                template: template
-                            )
-                        }
-                        goToTabs = true
-                    }
-                )
-            .navigationDestination(isPresented: $goToTabs) {
-                if appState.currentTeamID != nil {
-                    MainTabsView(
-                        store: store,
-                        clipStore: clipStore,
-                        teamStore: teamStore
-                    )
-                    } else {
-                        Text("No team selected")
-                    }
-                }
-            }
+            MainTabsView(
+                store: store,
+                clipStore: clipStore,
+                teamStore: teamStore
+            )
             .background(GoStatsTheme.bg)
         }
         .tint(GoStatsTheme.primary)
@@ -85,6 +61,8 @@ struct GoStatsRootView: View {
         .environmentObject(clubStore)
         .environmentObject(analytics)
         .environmentObject(joinRequestStore)
+        .environmentObject(statKeeperRequestStore)
+        .environmentObject(chatStore)
         .environmentObject(sharingService)
         .overlay {
             if showSplash {
@@ -114,7 +92,8 @@ struct GoStatsRootView: View {
             await runSplashSequenceIfNeeded()
             analytics.log(.appOpen)
             membershipStore.updateCloudSyncEnabled(teamStore.cloudSyncEnabled)
-            membershipStore.bootstrapMemberships(for: teamStore, userID: roleManager.userID, defaultRole: .coachManager)
+            membershipStore.bootstrapMemberships(for: teamStore, userID: roleManager.userID, defaultRole: .manager)
+            teamStore.assignManagerIfNeeded(userID: roleManager.userID)
             if appState.currentTeamID == nil {
                 appState.currentTeamID = membershipStore.activeTeamIDs(for: roleManager.userID).first ?? teamStore.teams.first?.id
             }
@@ -125,7 +104,8 @@ struct GoStatsRootView: View {
         .onChange(of: authManager.currentUser) { _, newUser in
             roleManager.applyAuthUser(newUser)
             if let user = newUser {
-                membershipStore.bootstrapMemberships(for: teamStore, userID: user.userID, defaultRole: .coachManager)
+                membershipStore.bootstrapMemberships(for: teamStore, userID: user.userID, defaultRole: .manager)
+                teamStore.assignManagerIfNeeded(userID: user.userID)
                 if appState.currentTeamID == nil {
                     appState.currentTeamID = membershipStore.activeTeamIDs(for: user.userID).first ?? teamStore.teams.first?.id
                 }
@@ -150,11 +130,7 @@ struct GoStatsRootView: View {
     }
 
     private var shouldRequireAuth: Bool {
-        #if DEBUG
-        return !demoModeEnabled && !authManager.isSignedIn
-        #else
-        return !authManager.isSignedIn
-        #endif
+        false
     }
 
     private func migrateLocalTeamsIfNeeded(for user: AuthUser) async {

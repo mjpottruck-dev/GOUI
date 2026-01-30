@@ -18,6 +18,8 @@ struct TeamRosterView: View {
 
     @EnvironmentObject var permissionService: PermissionService
     @EnvironmentObject var appState: AppState
+    @EnvironmentObject var roleManager: RoleManager
+    @EnvironmentObject var statKeeperRequestStore: StatKeeperRequestStore
 
     private var sport: any SportDefinition {
         SportCatalog.sport(for: team?.sportID)
@@ -169,6 +171,14 @@ struct TeamRosterView: View {
                     }
                     .buttonStyle(GlassPillButtonStyle(fill: GoStatsTheme.primary))
                 }
+
+                if shouldShowStatKeeperRequest {
+                    Button("Request Stat Keeper Access") {
+                        submitStatKeeperRequest()
+                    }
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(GoStatsTheme.primary)
+                }
             }
         }
     }
@@ -269,6 +279,22 @@ struct TeamRosterView: View {
 
     private func deletePlayer(_ player: Player) {
         teamStore.deletePlayer(player, from: teamID)
+    }
+
+    private var shouldShowStatKeeperRequest: Bool {
+        guard let membership = membershipStore.membership(for: teamID, userID: roleManager.userID) else { return false }
+        let isParent = membership.memberType == .parent || membership.memberType == .family
+        return isParent && membership.permissionRole != .statKeeper
+    }
+
+    private func submitStatKeeperRequest() {
+        let request = StatKeeperRequest(
+            teamID: teamID,
+            requestedByUserID: roleManager.userID,
+            requestedByName: roleManager.displayName,
+            message: nil
+        )
+        statKeeperRequestStore.submitRequest(request)
     }
 }
 
@@ -510,15 +536,15 @@ private struct TeamMembersSheet: View {
                         ForEach(pendingRequests) { request in
                             HStack {
                                 VStack(alignment: .leading, spacing: 4) {
-                                    Text(request.requesterUserID)
+                                    Text(request.requesterName)
                                         .font(.subheadline.weight(.semibold))
-                                    Text(request.requestedRole.displayName)
+                                    Text(request.requestedMemberType.displayName)
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                 }
                                 Spacer()
                                 Button("Approve") {
-                                    guard permissionService.canAssignCoachRole(teamID: teamID, role: request.requestedRole) else {
+                                    guard permissionService.canAssignCoachRole(teamID: teamID, role: request.requestedMemberType == .coach ? .coachStaff : .viewer) else {
                                         showLimitAlert = true
                                         return
                                     }
@@ -543,15 +569,22 @@ private struct TeamMembersSheet: View {
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text(membership.userID)
                                         .font(.subheadline.weight(.semibold))
-                                    Text(membership.membershipRole.displayName)
+                                    Text(membership.permissionRole.displayName)
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                 }
                                 Spacer()
-                                if membership.membershipRole.hasCoachPermissions {
+                                if membership.permissionRole.hasCoachPermissions {
                                     Text("Coach")
                                         .font(.caption2)
                                         .foregroundStyle(GoStatsTheme.primary)
+                                } else if membership.memberType == .parent || membership.memberType == .family {
+                                    if permissionService.canApproveStatKeepers(teamID: teamID) && membership.permissionRole != .statKeeper {
+                                        Button("Grant Stat Keeper") {
+                                            membershipStore.updateMembership(membership, status: .active, role: .statKeeper)
+                                        }
+                                        .font(.caption)
+                                    }
                                 }
                             }
                         }
@@ -587,16 +620,16 @@ private struct TeamMembersSheet: View {
 
     private func approve(_ request: JoinRequest) async {
         if let existing = membershipStore.membershipRecord(for: teamID, userID: request.requesterUserID) {
-            membershipStore.updateMembership(existing, status: .active, role: request.requestedRole)
+            membershipStore.updateMembership(existing, status: .active, role: request.requestedMemberType == .coach ? .coachStaff : .viewer, memberType: request.requestedMemberType)
         } else {
-            membershipStore.requestJoin(teamID: teamID, userID: request.requesterUserID, role: request.requestedRole)
+            membershipStore.requestJoin(teamID: teamID, userID: request.requesterUserID, memberType: request.requestedMemberType, permissionRole: request.requestedMemberType == .coach ? .coachStaff : .viewer)
             if let pending = membershipStore.membershipRecord(for: teamID, userID: request.requesterUserID) {
                 membershipStore.approveMembership(pending)
             }
         }
 
         if let shareRecordName, let requesterRecordName = request.requesterUserRecordName {
-            let permission: CKShare.ParticipantPermission = request.requestedRole.hasCoachPermissions ? .readWrite : .readOnly
+            let permission: CKShare.ParticipantPermission = request.requestedMemberType == .coach ? .readWrite : .readOnly
             do {
                 try await sharingService.addParticipant(
                     shareRecordName: shareRecordName,

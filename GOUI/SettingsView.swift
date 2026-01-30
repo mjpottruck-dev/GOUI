@@ -37,6 +37,10 @@ struct SettingsView: View {
                 }
 
                 Section("Profile") {
+                    TextField("Display Name", text: Binding(
+                        get: { roleManager.displayName },
+                        set: { roleManager.updateDisplayName($0) }
+                    ))
                     Picker("Role", selection: Binding(
                         get: { roleManager.role },
                         set: { roleManager.setRole($0) }
@@ -51,6 +55,12 @@ struct SettingsView: View {
 
                     NavigationLink("Join Club") {
                         JoinClubView()
+                    }
+                }
+
+                Section("My Teams") {
+                    NavigationLink("Manage Teams") {
+                        RosterHomeView(teamStore: teamStore)
                     }
                 }
 
@@ -206,7 +216,7 @@ private struct CoachTeamAssignmentSheet: View {
                         if let existing = membershipStore.membershipRecord(for: team.id, userID: roleManager.userID) {
                             membershipStore.updateMembership(existing, status: .active, role: .coachManager)
                         } else {
-                            membershipStore.requestJoin(teamID: team.id, userID: roleManager.userID, role: .coachManager)
+                            membershipStore.requestJoin(teamID: team.id, userID: roleManager.userID, memberType: .coach, permissionRole: .coachManager)
                             if let pending = membershipStore.membershipRecord(for: team.id, userID: roleManager.userID) {
                                 membershipStore.approveMembership(pending)
                             }

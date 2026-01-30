@@ -10,7 +10,7 @@ struct OnboardingView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var pageIndex = 0
-    @State private var selectedRole: UserRole = .familyMember
+    @State private var selectedRole: UserRole = .athlete
     @State private var selectedTeams: Set<UUID> = []
     @State private var clubName: String = ""
     @State private var inviteCode: String = ""
@@ -50,7 +50,7 @@ struct OnboardingView: View {
             }
             .onAppear {
                 selectedRole = roleManager.role
-                selectedTeams = Set(roleManager.profile?.affiliatedTeamIDs ?? [])
+                selectedTeams = Set(roleManager.affiliatedTeamIDs)
             }
         }
     }
@@ -109,7 +109,7 @@ struct OnboardingView: View {
                 teamSelectionList
             }
 
-            if selectedRole == .familyMember {
+            if selectedRole == .parent {
                 inviteSection
             }
 
@@ -283,11 +283,7 @@ struct OnboardingView: View {
     private func handleInvite() {
         let trimmed = inviteCode.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
         guard !trimmed.isEmpty else { return }
-        if roleManager.profile == nil {
-            roleManager.setRole(selectedRole)
-        }
-        guard let profile = roleManager.profile else { return }
-        if let result = clubStore.joinClub(with: trimmed, userID: profile.userID) {
+        if let result = clubStore.joinClub(with: trimmed, userID: roleManager.userID) {
             roleManager.setRole(result.role)
             roleManager.updateClub(result.club.id)
             statusMessage = "Joined \(result.club.name)."

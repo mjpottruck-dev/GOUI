@@ -32,6 +32,7 @@ extension MatchStore {
         rec.periodScores = periodScores
         rec.playerHoleScores = playerHoleScores
         rec.playerHolePutts = playerHolePutts
+        rec.resultEntries = resultEntries
 
         rec.playerSeconds = Dictionary(uniqueKeysWithValues: players.map { ($0.id, $0.secondsPlayed) })
 

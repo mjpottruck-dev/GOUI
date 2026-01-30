@@ -11,37 +11,54 @@ final class PermissionService: ObservableObject {
         self.subscriptionManager = subscriptionManager
     }
 
-    func canEditRoster(teamID: UUID) -> Bool {
+    func canViewTeam(teamID: UUID) -> Bool {
         guard roleManager.role != .recruiter else { return false }
-        return membershipRole(for: teamID) == .coachManager
+        return membershipRole(for: teamID) != nil
+    }
+
+    func canChat(teamID: UUID) -> Bool {
+        canViewTeam(teamID: teamID)
     }
 
     func canLogMatches(teamID: UUID) -> Bool {
         guard roleManager.role != .recruiter else { return false }
         let role = membershipRole(for: teamID)
-        return role == .coachManager || role == .coachStaff
+        return role == .coachManager || role == .coachStaff || role == .statKeeper || role == .manager
+    }
+
+    func canEditRoster(teamID: UUID) -> Bool {
+        guard roleManager.role != .recruiter else { return false }
+        return membershipRole(for: teamID) == .coachManager || membershipRole(for: teamID) == .manager
+    }
+
+    func canManageMembers(teamID: UUID) -> Bool {
+        guard roleManager.role != .recruiter else { return false }
+        return membershipRole(for: teamID) == .coachManager || membershipRole(for: teamID) == .manager
+    }
+
+    func canApproveJoinRequests(teamID: UUID) -> Bool {
+        canManageMembers(teamID: teamID)
+    }
+
+    func canApproveStatKeepers(teamID: UUID) -> Bool {
+        canManageMembers(teamID: teamID)
     }
 
     func canExport(teamID: UUID) -> Bool {
         guard roleManager.role != .recruiter else { return false }
         let role = membershipRole(for: teamID)
-        return role == .coachManager || role == .coachStaff
+        return role == .coachManager || role == .coachStaff || role == .statKeeper || role == .manager
     }
 
-    func canManageMembers(teamID: UUID) -> Bool {
-        guard roleManager.role != .recruiter else { return false }
-        return membershipRole(for: teamID) == .coachManager
-    }
-
-    func membershipRole(for teamID: UUID) -> TeamMembershipRole? {
-        membershipStore.membership(for: teamID, userID: roleManager.userID)?.membershipRole
+    func membershipRole(for teamID: UUID) -> TeamPermissionRole? {
+        membershipStore.membership(for: teamID, userID: roleManager.userID)?.permissionRole
     }
 
     func coachLimitMessage() -> String {
         "Coach membership includes 1 team. Upgrade to Club or remove coach access from another team."
     }
 
-    func canAssignCoachRole(teamID: UUID, role: TeamMembershipRole) -> Bool {
+    func canAssignCoachRole(teamID: UUID, role: TeamPermissionRole) -> Bool {
         membershipStore.canGrantCoachRole(
             userID: roleManager.userID,
             newRole: role,

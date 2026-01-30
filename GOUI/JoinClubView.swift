@@ -38,11 +38,7 @@ struct JoinClubView: View {
     private func handleJoin() {
         let code = inviteCode.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
         guard !code.isEmpty else { return }
-        if roleManager.profile == nil {
-            roleManager.setRole(.familyMember)
-        }
-        guard let profile = roleManager.profile else { return }
-        if let result = clubStore.joinClub(with: code, userID: profile.userID) {
+        if let result = clubStore.joinClub(with: code, userID: roleManager.userID) {
             roleManager.setRole(result.role)
             roleManager.updateClub(result.club.id)
             statusMessage = "Joined \(result.club.name)."

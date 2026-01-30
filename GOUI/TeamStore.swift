@@ -90,6 +90,17 @@ final class TeamStore {
         teams[idx].updatedAt = Date()
     }
 
+    func assignManagerIfNeeded(userID: String) {
+        var changed = false
+        for index in teams.indices where teams[index].managerUserID == nil {
+            teams[index].managerUserID = userID
+            changed = true
+        }
+        if changed {
+            save()
+        }
+    }
+
     // MARK: - Seasons
     func addSeason(_ season: Season) {
         seasons.append(season)

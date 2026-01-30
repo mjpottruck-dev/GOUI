@@ -18,6 +18,7 @@ final class MatchStore: ObservableObject {
     @Published var playerHoleScores: [UUID: [Int]] = [:]
     @Published var playerHolePutts: [UUID: [Int]] = [:]
     @Published var activeTemplate: GameTemplate? = nil
+    @Published var resultEntries: [ResultEntry] = []
 
     private var startDate: Date? = nil
     private var accumulatedSeconds: Int = 0
@@ -68,6 +69,7 @@ final class MatchStore: ObservableObject {
         let periodScores: [PeriodScore]
         let playerHoleScores: [UUID: [Int]]
         let playerHolePutts: [UUID: [Int]]
+        let resultEntries: [ResultEntry]
     }
 
     // MARK: - Computed
@@ -180,6 +182,7 @@ final class MatchStore: ObservableObject {
         periodScores = []
         playerHoleScores = [:]
         playerHolePutts = [:]
+        resultEntries = []
 
         undoStack.removeAll()
 
@@ -270,7 +273,8 @@ final class MatchStore: ObservableObject {
                 currentPeriodIndex: currentPeriodIndex,
                 periodScores: periodScores,
                 playerHoleScores: playerHoleScores,
-                playerHolePutts: playerHolePutts
+                playerHolePutts: playerHolePutts,
+                resultEntries: resultEntries
             )
         )
     }
@@ -289,6 +293,7 @@ final class MatchStore: ObservableObject {
         periodScores = snap.periodScores
         playerHoleScores = snap.playerHoleScores
         playerHolePutts = snap.playerHolePutts
+        resultEntries = snap.resultEntries
     }
 
     // MARK: - Events + Stats

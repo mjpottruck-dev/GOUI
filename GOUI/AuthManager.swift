@@ -138,7 +138,7 @@ final class AuthManager: NSObject, ObservableObject {
         let newUser = AuthUser(
             userID: userID,
             displayName: displayName,
-            role: .familyMember,
+            role: .athlete,
             userRecordName: userRecordName,
             createdAt: now,
             updatedAt: now
@@ -171,7 +171,7 @@ final class AuthManager: NSObject, ObservableObject {
     nonisolated private static func decodeUser(from record: CKRecord) -> AuthUser? {
         guard let displayName = record["displayName"] as? String,
               let roleRaw = record["role"] as? String,
-              let role = UserRole(rawValue: roleRaw),
+              let role = UserRole.fromStoredValue(roleRaw),
               let createdAt = record["createdAt"] as? Date,
               let updatedAt = record["updatedAt"] as? Date
         else { return nil }

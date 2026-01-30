@@ -31,7 +31,7 @@ final class TeamMembershipStore: ObservableObject {
         }
     }
 
-    func bootstrapMemberships(for teamStore: TeamStore, userID: String, defaultRole: TeamMembershipRole) {
+    func bootstrapMemberships(for teamStore: TeamStore, userID: String, defaultRole: TeamPermissionRole) {
         let teamIDs = Set(teamStore.teams.map(\.id))
         let existing = Set(memberships.filter { $0.userID == userID && $0.status == .active }.map(\.teamID))
         let missing = teamIDs.subtracting(existing)
@@ -42,7 +42,8 @@ final class TeamMembershipStore: ObservableObject {
             TeamMembership(
                 teamID: teamID,
                 userID: userID,
-                membershipRole: defaultRole,
+                memberType: .coach,
+                permissionRole: defaultRole,
                 createdAt: now,
                 updatedAt: now,
                 status: .active
@@ -78,12 +79,13 @@ final class TeamMembershipStore: ObservableObject {
             .sorted { $0.createdAt < $1.createdAt }
     }
 
-    func requestJoin(teamID: UUID, userID: String, role: TeamMembershipRole) {
+    func requestJoin(teamID: UUID, userID: String, memberType: TeamMemberType, permissionRole: TeamPermissionRole) {
         let now = Date()
         let membership = TeamMembership(
             teamID: teamID,
             userID: userID,
-            membershipRole: role,
+            memberType: memberType,
+            permissionRole: permissionRole,
             createdAt: now,
             updatedAt: now,
             status: .pending
@@ -95,11 +97,12 @@ final class TeamMembershipStore: ObservableObject {
         updateMembership(membership, status: .active)
     }
 
-    func updateMembership(_ membership: TeamMembership, status: TeamMembershipStatus? = nil, role: TeamMembershipRole? = nil) {
+    func updateMembership(_ membership: TeamMembership, status: TeamMembershipStatus? = nil, role: TeamPermissionRole? = nil, memberType: TeamMemberType? = nil) {
         guard let idx = memberships.firstIndex(where: { $0.id == membership.id }) else { return }
         var updated = memberships[idx]
         if let status { updated.status = status }
-        if let role { updated.membershipRole = role }
+        if let role { updated.permissionRole = role }
+        if let memberType { updated.memberType = memberType }
         updated.updatedAt = Date()
         memberships[idx] = updated
     }
@@ -110,7 +113,7 @@ final class TeamMembershipStore: ObservableObject {
 
     func canGrantCoachRole(
         userID: String,
-        newRole: TeamMembershipRole,
+        newRole: TeamPermissionRole,
         teamID: UUID,
         userRole: UserRole,
         currentPlan: Plan
@@ -118,12 +121,12 @@ final class TeamMembershipStore: ObservableObject {
         guard userRole == .coach, newRole.hasCoachPermissions else { return true }
         guard currentPlan == .coachPro else { return true }
         let activeCoachMemberships = activeMemberships(for: userID)
-            .filter { $0.membershipRole.hasCoachPermissions && $0.teamID != teamID }
+            .filter { $0.permissionRole.hasCoachPermissions && $0.teamID != teamID }
         return activeCoachMemberships.isEmpty
     }
 
     func activeCoachTeam(for userID: String) -> TeamMembership? {
-        activeMemberships(for: userID).first { $0.membershipRole.hasCoachPermissions }
+        activeMemberships(for: userID).first { $0.permissionRole.hasCoachPermissions }
     }
 
     private func scheduleSync() {
@@ -180,7 +183,8 @@ final class CloudMembershipSyncManager {
             let record = CKRecord(recordType: "TeamMembership", recordID: recordID)
             record["teamID"] = membership.teamID.uuidString as CKRecordValue
             record["userID"] = membership.userID as CKRecordValue
-            record["membershipRole"] = membership.membershipRole.rawValue as CKRecordValue
+            record["membershipRole"] = membership.permissionRole.rawValue as CKRecordValue
+            record["memberType"] = membership.memberType.rawValue as CKRecordValue
             record["status"] = membership.status.rawValue as CKRecordValue
             record["createdAt"] = membership.createdAt as CKRecordValue
             record["updatedAt"] = membership.updatedAt as CKRecordValue
@@ -215,18 +219,21 @@ final class CloudMembershipSyncManager {
                   let teamID = UUID(uuidString: teamIDString),
                   let userID = record["userID"] as? String,
                   let roleRaw = record["membershipRole"] as? String,
-                  let role = TeamMembershipRole(rawValue: roleRaw),
+                  let role = TeamPermissionRole(rawValue: roleRaw),
                   let statusRaw = record["status"] as? String,
                   let status = TeamMembershipStatus(rawValue: statusRaw),
                   let createdAt = record["createdAt"] as? Date,
                   let updatedAt = record["updatedAt"] as? Date,
                   let id = UUID(uuidString: record.recordID.recordName)
             else { return nil }
+            let memberTypeRaw = record["memberType"] as? String
+            let memberType = TeamMemberType(rawValue: memberTypeRaw ?? "") ?? .athlete
             return TeamMembership(
                 id: id,
                 teamID: teamID,
                 userID: userID,
-                membershipRole: role,
+                memberType: memberType,
+                permissionRole: role,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 status: status
