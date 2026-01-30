@@ -162,6 +162,7 @@ extension VideoCaptureService: AVCaptureFileOutputRecordingDelegate {
         error: Error?
     ) {
         let recordingID = currentRecordingID
+        let clipStore = clipStore
         Task {
             let asset = AVURLAsset(url: outputFileURL)
             do {
@@ -170,8 +171,8 @@ extension VideoCaptureService: AVCaptureFileOutputRecordingDelegate {
                     clipStore?.finalizeRecording(id: recordingID, duration: duration)
                 }
             } catch {
-                DispatchQueue.main.async {
-                    self.lastError = error.localizedDescription
+                DispatchQueue.main.async { [weak self] in
+                    self?.lastError = error.localizedDescription
                 }
             }
         }
