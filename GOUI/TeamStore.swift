@@ -18,7 +18,7 @@ final class TeamStore {
         didSet { save() }
     }
 
-    var activeSeasonID: UUID? {
+    var activeSeasonByTeam: [UUID: UUID] = [:] {
         didSet { save() }
     }
 
@@ -45,12 +45,15 @@ final class TeamStore {
     private var syncTask: Task<Void, Never>? = nil
     private var isApplyingSync = false
 
+    @ObservationIgnored private var legacyActiveSeasonID: UUID? = nil
+
     // MARK: - Init
     init() {
         syncManager = CloudSyncManager.makeIfAvailable()
         load()
-        ensureDefaultSeason()
+        ensureDefaultSeasons()
         seedDemoTeamIfNeeded()
+        ensureDefaultSeasons()
         if cloudSyncEnabled {
             scheduleSync()
         }
@@ -63,11 +66,14 @@ final class TeamStore {
         newTeam.createdAt = now
         newTeam.updatedAt = now
         teams.append(newTeam)
+        addDefaultSeason(for: newTeam)
     }
 
     func deleteTeam(_ team: Team) {
         deletedTeamIDs.append(team.id)
         teams.removeAll { $0.id == team.id }
+        seasons.removeAll { $0.teamID == team.id }
+        activeSeasonByTeam[team.id] = nil
     }
 
     func updateTeam(_ team: Team) {
@@ -81,18 +87,30 @@ final class TeamStore {
     // MARK: - Seasons
     func addSeason(_ season: Season) {
         seasons.append(season)
-        if activeSeasonID == nil {
-            activeSeasonID = season.id
+        if activeSeasonByTeam[season.teamID] == nil {
+            activeSeasonByTeam[season.teamID] = season.id
         }
     }
 
-    func setActiveSeason(_ seasonID: UUID) {
-        activeSeasonID = seasonID
+    func setActiveSeason(_ seasonID: UUID, for teamID: UUID) {
+        activeSeasonByTeam[teamID] = seasonID
     }
 
-    func activeSeason() -> Season? {
-        guard let id = activeSeasonID else { return nil }
+    func activeSeasonID(for teamID: UUID) -> UUID? {
+        if let id = activeSeasonByTeam[teamID] {
+            return id
+        }
+        return seasons(for: teamID).first?.id
+    }
+
+    func activeSeason(for teamID: UUID) -> Season? {
+        guard let id = activeSeasonID(for: teamID) else { return nil }
         return seasons.first(where: { $0.id == id })
+    }
+
+    func seasons(for teamID: UUID) -> [Season] {
+        seasons.filter { $0.teamID == teamID }
+            .sorted { $0.startDate > $1.startDate }
     }
 
     // MARK: - Matches (Archive)
@@ -155,7 +173,8 @@ final class TeamStore {
                 AppData(
                     teams: teams,
                     seasons: seasons,
-                    activeSeasonID: activeSeasonID,
+                    activeSeasonByTeam: activeSeasonByTeam,
+                    activeSeasonID: nil,
                     deletedTeamIDs: deletedTeamIDs,
                     deletedPlayerIDs: deletedPlayerIDs
                 )
@@ -172,7 +191,7 @@ final class TeamStore {
             guard FileManager.default.fileExists(atPath: url.path) else {
                 teams = []
                 seasons = []
-                activeSeasonID = nil
+                activeSeasonByTeam = [:]
                 return
             }
 
@@ -181,7 +200,8 @@ final class TeamStore {
             if let decoded = try? JSONDecoder().decode(AppData.self, from: data) {
                 teams = decoded.teams
                 seasons = decoded.seasons
-                activeSeasonID = decoded.activeSeasonID
+                activeSeasonByTeam = decoded.activeSeasonByTeam ?? [:]
+                legacyActiveSeasonID = decoded.activeSeasonID
                 deletedTeamIDs = decoded.deletedTeamIDs
                 deletedPlayerIDs = decoded.deletedPlayerIDs
                 migrateIfNeeded()
@@ -191,7 +211,7 @@ final class TeamStore {
             if let decoded = try? JSONDecoder().decode([Team].self, from: data) {
                 teams = decoded
                 seasons = []
-                activeSeasonID = nil
+                activeSeasonByTeam = [:]
                 deletedTeamIDs = []
                 deletedPlayerIDs = []
                 migrateIfNeeded()
@@ -202,7 +222,7 @@ final class TeamStore {
             if let legacy = try? JSONDecoder().decode([LegacyTeam].self, from: data) {
                 teams = legacy.map { $0.toTeam() }
                 seasons = []
-                activeSeasonID = nil
+                activeSeasonByTeam = [:]
                 deletedTeamIDs = []
                 deletedPlayerIDs = []
                 migrateIfNeeded()
@@ -213,7 +233,7 @@ final class TeamStore {
             print("❌ TeamStore load failed: could not decode teams.json (current or legacy). Resetting.")
             teams = []
             seasons = []
-            activeSeasonID = nil
+            activeSeasonByTeam = [:]
             deletedTeamIDs = []
             deletedPlayerIDs = []
 
@@ -221,27 +241,77 @@ final class TeamStore {
             print("❌ TeamStore load failed:", error)
             teams = []
             seasons = []
-            activeSeasonID = nil
+            activeSeasonByTeam = [:]
             deletedTeamIDs = []
             deletedPlayerIDs = []
         }
     }
 
-    private func ensureDefaultSeason() {
-        guard seasons.isEmpty else { return }
+    private func ensureDefaultSeasons() {
+        guard !teams.isEmpty else { return }
+        let validTeamIDs = Set(teams.map(\.id))
+        let beforeCount = seasons.count
+        seasons.removeAll { !validTeamIDs.contains($0.teamID) }
+        if seasons.count != beforeCount {
+            save()
+        }
+
+        for team in teams {
+            if seasons(for: team.id).isEmpty {
+                addDefaultSeason(for: team)
+            }
+        }
+
+        for team in teams {
+            guard let resolved = activeSeasonID(for: team.id) else { continue }
+            if activeSeasonByTeam[team.id] != resolved {
+                activeSeasonByTeam[team.id] = resolved
+            }
+        }
+    }
+
+    private func addDefaultSeason(for team: Team) {
+        let (name, startDate, endDate) = defaultSeasonInfo(for: team.sportID)
+        let season = Season(
+            teamID: team.id,
+            sportID: team.sportID,
+            name: name,
+            startDate: startDate,
+            endDate: endDate
+        )
+        seasons.append(season)
+        activeSeasonByTeam[team.id] = season.id
+    }
+
+    private func defaultSeasonInfo(for sportID: String) -> (String, Date, Date) {
         let now = Date()
         let calendar = Calendar.current
         let year = calendar.component(.year, from: now)
-        let month = calendar.component(.month, from: now)
-        let isFall = month >= 8
-        let name = "\(isFall ? "Fall" : "Spring") \(year)"
-        let startMonth = isFall ? 8 : 1
+        let sportSeason = SportCatalog.sport(for: sportID).season
+        let startMonth: Int
+        let endMonth: Int
+        let nameYear: Int
+
+        switch sportSeason {
+        case .fall:
+            startMonth = 8
+            endMonth = 11
+            nameYear = year
+        case .winter:
+            startMonth = 11
+            endMonth = 3
+            nameYear = startMonth > endMonth ? year : year
+        case .spring:
+            startMonth = 2
+            endMonth = 6
+            nameYear = year
+        }
+
         let startDate = calendar.date(from: DateComponents(year: year, month: startMonth, day: 1)) ?? now
-        let endMonth = isFall ? 12 : 6
-        let endDate = calendar.date(from: DateComponents(year: year, month: endMonth, day: 28)) ?? now
-        let season = Season(name: name, startDate: startDate, endDate: endDate)
-        seasons = [season]
-        activeSeasonID = season.id
+        let endYear = startMonth > endMonth ? year + 1 : year
+        let endDate = calendar.date(from: DateComponents(year: endYear, month: endMonth, day: 28)) ?? now
+        let label = "\(sportSeason.rawValue.capitalized) \(nameYear)"
+        return (label, startDate, endDate)
     }
 
     private func seedDemoTeamIfNeeded() {
@@ -288,6 +358,12 @@ final class TeamStore {
     private func migrateIfNeeded() {
         var changed = false
         let now = Date()
+        let teamIDs = Set(teams.map(\.id))
+
+        if seasons.contains(where: { !teamIDs.contains($0.teamID) }) {
+            seasons.removeAll { !teamIDs.contains($0.teamID) }
+            changed = true
+        }
 
         for ti in teams.indices {
             if teams[ti].createdAt > now {
@@ -326,6 +402,33 @@ final class TeamStore {
                 teams[ti].sportID = SportCatalog.defaultSportID
                 changed = true
             }
+
+            if seasons(for: teams[ti].id).isEmpty {
+                addDefaultSeason(for: teams[ti])
+                changed = true
+            }
+
+            if activeSeasonByTeam[teams[ti].id] == nil {
+                if let legacyID = legacyActiveSeasonID,
+                   seasons(for: teams[ti].id).contains(where: { $0.id == legacyID }) {
+                    activeSeasonByTeam[teams[ti].id] = legacyID
+                } else if let fallback = seasons(for: teams[ti].id).first?.id {
+                    activeSeasonByTeam[teams[ti].id] = fallback
+                }
+                changed = true
+            }
+
+            for seasonIndex in seasons.indices where seasons[seasonIndex].teamID == teams[ti].id {
+                if seasons[seasonIndex].sportID.isEmpty {
+                    seasons[seasonIndex].sportID = teams[ti].sportID
+                    changed = true
+                }
+            }
+
+            let resolvedSeasonID = activeSeasonByTeam[teams[ti].id]
+            let resolvedSeasonName = resolvedSeasonID.flatMap { id in
+                seasons.first(where: { $0.id == id })?.name
+            } ?? ""
             for mi in teams[ti].matches.indices {
                 let secondsKeys = Set(teams[ti].matches[mi].playerSeconds.keys)
                 let statsKeys = Set(teams[ti].matches[mi].playerStats.keys)
@@ -345,8 +448,20 @@ final class TeamStore {
                 }
 
                 if teams[ti].matches[mi].seasonID == nil {
-                    teams[ti].matches[mi].seasonID = activeSeasonID
+                    teams[ti].matches[mi].seasonID = resolvedSeasonID
+                    teams[ti].matches[mi].seasonName = resolvedSeasonName
                     changed = true
+                } else if let seasonID = teams[ti].matches[mi].seasonID,
+                          !seasons.contains(where: { $0.id == seasonID }) {
+                    teams[ti].matches[mi].seasonID = resolvedSeasonID
+                    teams[ti].matches[mi].seasonName = resolvedSeasonName
+                    changed = true
+                } else if teams[ti].matches[mi].seasonName.isEmpty {
+                    if let seasonID = teams[ti].matches[mi].seasonID,
+                       let seasonName = seasons.first(where: { $0.id == seasonID })?.name {
+                        teams[ti].matches[mi].seasonName = seasonName
+                        changed = true
+                    }
                 }
                 if teams[ti].matches[mi].sportID.isEmpty {
                     teams[ti].matches[mi].sportID = teams[ti].sportID
@@ -459,6 +574,7 @@ final class TeamStore {
 private struct AppData: Codable {
     var teams: [Team]
     var seasons: [Season]
+    var activeSeasonByTeam: [UUID: UUID]?
     var activeSeasonID: UUID?
     var deletedTeamIDs: [UUID] = []
     var deletedPlayerIDs: [UUID] = []

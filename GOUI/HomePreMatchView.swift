@@ -9,6 +9,7 @@ struct HomePreMatchView: View {
     var onStartMatch: (UUID, GameTemplate?) -> Void
 
     @State private var selectedTemplateID: String? = nil
+    @State private var selectedSeasonID: UUID? = nil
 
     var body: some View {
         ZStack {
@@ -38,6 +39,35 @@ struct HomePreMatchView: View {
                     )
 
                     if let team = selectedTeam {
+                        LiquidGlassContainer(cornerRadius: 22) {
+                            VStack(alignment: .leading, spacing: 10) {
+                                Text("SEASON")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundStyle(.secondary)
+
+                                if seasons.isEmpty {
+                                    Text("No seasons yet")
+                                        .font(.system(size: 14, weight: .medium))
+                                        .foregroundStyle(GoStatsTheme.text2)
+                                } else {
+                                    Picker("Season", selection: Binding(
+                                        get: { selectedSeasonID ?? seasons.first?.id },
+                                        set: { newValue in
+                                            selectedSeasonID = newValue
+                                            if let newValue {
+                                                teamStore.setActiveSeason(newValue, for: team.id)
+                                            }
+                                        }
+                                    )) {
+                                        ForEach(seasons) { season in
+                                            Text(season.name).tag(Optional(season.id))
+                                        }
+                                    }
+                                    .pickerStyle(.menu)
+                                }
+                            }
+                        }
+
                         LiquidGlassContainer(cornerRadius: 22) {
                             VStack(alignment: .leading, spacing: 10) {
                                 Text("GAME TEMPLATE")
@@ -73,7 +103,7 @@ struct HomePreMatchView: View {
                         }
                         onStartMatch(tid, template)
                     } label: {
-                        Text("Start Match")
+                        Text(startMatchLabel)
                             .font(.system(size: 18, weight: .semibold))
                             .foregroundStyle(.white)
                             .frame(maxWidth: .infinity)
@@ -139,9 +169,11 @@ struct HomePreMatchView: View {
                 selectedTeamID = teamStore.teams.first?.id
             }
             syncTemplateSelection()
+            syncSeasonSelection()
         }
         .onChange(of: selectedTeamID) { _, _ in
             syncTemplateSelection()
+            syncSeasonSelection()
         }
     }
 
@@ -155,12 +187,46 @@ struct HomePreMatchView: View {
         return GameTemplateCatalog.templates(for: team.sportID)
     }
 
+    private var seasons: [Season] {
+        guard let team = selectedTeam else { return [] }
+        return teamStore.seasons(for: team.id)
+    }
+
     private func syncTemplateSelection() {
         guard let team = selectedTeam else {
             selectedTemplateID = nil
             return
         }
         selectedTemplateID = team.lastTemplateID ?? GameTemplateCatalog.defaultTemplate(for: team.sportID)?.id
+    }
+
+    private func syncSeasonSelection() {
+        guard let team = selectedTeam else {
+            selectedSeasonID = nil
+            return
+        }
+        let resolved = teamStore.activeSeasonID(for: team.id) ?? seasons.first?.id
+        selectedSeasonID = resolved
+        if let resolved {
+            teamStore.setActiveSeason(resolved, for: team.id)
+        }
+    }
+
+    private var startMatchLabel: String {
+        guard let team = selectedTeam else { return "Start Match" }
+        return isMeetSport(sportID: team.sportID) ? "Start Meet" : "Start Match"
+    }
+
+    private func isMeetSport(sportID: String) -> Bool {
+        switch sportID {
+        case SportCatalog.swimmingID,
+             SportCatalog.trackID,
+             SportCatalog.crossCountryID,
+             SportCatalog.golfID:
+            return true
+        default:
+            return false
+        }
     }
 
     private func rowButton(title: String, systemImage: String) -> some View {

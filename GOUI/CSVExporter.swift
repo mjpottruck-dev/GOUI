@@ -16,11 +16,14 @@ enum CSVExporter {
         lines.append((
             [
             "Team",
+            "Season",
             "MatchDate",
             "Title",
             "Opponent",
+            "Location",
             "Sport",
             "Template",
+            "MeetEvents",
             "GoalsFor",
             "GoalsAgainst",
             "SecondsElapsed",
@@ -46,11 +49,14 @@ enum CSVExporter {
             let positionLabel = p.displayPosition(for: resolvedSport) ?? ""
             let row: [String] = [
                 esc(team.name),
+                esc(match.seasonName),
                 esc(dateString),
                 esc(match.title),
                 esc(match.opponent),
+                esc(match.location),
                 esc(resolvedSport.displayName),
                 esc(match.templateName ?? ""),
+                esc(match.meetEvents.joined(separator: " | ")),
                 "\(match.goalsFor)",
                 "\(match.goalsAgainst)",
                 "\(match.secondsElapsed)",

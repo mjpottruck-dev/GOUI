@@ -13,7 +13,7 @@ struct StatsView: View {
     }
 
     private var seasons: [Season] {
-        teamStore.seasons
+        teamStore.seasons(for: teamID)
     }
 
     private var matches: [MatchRecord] {
@@ -63,7 +63,7 @@ struct StatsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             if selectedSeasonID == nil {
-                selectedSeasonID = teamStore.activeSeasonID ?? seasons.first?.id
+                selectedSeasonID = teamStore.activeSeasonID(for: teamID) ?? seasons.first?.id
             }
         }
     }
@@ -85,7 +85,7 @@ struct StatsView: View {
                         set: { newValue in
                             selectedSeasonID = newValue
                             if let newValue {
-                                teamStore.setActiveSeason(newValue)
+                                teamStore.setActiveSeason(newValue, for: teamID)
                             }
                         }
                     )) {
