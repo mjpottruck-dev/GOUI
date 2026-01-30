@@ -94,6 +94,12 @@ struct SettingsView: View {
                     }
                 }
 
+                Section("Recruiting") {
+                    NavigationLink("Recruiter Mode") {
+                        RecruiterView(teamStore: teamStore)
+                    }
+                }
+
                 Section("Debug") {
                     Toggle("Render Count Logs", isOn: $renderCountsEnabled)
                         .onChange(of: renderCountsEnabled) { _, newValue in

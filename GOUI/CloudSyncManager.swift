@@ -134,6 +134,10 @@ final class CloudSyncManager {
                 playerRecord["notes"] = (player.notes ?? "") as CKRecordValue
                 playerRecord["createdAt"] = player.createdAt as CKRecordValue
                 playerRecord["updatedAt"] = player.updatedAt as CKRecordValue
+                if let profileData = try? JSONEncoder().encode(player.profile),
+                   let profileString = String(data: profileData, encoding: .utf8) {
+                    playerRecord["profileData"] = profileString as CKRecordValue
+                }
                 records.append(playerRecord)
             }
         }
@@ -235,6 +239,14 @@ final class CloudSyncManager {
         let isGoalie = record["isGoalie"] as? Bool
         let notes = record["notes"] as? String
         let resolvedPosition = Position(rawValue: positionName ?? "") ?? .cm
+        let profile: PlayerProfile
+        if let profileString = record["profileData"] as? String,
+           let data = profileString.data(using: .utf8),
+           let decoded = try? JSONDecoder().decode(PlayerProfile.self, from: data) {
+            profile = decoded
+        } else {
+            profile = PlayerProfile()
+        }
         return Player(
             id: id,
             name: name,
@@ -246,7 +258,8 @@ final class CloudSyncManager {
             isGoalie: isGoalie,
             notes: notes,
             createdAt: createdAt,
-            updatedAt: updatedAt
+            updatedAt: updatedAt,
+            profile: profile
         )
     }
 }

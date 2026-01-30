@@ -44,6 +44,10 @@ struct StatsView: View {
         Array(leaderboard.prefix(3))
     }
 
+    private var spotlightPlayer: Player? {
+        leaderboard.first?.player ?? team?.players.first
+    }
+
     var body: some View {
         ZStack {
             GoStatsTheme.bg.ignoresSafeArea()
@@ -55,6 +59,7 @@ struct StatsView: View {
                         podiumCard
                         leaderboardCard
                         summaryCard
+                        advancedAnalyticsCard
                         playerStatsCard
                         Spacer(minLength: 16)
                     }
@@ -236,6 +241,26 @@ struct StatsView: View {
                     .buttonStyle(.plain)
                 } else {
                     Text("Select a team to view player stats.")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(GoStatsTheme.text2)
+                }
+            }
+        }
+    }
+
+    private var advancedAnalyticsCard: some View {
+        Group {
+            if let team {
+                AdvancedAnalyticsDashboardView(
+                    team: team,
+                    sport: sport,
+                    matches: matches,
+                    seasons: seasons,
+                    spotlightPlayer: spotlightPlayer
+                )
+            } else {
+                LiquidGlassContainer(cornerRadius: 22) {
+                    Text("Select a team to view analytics.")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(GoStatsTheme.text2)
                 }

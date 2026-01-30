@@ -2,6 +2,7 @@ import SwiftUI
 
 struct TeamRosterView: View {
     @Bindable var teamStore: TeamStore
+    @ObservedObject var clipStore: ClipStore
     let teamID: UUID
 
     @State private var showingAddPlayer = false
@@ -39,6 +40,8 @@ struct TeamRosterView: View {
                         rosterHeader
 
                         rosterFilters
+
+                        recruitingProfiles
 
                         if displayedPlayers.isEmpty {
                             emptyState
@@ -149,6 +152,32 @@ struct TeamRosterView: View {
                 }
                 .pickerStyle(.segmented)
             }
+        }
+    }
+
+    private var recruitingProfiles: some View {
+        GlassCard(level: .surface) {
+            NavigationLink {
+                PlayerProfilesView(teamStore: teamStore, teamID: teamID, clipStore: clipStore)
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "person.text.rectangle")
+                        .foregroundStyle(GoStatsTheme.primary)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Recruiting Profiles")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(GoStatsTheme.text)
+                        Text("Manage public links, bios, and highlights")
+                            .font(.system(size: 12))
+                            .foregroundStyle(GoStatsTheme.text2)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .foregroundStyle(GoStatsTheme.text2)
+                }
+                .padding(.vertical, 6)
+            }
+            .buttonStyle(.plain)
         }
     }
 
@@ -303,6 +332,7 @@ private struct EditPlayerSheet: View {
     @State private var positionName: String
     @State private var isGoalie: Bool
     @State private var notes: String
+    @State private var profile: PlayerProfile
 
     let playerID: UUID
     let sport: any SportDefinition
@@ -316,6 +346,7 @@ private struct EditPlayerSheet: View {
         self._positionName = State(initialValue: player.positionName ?? player.position.rawValue)
         self._isGoalie = State(initialValue: player.isGoalie ?? (player.position == .gk))
         self._notes = State(initialValue: player.notes ?? "")
+        self._profile = State(initialValue: player.profile)
         self.playerID = player.id
         self.sport = sport
         self.onSave = onSave
@@ -391,7 +422,8 @@ private struct EditPlayerSheet: View {
                             secondaryPosition: secondaryPosition,
                             positionName: resolvedPositionName,
                             isGoalie: sport.supportsGoalie ? isGoalie : nil,
-                            notes: notes.trimmingCharacters(in: .whitespacesAndNewlines)
+                            notes: notes.trimmingCharacters(in: .whitespacesAndNewlines),
+                            profile: profile
                         )
                         onSave(updated)
                         dismiss()
