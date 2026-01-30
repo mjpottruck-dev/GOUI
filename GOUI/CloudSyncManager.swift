@@ -119,6 +119,10 @@ final class CloudSyncManager {
             let recordID = CKRecord.ID(recordName: team.id.uuidString)
             let teamRecord = CKRecord(recordType: "Team", recordID: recordID)
             teamRecord["name"] = team.name as CKRecordValue
+            teamRecord["sportID"] = team.sportID as CKRecordValue
+            teamRecord["joinCode"] = team.joinCode as CKRecordValue
+            teamRecord["requiresApprovalToJoin"] = team.requiresApprovalToJoin as CKRecordValue
+            teamRecord["shareRecordName"] = (team.shareRecordName ?? "") as CKRecordValue
             teamRecord["createdAt"] = team.createdAt as CKRecordValue
             teamRecord["updatedAt"] = team.updatedAt as CKRecordValue
             records.append(teamRecord)
@@ -217,12 +221,20 @@ final class CloudSyncManager {
               let createdAt = record["createdAt"] as? Date,
               let updatedAt = record["updatedAt"] as? Date
         else { return nil }
+        let sportID = record["sportID"] as? String ?? SportCatalog.defaultSportID
+        let joinCode = record["joinCode"] as? String ?? Team.makeJoinCode()
+        let requiresApproval = record["requiresApprovalToJoin"] as? Bool ?? true
+        let shareRecordName = record["shareRecordName"] as? String
         var team = Team(
             id: id,
             name: name,
             players: players,
             createdAt: createdAt,
-            updatedAt: updatedAt
+            updatedAt: updatedAt,
+            sportID: sportID,
+            joinCode: joinCode,
+            requiresApprovalToJoin: requiresApproval,
+            shareRecordName: shareRecordName?.isEmpty == true ? nil : shareRecordName
         )
         team.matches = []
         return team

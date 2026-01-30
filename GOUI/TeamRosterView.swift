@@ -1,3 +1,4 @@
+import CloudKit
 import SwiftUI
 
 struct TeamRosterView: View {
@@ -108,7 +109,11 @@ struct TeamRosterView: View {
                 }
             }
             .sheet(isPresented: $showMembers) {
-                TeamMembersSheet(teamID: teamID)
+                TeamMembersSheet(
+                    teamID: teamID,
+                    teamName: team?.name ?? "Team",
+                    shareRecordName: team?.shareRecordName
+                )
             }
             .sheet(item: $editingPlayer) { player in
                 EditPlayerSheet(player: player, sport: sport) { updated in
@@ -483,9 +488,13 @@ private var isFormValid: Bool {
 
 private struct TeamMembersSheet: View {
     let teamID: UUID
+    let teamName: String
+    let shareRecordName: String?
 
     @EnvironmentObject var membershipStore: TeamMembershipStore
     @EnvironmentObject var permissionService: PermissionService
+    @EnvironmentObject var joinRequestStore: JoinRequestStore
+    @EnvironmentObject var sharingService: SharingService
     @Environment(\.dismiss) private var dismiss
 
     @State private var showLimitAlert = false
@@ -494,30 +503,30 @@ private struct TeamMembersSheet: View {
         NavigationStack {
             List {
                 Section("Pending Requests") {
-                    if pendingMembers.isEmpty {
+                    if pendingRequests.isEmpty {
                         Text("No pending requests.")
                             .foregroundStyle(.secondary)
                     } else {
-                        ForEach(pendingMembers) { membership in
+                        ForEach(pendingRequests) { request in
                             HStack {
                                 VStack(alignment: .leading, spacing: 4) {
-                                    Text(membership.userID)
+                                    Text(request.requesterUserID)
                                         .font(.subheadline.weight(.semibold))
-                                    Text(membership.membershipRole.displayName)
+                                    Text(request.requestedRole.displayName)
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                 }
                                 Spacer()
                                 Button("Approve") {
-                                    guard permissionService.canAssignCoachRole(teamID: teamID, role: membership.membershipRole) else {
+                                    guard permissionService.canAssignCoachRole(teamID: teamID, role: request.requestedRole) else {
                                         showLimitAlert = true
                                         return
                                     }
-                                    membershipStore.approveMembership(membership)
+                                    Task { await approve(request) }
                                 }
                                 .buttonStyle(.borderedProminent)
                                 Button("Reject", role: .destructive) {
-                                    membershipStore.removeMembership(membership)
+                                    Task { await deny(request) }
                                 }
                             }
                         }
@@ -555,6 +564,9 @@ private struct TeamMembersSheet: View {
                     Button("Close") { dismiss() }
                 }
             }
+            .task {
+                await joinRequestStore.refreshRequests(for: teamID)
+            }
             .alert("Coach Team Limit", isPresented: $showLimitAlert) {
                 Button("OK", role: .cancel) {}
             } message: {
@@ -563,11 +575,53 @@ private struct TeamMembersSheet: View {
         }
     }
 
-    private var pendingMembers: [TeamMembership] {
-        membershipStore.memberships(for: teamID).filter { $0.status == .pending }
+    private var pendingRequests: [JoinRequest] {
+        joinRequestStore.requests
+            .filter { $0.teamID == teamID && $0.status == .pending }
+            .sorted { $0.createdAt < $1.createdAt }
     }
 
     private var activeMembers: [TeamMembership] {
         membershipStore.memberships(for: teamID).filter { $0.status == .active }
+    }
+
+    private func approve(_ request: JoinRequest) async {
+        if let existing = membershipStore.membershipRecord(for: teamID, userID: request.requesterUserID) {
+            membershipStore.updateMembership(existing, status: .active, role: request.requestedRole)
+        } else {
+            membershipStore.requestJoin(teamID: teamID, userID: request.requesterUserID, role: request.requestedRole)
+            if let pending = membershipStore.membershipRecord(for: teamID, userID: request.requesterUserID) {
+                membershipStore.approveMembership(pending)
+            }
+        }
+
+        if let shareRecordName, let requesterRecordName = request.requesterUserRecordName {
+            let permission: CKShare.ParticipantPermission = request.requestedRole.hasCoachPermissions ? .readWrite : .readOnly
+            do {
+                try await sharingService.addParticipant(
+                    shareRecordName: shareRecordName,
+                    userRecordName: requesterRecordName,
+                    permission: permission
+                )
+            } catch {
+                print("❌ Share participant add failed:", error)
+            }
+        }
+
+        do {
+            try await joinRequestStore.updateRequest(request, status: .approved)
+            await joinRequestStore.refreshRequests(for: teamID)
+        } catch {
+            print("❌ JoinRequest update failed:", error)
+        }
+    }
+
+    private func deny(_ request: JoinRequest) async {
+        do {
+            try await joinRequestStore.updateRequest(request, status: .denied)
+            await joinRequestStore.refreshRequests(for: teamID)
+        } catch {
+            print("❌ JoinRequest update failed:", error)
+        }
     }
 }

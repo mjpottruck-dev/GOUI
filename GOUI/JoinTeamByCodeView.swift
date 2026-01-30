@@ -1,3 +1,4 @@
+import CloudKit
 import SwiftUI
 
 struct JoinTeamByCodeView: View {
@@ -5,6 +6,9 @@ struct JoinTeamByCodeView: View {
 
     @EnvironmentObject var membershipStore: TeamMembershipStore
     @EnvironmentObject var roleManager: RoleManager
+    @EnvironmentObject var authManager: AuthManager
+    @EnvironmentObject var joinRequestStore: JoinRequestStore
+    @EnvironmentObject var sharingService: SharingService
     @Environment(\.dismiss) private var dismiss
 
     @State private var joinCode: String = ""
@@ -19,8 +23,9 @@ struct JoinTeamByCodeView: View {
                         .autocorrectionDisabled()
 
                     Button("Request Access") {
-                        handleJoin()
+                        Task { await handleJoin() }
                     }
+                    .disabled(!authManager.isSignedIn)
 
                     if let statusMessage {
                         Text(statusMessage)
@@ -38,7 +43,11 @@ struct JoinTeamByCodeView: View {
         }
     }
 
-    private func handleJoin() {
+    private func handleJoin() async {
+        guard let authUser = authManager.currentUser else {
+            statusMessage = "Sign in with Apple to request access."
+            return
+        }
         let code = joinCode.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
         guard !code.isEmpty else { return }
         guard let team = teamStore.teams.first(where: { $0.joinCode == code }) else {
@@ -46,13 +55,47 @@ struct JoinTeamByCodeView: View {
             return
         }
 
+        await joinRequestStore.refreshRequests(for: team.id)
         if membershipStore.membershipRecord(for: team.id, userID: roleManager.userID) != nil {
             statusMessage = "You already requested or joined this team."
             return
         }
 
         let defaultRole: TeamMembershipRole = roleManager.role == .coach ? .coachStaff : .viewer
-        membershipStore.requestJoin(teamID: team.id, userID: roleManager.userID, role: defaultRole)
-        statusMessage = "Request sent to \(team.name)."
+        if joinRequestStore.hasPendingRequest(teamID: team.id, userID: authUser.userID) {
+            statusMessage = "You already requested to join this team."
+            return
+        }
+
+        if team.requiresApprovalToJoin {
+            let request = JoinRequest(
+                teamID: team.id,
+                teamName: team.name,
+                joinCode: team.joinCode,
+                requesterUserID: authUser.userID,
+                requesterUserRecordName: authUser.userRecordName,
+                requestedRole: defaultRole
+            )
+            do {
+                try await joinRequestStore.submitJoinRequest(request)
+                statusMessage = "Request sent to \(team.name)."
+            } catch {
+                statusMessage = "Could not send request. Try again."
+            }
+        } else {
+            membershipStore.requestJoin(teamID: team.id, userID: authUser.userID, role: defaultRole)
+            if let pending = membershipStore.membershipRecord(for: team.id, userID: authUser.userID) {
+                membershipStore.approveMembership(pending)
+            }
+            if let shareRecordName = team.shareRecordName, let requesterRecordName = authUser.userRecordName {
+                let permission: CKShare.ParticipantPermission = defaultRole.hasCoachPermissions ? .readWrite : .readOnly
+                try? await sharingService.addParticipant(
+                    shareRecordName: shareRecordName,
+                    userRecordName: requesterRecordName,
+                    permission: permission
+                )
+            }
+            statusMessage = "You're in! Access granted to \(team.name)."
+        }
     }
 }

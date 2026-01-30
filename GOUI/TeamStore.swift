@@ -84,6 +84,12 @@ final class TeamStore {
         }
     }
 
+    func updateShareRecordName(teamID: UUID, shareRecordName: String?) {
+        guard let idx = teams.firstIndex(where: { $0.id == teamID }) else { return }
+        teams[idx].shareRecordName = shareRecordName
+        teams[idx].updatedAt = Date()
+    }
+
     // MARK: - Seasons
     func addSeason(_ season: Season) {
         seasons.append(season)

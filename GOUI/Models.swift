@@ -413,6 +413,8 @@ struct Team: Identifiable, Codable, Hashable {
     var sportID: String = SportCatalog.defaultSportID
     var lastTemplateID: String? = nil
     var joinCode: String = Team.makeJoinCode()
+    var requiresApprovalToJoin: Bool = true
+    var shareRecordName: String? = nil
 
     var matches: [MatchRecord] = []
 }

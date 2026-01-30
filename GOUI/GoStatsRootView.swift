@@ -6,22 +6,28 @@ struct GoStatsRootView: View {
     @StateObject private var clipStore = ClipStore()
 
     @State private var teamStore = TeamStore()
+    @StateObject private var authManager: AuthManager
     @StateObject private var subscriptionManager: SubscriptionManager
     @StateObject private var roleManager: RoleManager
     @StateObject private var membershipStore: TeamMembershipStore
     @StateObject private var permissionService: PermissionService
     @StateObject private var clubStore = ClubStore()
     @StateObject private var analytics = AnalyticsService.shared
+    @StateObject private var joinRequestStore = JoinRequestStore()
+    @StateObject private var sharingService = SharingService()
 
     @StateObject private var appState: AppState
     @State private var goToTabs = false
     @State private var showSplash = true
     @State private var showOnboarding = false
+    @State private var demoModeEnabled = false
 
     init() {
+        let authManager = AuthManager()
         let roleManager = RoleManager()
         let subscriptionManager = SubscriptionManager()
         let membershipStore = TeamMembershipStore()
+        _authManager = StateObject(wrappedValue: authManager)
         _roleManager = StateObject(wrappedValue: roleManager)
         _subscriptionManager = StateObject(wrappedValue: subscriptionManager)
         _membershipStore = StateObject(wrappedValue: membershipStore)
@@ -55,13 +61,13 @@ struct GoStatsRootView: View {
                         goToTabs = true
                     }
                 )
-                .navigationDestination(isPresented: $goToTabs) {
-                    if appState.currentTeamID != nil {
-                        MainTabsView(
-                            store: store,
-                            clipStore: clipStore,
-                            teamStore: teamStore
-                        )
+            .navigationDestination(isPresented: $goToTabs) {
+                if appState.currentTeamID != nil {
+                    MainTabsView(
+                        store: store,
+                        clipStore: clipStore,
+                        teamStore: teamStore
+                    )
                     } else {
                         Text("No team selected")
                     }
@@ -70,6 +76,7 @@ struct GoStatsRootView: View {
             .background(GoStatsTheme.bg)
         }
         .tint(GoStatsTheme.primary)
+        .environmentObject(authManager)
         .environmentObject(subscriptionManager)
         .environmentObject(roleManager)
         .environmentObject(membershipStore)
@@ -77,6 +84,8 @@ struct GoStatsRootView: View {
         .environmentObject(appState)
         .environmentObject(clubStore)
         .environmentObject(analytics)
+        .environmentObject(joinRequestStore)
+        .environmentObject(sharingService)
         .overlay {
             if showSplash {
                 SplashView(onSkip: {
@@ -94,6 +103,13 @@ struct GoStatsRootView: View {
                 .environmentObject(subscriptionManager)
                 .environmentObject(analytics)
         }
+        .overlay {
+            if shouldRequireAuth {
+                SignInView {
+                    demoModeEnabled = true
+                }
+            }
+        }
         .task {
             await runSplashSequenceIfNeeded()
             analytics.log(.appOpen)
@@ -104,6 +120,18 @@ struct GoStatsRootView: View {
             }
             if !showSplash && roleManager.needsOnboarding {
                 showOnboarding = true
+            }
+        }
+        .onChange(of: authManager.currentUser) { _, newUser in
+            roleManager.applyAuthUser(newUser)
+            if let user = newUser {
+                membershipStore.bootstrapMemberships(for: teamStore, userID: user.userID, defaultRole: .coachManager)
+                if appState.currentTeamID == nil {
+                    appState.currentTeamID = membershipStore.activeTeamIDs(for: user.userID).first ?? teamStore.teams.first?.id
+                }
+                Task {
+                    await migrateLocalTeamsIfNeeded(for: user)
+                }
             }
         }
         .onChange(of: teamStore.cloudSyncEnabled) { _, newValue in
@@ -119,6 +147,28 @@ struct GoStatsRootView: View {
                 showOnboarding = true
             }
         }
+    }
+
+    private var shouldRequireAuth: Bool {
+        #if DEBUG
+        return !demoModeEnabled && !authManager.isSignedIn
+        #else
+        return !authManager.isSignedIn
+        #endif
+    }
+
+    private func migrateLocalTeamsIfNeeded(for user: AuthUser) async {
+        let key = "migration.completed.\(user.userID)"
+        guard !UserDefaults.standard.bool(forKey: key) else { return }
+        for team in teamStore.teams where team.shareRecordName == nil {
+            do {
+                let share = try await sharingService.createShare(for: team)
+                teamStore.updateShareRecordName(teamID: team.id, shareRecordName: share.recordID.recordName)
+            } catch {
+                print("❌ Migration share failed:", error)
+            }
+        }
+        UserDefaults.standard.set(true, forKey: key)
     }
 
     @MainActor
