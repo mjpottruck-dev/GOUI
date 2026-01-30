@@ -1,7 +1,7 @@
 import AVFoundation
 import SwiftUI
 
-final class VideoCaptureService: NSObject, ObservableObject {
+final class VideoCaptureService: NSObject, ObservableObject, @unchecked Sendable {
     @Published private(set) var isRecording: Bool = false
     @Published private(set) var elapsedTime: TimeInterval = 0
     @Published private(set) var lastError: String? = nil
