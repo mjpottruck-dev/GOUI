@@ -161,6 +161,7 @@ struct CreateTeamView: View {
             id: UUID(),
             name: trimmed,
             players: sortedPlayers,
+            managerUserID: roleManager.userID,
             fieldSize: fieldSize,
             startingOnFieldIDs: starterIDs,
             primaryFormation: primaryFormation,
@@ -168,7 +169,6 @@ struct CreateTeamView: View {
             secondaryGoalkeeperID: sport.supportsGoalie ? goalkeeperDepth.secondary : nil,
             thirdGoalkeeperID: sport.supportsGoalie ? goalkeeperDepth.third : nil,
             sportID: sportID,
-            managerUserID: roleManager.userID,
             matches: []
         )
 
