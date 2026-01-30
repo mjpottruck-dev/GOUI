@@ -2,15 +2,16 @@ import CloudKit
 import Foundation
 
 final class SharingService: ObservableObject {
-    private let container: CKContainer
-    private let database: CKDatabase
+    private let container: CKContainer?
+    private let database: CKDatabase?
 
-    init(container: CKContainer = CKContainer.default()) {
+    init(container: CKContainer? = CloudKitAvailability.defaultContainer()) {
         self.container = container
-        self.database = container.privateCloudDatabase
+        self.database = container?.privateCloudDatabase
     }
 
     func createShare(for team: Team) async throws -> CKShare {
+        guard cloudKitAvailable else { throw CloudKitUnavailableError() }
         let recordID = CKRecord.ID(recordName: team.id.uuidString)
         let teamRecord = CKRecord(recordType: CloudRecordType.team, recordID: recordID)
         teamRecord["name"] = team.name as CKRecordValue
@@ -33,6 +34,7 @@ final class SharingService: ObservableObject {
         userRecordName: String,
         permission: CKShare.ParticipantPermission
     ) async throws {
+        guard cloudKitAvailable else { throw CloudKitUnavailableError() }
         let shareID = CKRecord.ID(recordName: shareRecordName)
         let share = try await fetchShare(recordID: shareID)
         let userRecordID = CKRecord.ID(recordName: userRecordName)
@@ -46,6 +48,7 @@ final class SharingService: ObservableObject {
         shareRecordName: String,
         userRecordName: String
     ) async throws {
+        guard cloudKitAvailable else { throw CloudKitUnavailableError() }
         let shareID = CKRecord.ID(recordName: shareRecordName)
         let share = try await fetchShare(recordID: shareID)
         if let participant = share.participants.first(where: {
@@ -57,6 +60,7 @@ final class SharingService: ObservableObject {
     }
 
     private func fetchShare(recordID: CKRecord.ID) async throws -> CKShare {
+        guard let database else { throw CloudKitUnavailableError() }
         try await withCheckedThrowingContinuation { continuation in
             database.fetch(withRecordID: recordID) { record, error in
                 if let error {
@@ -73,6 +77,7 @@ final class SharingService: ObservableObject {
     }
 
     private func fetchParticipant(userRecordID: CKRecord.ID) async throws -> CKShare.Participant {
+        guard let container else { throw CloudKitUnavailableError() }
         try await withCheckedThrowingContinuation { continuation in
             container.fetchShareParticipant(withUserRecordID: userRecordID) { participant, error in
                 if let error {
@@ -87,6 +92,7 @@ final class SharingService: ObservableObject {
     }
 
     private func modifyRecords(recordsToSave: [CKRecord]) async throws {
+        guard let database else { throw CloudKitUnavailableError() }
         try await withCheckedThrowingContinuation { continuation in
             let operation = CKModifyRecordsOperation(recordsToSave: recordsToSave, recordIDsToDelete: nil)
             operation.savePolicy = .allKeys
@@ -100,5 +106,9 @@ final class SharingService: ObservableObject {
             }
             database.add(operation)
         }
+    }
+
+    private var cloudKitAvailable: Bool {
+        container != nil && database != nil
     }
 }
