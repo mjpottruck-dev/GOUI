@@ -194,6 +194,8 @@ struct Player: Identifiable, Codable, Hashable {
     var pkConceded: Int = 0
 
     var statValues: [String: Int] = [:]
+
+    var profile: PlayerProfile = PlayerProfile()
 }
 
 extension Player {

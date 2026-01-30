@@ -27,7 +27,7 @@ struct MainTabsView: View {
                 )
                 .tabItem { Label("Match", systemImage: "soccerball") }
 
-                TeamRosterView(teamStore: teamStore, teamID: teamID)
+                TeamRosterView(teamStore: teamStore, clipStore: clipStore, teamID: teamID)
                     .tabItem { Label("Roster", systemImage: "person.3") }
 
                 StatsView(teamStore: teamStore, teamID: teamID, sport: sport)

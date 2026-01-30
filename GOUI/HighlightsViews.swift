@@ -175,6 +175,8 @@ struct PlayerHighlightsView: View {
 
     @State private var selectedPlayerID: UUID? = nil
     @State private var selectedSeasonID: UUID? = nil
+    @State private var generatedReel: HighlightReel? = nil
+    @State private var showReelShare = false
 
     private var team: Team? {
         teamStore.teams.first(where: { $0.id == teamID })
@@ -216,6 +218,7 @@ struct PlayerHighlightsView: View {
 
             if let selectedPlayerID {
                 let clips = filteredPlayerClips(playerID: selectedPlayerID)
+                highlightReelCard(playerID: selectedPlayerID, clips: clips)
                 ClipListView(
                     title: "PLAYER HIGHLIGHTS",
                     clips: clips,
@@ -242,6 +245,15 @@ struct PlayerHighlightsView: View {
                 selectedSeasonID = teamStore.activeSeasonID(for: teamID)
             }
         }
+        .sheet(isPresented: $showReelShare) {
+            if let reel = generatedReel {
+                ShareSheet(activityItems: [
+                    "Highlight Reel: \(reel.title)",
+                    "Clips: \(reel.clipIDs.count)",
+                    "Duration: \(formattedDuration(reel.totalDuration))"
+                ])
+            }
+        }
     }
 
     private func filteredPlayerClips(playerID: UUID) -> [Clip] {
@@ -250,6 +262,60 @@ struct PlayerHighlightsView: View {
         let matches = teamStore.teams.first(where: { $0.id == teamID })?.matches ?? []
         let matchIDs = matches.filter { $0.seasonID == seasonID }.map { $0.id }
         return clips.filter { matchIDs.contains($0.gameID) }
+    }
+
+    private func highlightReelCard(playerID: UUID, clips: [Clip]) -> some View {
+        LiquidGlassContainer(cornerRadius: 22) {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("AUTO HIGHLIGHT REEL")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(GoStatsTheme.primary)
+
+                if let reel = generatedReel {
+                    Text("\(reel.title) • \(reel.clipIDs.count) clips")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(GoStatsTheme.text)
+                    Text("Estimated length: \(formattedDuration(reel.totalDuration))")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(GoStatsTheme.text2)
+
+                    HStack {
+                        Button("Share Reel") {
+                            showReelShare = true
+                        }
+                        .buttonStyle(GlassPillButtonStyle(fill: GoStatsTheme.primary))
+
+                        Button("Regenerate") {
+                            generatedReel = HighlightReelGenerator().generateReel(from: clips, title: reelTitle(for: playerID))
+                        }
+                        .buttonStyle(GlassPillButtonStyle(fill: Color.white.opacity(0.15)))
+                    }
+                } else {
+                    Text("Auto-build a 2–3 minute reel from top clips.")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(GoStatsTheme.text2)
+
+                    Button("Generate Reel") {
+                        generatedReel = HighlightReelGenerator().generateReel(from: clips, title: reelTitle(for: playerID))
+                    }
+                    .buttonStyle(GlassPillButtonStyle(fill: GoStatsTheme.primary))
+                    .disabled(clips.isEmpty)
+                }
+            }
+        }
+    }
+
+    private func reelTitle(for playerID: UUID) -> String {
+        guard let team = teamStore.teams.first(where: { $0.id == teamID }),
+              let player = team.players.first(where: { $0.id == playerID })
+        else { return "Highlight Reel" }
+        return "#\(player.number) \(player.name)"
+    }
+
+    private func formattedDuration(_ duration: TimeInterval) -> String {
+        let minutes = Int(duration) / 60
+        let seconds = Int(duration) % 60
+        return String(format: "%d:%02d", minutes, seconds)
     }
 }
 
