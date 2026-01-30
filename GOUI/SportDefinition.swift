@@ -216,9 +216,9 @@ extension SportDefinition {
             return periods.map { SegmentDefinition(name: $0.name, durationSeconds: Int($0.duration), count: $0.maxCount) }
         }
         if supportsHoles {
-            return [SegmentDefinition(name: \"Hole\", durationSeconds: nil, count: defaultHoleCount)]
+            return [SegmentDefinition(name: "Hole", durationSeconds: nil, count: defaultHoleCount)]
         }
-        return [SegmentDefinition(name: \"Event\", durationSeconds: nil, count: 1)]
+        return [SegmentDefinition(name: "Event", durationSeconds: nil, count: 1)]
     }
 
     var statTypes: [StatType] { statSchema }
