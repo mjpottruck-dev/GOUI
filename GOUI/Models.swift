@@ -412,11 +412,17 @@ struct Team: Identifiable, Codable, Hashable {
     var thirdGoalkeeperID: UUID? = nil
     var sportID: String = SportCatalog.defaultSportID
     var lastTemplateID: String? = nil
+    var joinCode: String = Team.makeJoinCode()
 
     var matches: [MatchRecord] = []
 }
 
 extension Team {
+    static func makeJoinCode() -> String {
+        let characters = Array("ABCDEFGHJKLMNPQRSTUVWXYZ23456789")
+        return String((0..<6).compactMap { _ in characters.randomElement() })
+    }
+
     static func goalkeeperDepthIDs(
         from players: [Player],
         currentPrimary: UUID? = nil,

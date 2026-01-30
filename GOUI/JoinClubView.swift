@@ -39,10 +39,10 @@ struct JoinClubView: View {
         let code = inviteCode.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
         guard !code.isEmpty else { return }
         if roleManager.profile == nil {
-            roleManager.setRole(.parentPlayer)
+            roleManager.setRole(.familyMember)
         }
         guard let profile = roleManager.profile else { return }
-        if let result = clubStore.joinClub(with: code, userID: profile.id) {
+        if let result = clubStore.joinClub(with: code, userID: profile.userID) {
             roleManager.setRole(result.role)
             roleManager.updateClub(result.club.id)
             statusMessage = "Joined \(result.club.name)."

@@ -10,7 +10,7 @@ struct OnboardingView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var pageIndex = 0
-    @State private var selectedRole: UserRole = .parentPlayer
+    @State private var selectedRole: UserRole = .familyMember
     @State private var selectedTeams: Set<UUID> = []
     @State private var clubName: String = ""
     @State private var inviteCode: String = ""
@@ -109,12 +109,8 @@ struct OnboardingView: View {
                 teamSelectionList
             }
 
-            if selectedRole == .parentPlayer {
+            if selectedRole == .familyMember {
                 inviteSection
-            }
-
-            if selectedRole == .clubAdmin {
-                clubSection
             }
 
             Spacer()
@@ -291,7 +287,7 @@ struct OnboardingView: View {
             roleManager.setRole(selectedRole)
         }
         guard let profile = roleManager.profile else { return }
-        if let result = clubStore.joinClub(with: trimmed, userID: profile.id) {
+        if let result = clubStore.joinClub(with: trimmed, userID: profile.userID) {
             roleManager.setRole(result.role)
             roleManager.updateClub(result.club.id)
             statusMessage = "Joined \(result.club.name)."
@@ -303,16 +299,6 @@ struct OnboardingView: View {
     private func finishOnboarding() {
         roleManager.setRole(selectedRole)
         roleManager.updateAffiliatedTeams(Array(selectedTeams))
-
-        if selectedRole == .clubAdmin, let profile = roleManager.profile {
-            if roleManager.profile?.affiliatedClubID == nil {
-                let trimmedClub = clubName.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !trimmedClub.isEmpty {
-                    let club = clubStore.createClub(name: trimmedClub, adminID: profile.id, teamIDs: Array(selectedTeams))
-                    roleManager.updateClub(club.id)
-                }
-            }
-        }
 
         roleManager.completeOnboarding()
         dismiss()

@@ -9,7 +9,8 @@ struct MatchView: View {
 
     @Environment(\.scenePhase) private var scenePhase
     @EnvironmentObject var subscriptionManager: SubscriptionManager
-    @EnvironmentObject var roleManager: RoleManager
+    @EnvironmentObject var permissionService: PermissionService
+    @EnvironmentObject var appState: AppState
     @EnvironmentObject var analytics: AnalyticsService
 
     @State private var showingEndSheet = false
@@ -36,6 +37,7 @@ struct MatchView: View {
     @State private var recordingError: String? = nil
     @State private var showPricing = false
     @State private var showPermissionAlert = false
+    @State private var showSwitcher = false
 
     @StateObject private var videoCaptureService: VideoCaptureService
 
@@ -78,6 +80,27 @@ struct MatchView: View {
             .overlay(fieldOverlay)
         }
         .navigationTitle("Match")
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    showSwitcher = true
+                } label: {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                }
+            }
+        }
+        .sheet(isPresented: $showSwitcher) {
+            TeamSwitcherSheet(teamStore: teamStore) { picked in
+                appState.currentTeamID = picked
+                if let team = teamStore.teams.first(where: { $0.id == picked }) {
+                    store.resetForNewMatch(
+                        team: team,
+                        formation: team.primaryFormation,
+                        seasonID: teamStore.activeSeasonID(for: picked)
+                    )
+                }
+            }
+        }
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -244,7 +267,7 @@ struct MatchView: View {
                                 .foregroundStyle(.white)
                         }
                         .buttonStyle(.plain)
-                        .disabled(!roleManager.canLogGames())
+                        .disabled(!permissionService.canLogMatches(teamID: teamID))
                     } else if store.sport.supportsPeriods {
                         Button(action: handleAdvancePeriod) {
                             Text("Next Set")
@@ -258,7 +281,7 @@ struct MatchView: View {
                                 .foregroundStyle(.white)
                         }
                         .buttonStyle(.plain)
-                        .disabled(!store.hasNextPeriod() || !roleManager.canLogGames())
+                        .disabled(!store.hasNextPeriod() || !permissionService.canLogMatches(teamID: teamID))
                     }
 
                     Spacer()
@@ -365,7 +388,7 @@ struct MatchView: View {
                         .font(.system(size: 16, weight: .semibold))
                     }
                     .buttonStyle(GlassPillButtonStyle(fill: GoStatsTheme.primary.opacity(0.95)))
-                    .disabled(!roleManager.canLogGames())
+                    .disabled(!permissionService.canLogMatches(teamID: teamID))
                 }
             }
         }
@@ -391,7 +414,7 @@ struct MatchView: View {
                 Spacer()
 
                 Button {
-                    guard roleManager.canLogGames() else {
+                    guard permissionService.canLogMatches(teamID: teamID) else {
                         showPermissionAlert = true
                         return
                     }
@@ -412,7 +435,7 @@ struct MatchView: View {
                         .foregroundStyle(.white)
                 }
                 .buttonStyle(.plain)
-                .disabled(!roleManager.canLogGames())
+                .disabled(!permissionService.canLogMatches(teamID: teamID))
             }
         }
     }
@@ -605,7 +628,7 @@ struct MatchView: View {
     // MARK: - Quick Event Flow
 
     private func startQuickEvent(_ eventType: EventType) {
-        guard roleManager.canLogGames() else {
+        guard permissionService.canLogMatches(teamID: teamID) else {
             showPermissionAlert = true
             return
         }
@@ -719,7 +742,7 @@ struct MatchView: View {
     }
 
     private func handleStartPause() {
-        guard roleManager.canLogGames() else {
+        guard permissionService.canLogMatches(teamID: teamID) else {
             showPermissionAlert = true
             return
         }
@@ -738,7 +761,7 @@ struct MatchView: View {
     }
 
     private func handleAdvancePeriod() {
-        guard roleManager.canLogGames() else {
+        guard permissionService.canLogMatches(teamID: teamID) else {
             showPermissionAlert = true
             return
         }

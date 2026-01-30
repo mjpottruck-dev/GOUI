@@ -8,8 +8,10 @@ struct StatsView: View {
     @State private var selectedSeasonID: UUID? = nil
     @State private var showFullLeaderboard: Bool = false
     @State private var showPricing = false
+    @State private var showSwitcher = false
 
     @EnvironmentObject var subscriptionManager: SubscriptionManager
+    @EnvironmentObject var appState: AppState
 
     private var team: Team? {
         teamStore.teams.first(where: { $0.id == teamID })
@@ -86,9 +88,23 @@ struct StatsView: View {
         }
         .navigationTitle("Stats")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    showSwitcher = true
+                } label: {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                }
+            }
+        }
         .onAppear {
             if selectedSeasonID == nil {
                 selectedSeasonID = teamStore.activeSeasonID(for: teamID) ?? seasons.first?.id
+            }
+        }
+        .sheet(isPresented: $showSwitcher) {
+            TeamSwitcherSheet(teamStore: teamStore) { picked in
+                appState.currentTeamID = picked
             }
         }
         .sheet(isPresented: $showPricing) {

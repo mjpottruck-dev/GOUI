@@ -405,6 +405,10 @@ final class TeamStore {
                 teams[ti].sportID = SportCatalog.waterPoloID
                 changed = true
             }
+            if teams[ti].joinCode.isEmpty {
+                teams[ti].joinCode = Team.makeJoinCode()
+                changed = true
+            }
 
             if seasons(for: teams[ti].id).isEmpty {
                 addDefaultSeason(for: teams[ti])

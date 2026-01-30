@@ -83,8 +83,9 @@ struct PlayerProfilesView: View {
 
     private func profileStatus(_ profile: PlayerProfile) -> String {
         let visibility = profile.isPublic ? "Public" : "Private"
+        let recruiter = profile.isRecruiterVisible ? "Recruiter-visible" : "Recruiter-hidden"
         let grad = profile.gradYear.map { "'\($0)" } ?? "Grad year TBD"
-        return "\(visibility) • \(grad)"
+        return "\(visibility) • \(recruiter) • \(grad)"
     }
 }
 
@@ -208,6 +209,7 @@ struct PlayerProfileEditorView: View {
 
                 Section("Public Profile") {
                     Toggle("Public Link", isOn: $profile.isPublic)
+                    Toggle("Visible to Recruiters", isOn: $profile.isRecruiterVisible)
                     if let url = profile.publicProfileURL {
                         Text(url.absoluteString)
                             .font(.footnote)

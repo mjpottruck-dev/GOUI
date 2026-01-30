@@ -11,7 +11,7 @@ struct MatchDetailView: View {
     @State private var showPermissionAlert = false
 
     @EnvironmentObject var subscriptionManager: SubscriptionManager
-    @EnvironmentObject var roleManager: RoleManager
+    @EnvironmentObject var permissionService: PermissionService
     @EnvironmentObject var analytics: AnalyticsService
 
     var body: some View {
@@ -457,7 +457,7 @@ struct MatchDetailView: View {
 
     private func canExport() -> Bool {
         analytics.log(.tappedExport, metadata: ["source": "match_detail"])
-        guard roleManager.canExport() else {
+        guard permissionService.canExport(teamID: team.id) else {
             showPermissionAlert = true
             return false
         }

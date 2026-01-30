@@ -12,8 +12,11 @@ struct TeamRosterView: View {
     @State private var displayedPlayers: [Player] = []
     @State private var refreshTask: Task<Void, Never>? = nil
     @State private var showPermissionAlert = false
+    @State private var showSwitcher = false
+    @State private var showMembers = false
 
-    @EnvironmentObject var roleManager: RoleManager
+    @EnvironmentObject var permissionService: PermissionService
+    @EnvironmentObject var appState: AppState
 
     private var sport: any SportDefinition {
         SportCatalog.sport(for: team?.sportID)
@@ -54,14 +57,14 @@ struct TeamRosterView: View {
                                 )
                                 .equatable()
                                 .onTapGesture {
-                                    guard roleManager.canEditRoster() else {
+                                    guard permissionService.canEditRoster(teamID: teamID) else {
                                         showPermissionAlert = true
                                         return
                                     }
                                     editingPlayer = player
                                 }
                                 .swipeActions(edge: .trailing) {
-                                    if roleManager.canEditRoster() {
+                                    if permissionService.canEditRoster(teamID: teamID) {
                                         Button(role: .destructive) {
                                             deletePlayer(player)
                                         } label: {
@@ -78,10 +81,34 @@ struct TeamRosterView: View {
             }
             .navigationTitle(team?.name ?? "Roster")
             .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always))
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showSwitcher = true
+                    } label: {
+                        Image(systemName: "arrow.triangle.2.circlepath")
+                    }
+                }
+                if permissionService.canManageMembers(teamID: teamID) {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button("Members") {
+                            showMembers = true
+                        }
+                    }
+                }
+            }
             .sheet(isPresented: $showingAddPlayer) {
                 AddPlayerView(onCreate: { newPlayer in
                     addPlayer(newPlayer)
                 }, sport: sport)
+            }
+            .sheet(isPresented: $showSwitcher) {
+                TeamSwitcherSheet(teamStore: teamStore) { picked in
+                    appState.currentTeamID = picked
+                }
+            }
+            .sheet(isPresented: $showMembers) {
+                TeamMembersSheet(teamID: teamID)
             }
             .sheet(item: $editingPlayer) { player in
                 EditPlayerSheet(player: player, sport: sport) { updated in
@@ -116,22 +143,27 @@ struct TeamRosterView: View {
                         Text("Roster")
                             .font(.system(size: 20, weight: .semibold))
                             .foregroundStyle(GoStatsTheme.text)
-                Text("\(team?.players.count ?? 0) players")
-                    .font(.footnote)
-                    .foregroundStyle(GoStatsTheme.text2)
-            }
-            Spacer()
-            Button {
-                guard roleManager.canEditRoster() else {
-                    showPermissionAlert = true
-                    return
+                        Text("\(team?.players.count ?? 0) players")
+                            .font(.footnote)
+                            .foregroundStyle(GoStatsTheme.text2)
+                        if let joinCode = team?.joinCode {
+                            Text("Join Code: \(joinCode)")
+                                .font(.footnote)
+                                .foregroundStyle(GoStatsTheme.text2)
+                        }
+                    }
+                    Spacer()
+                    Button {
+                        guard permissionService.canEditRoster(teamID: teamID) else {
+                            showPermissionAlert = true
+                            return
+                        }
+                        showingAddPlayer = true
+                    } label: {
+                        Label("Add Player", systemImage: "plus")
+                    }
+                    .buttonStyle(GlassPillButtonStyle(fill: GoStatsTheme.primary))
                 }
-                showingAddPlayer = true
-            } label: {
-                Label("Add Player", systemImage: "plus")
-            }
-            .buttonStyle(GlassPillButtonStyle(fill: GoStatsTheme.primary))
-        }
             }
         }
     }
@@ -444,7 +476,98 @@ private struct EditPlayerSheet: View {
         return (0...99).contains(value)
     }
 
-    private var isFormValid: Bool {
+private var isFormValid: Bool {
         isNameValid && isNumberValid
+    }
+}
+
+private struct TeamMembersSheet: View {
+    let teamID: UUID
+
+    @EnvironmentObject var membershipStore: TeamMembershipStore
+    @EnvironmentObject var permissionService: PermissionService
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var showLimitAlert = false
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section("Pending Requests") {
+                    if pendingMembers.isEmpty {
+                        Text("No pending requests.")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(pendingMembers) { membership in
+                            HStack {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(membership.userID)
+                                        .font(.subheadline.weight(.semibold))
+                                    Text(membership.membershipRole.displayName)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                Button("Approve") {
+                                    guard permissionService.canAssignCoachRole(teamID: teamID, role: membership.membershipRole) else {
+                                        showLimitAlert = true
+                                        return
+                                    }
+                                    membershipStore.approveMembership(membership)
+                                }
+                                .buttonStyle(.borderedProminent)
+                                Button("Reject", role: .destructive) {
+                                    membershipStore.removeMembership(membership)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Section("Active Members") {
+                    if activeMembers.isEmpty {
+                        Text("No active members yet.")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(activeMembers) { membership in
+                            HStack {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(membership.userID)
+                                        .font(.subheadline.weight(.semibold))
+                                    Text(membership.membershipRole.displayName)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                if membership.membershipRole.hasCoachPermissions {
+                                    Text("Coach")
+                                        .font(.caption2)
+                                        .foregroundStyle(GoStatsTheme.primary)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Team Members")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Close") { dismiss() }
+                }
+            }
+            .alert("Coach Team Limit", isPresented: $showLimitAlert) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(permissionService.coachLimitMessage())
+            }
+        }
+    }
+
+    private var pendingMembers: [TeamMembership] {
+        membershipStore.memberships(for: teamID).filter { $0.status == .pending }
+    }
+
+    private var activeMembers: [TeamMembership] {
+        membershipStore.memberships(for: teamID).filter { $0.status == .active }
     }
 }

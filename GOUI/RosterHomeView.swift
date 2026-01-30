@@ -8,12 +8,16 @@ struct RosterHomeView: View {
     @State private var editingTeam: Team? = nil
     @State private var selectedSportFilter: String = "all"
     @State private var showPermissionAlert = false
+    @State private var showJoinTeam = false
 
     @EnvironmentObject var roleManager: RoleManager
+    @EnvironmentObject var membershipStore: TeamMembershipStore
+    @EnvironmentObject var permissionService: PermissionService
 
     private var filteredTeams: [Team] {
-        if selectedSportFilter == "all" { return teamStore.teams }
-        return teamStore.teams.filter { $0.sportID == selectedSportFilter }
+        let availableTeams = teamStore.teams.filter { activeTeamIDs.contains($0.id) }
+        if selectedSportFilter == "all" { return availableTeams }
+        return availableTeams.filter { $0.sportID == selectedSportFilter }
     }
 
     var body: some View {
@@ -48,7 +52,7 @@ struct RosterHomeView: View {
                 } else {
                     ForEach(filteredTeams) { team in
                         Button {
-                            guard roleManager.canEditRoster() else {
+                            guard permissionService.canEditRoster(teamID: team.id) else {
                                 showPermissionAlert = true
                                 return
                             }
@@ -73,12 +77,12 @@ struct RosterHomeView: View {
                         }
                     }
                     .onDelete { indexSet in
-                        guard roleManager.canEditRoster() else {
-                            showPermissionAlert = true
-                            return
-                        }
                         for idx in indexSet {
                             let team = filteredTeams[idx]
+                            guard permissionService.canEditRoster(teamID: team.id) else {
+                                showPermissionAlert = true
+                                return
+                            }
                             teamStore.deleteTeam(team)
                         }
                     }
@@ -88,7 +92,7 @@ struct RosterHomeView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
-                        guard roleManager.canEditRoster() else {
+                        guard roleManager.role == .coach || permissionService.canEditRoster(teamID: filteredTeams.first?.id ?? UUID()) else {
                             showPermissionAlert = true
                             return
                         }
@@ -97,12 +101,20 @@ struct RosterHomeView: View {
                         Image(systemName: "plus")
                     }
                 }
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Join") {
+                        showJoinTeam = true
+                    }
+                }
             }
             .sheet(isPresented: $showingCreateTeam) {
                 CreateTeamView(teamStore: teamStore) { _ in
                     // CreateTeamView already adds the team + dismisses.
                     showingCreateTeam = false
                 }
+            }
+            .sheet(isPresented: $showJoinTeam) {
+                JoinTeamByCodeView(teamStore: teamStore)
             }
             .sheet(item: $editingTeam) { team in
                 EditRosterView(team: team) { updated in
@@ -119,5 +131,13 @@ struct RosterHomeView: View {
                 Text("Coach access is required to manage teams.")
             }
         }
+    }
+
+    private var activeTeamIDs: Set<UUID> {
+        let activeIDs = membershipStore.activeTeamIDs(for: roleManager.userID)
+        if activeIDs.isEmpty {
+            return Set(teamStore.teams.map(\.id))
+        }
+        return Set(activeIDs)
     }
 }
