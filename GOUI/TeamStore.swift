@@ -368,7 +368,34 @@ final class TeamStore {
             thirdGoalkeeperID: goalkeeperDepth.third
         )
 
-        teams = [team]
+        let waterPoloPlayers: [Player] = [
+            Player(name: "Ava Torres", number: 1, position: .gk),
+            Player(name: "Maya Lin", number: 2, position: .cm),
+            Player(name: "Brooke Ellis", number: 3, position: .cm),
+            Player(name: "Sofia Perez", number: 4, position: .cm),
+            Player(name: "Riley Chen", number: 5, position: .cm),
+            Player(name: "Jordan Blake", number: 6, position: .cm),
+            Player(name: "Tessa Grant", number: 7, position: .cm),
+            Player(name: "Harper Cole", number: 8, position: .cm),
+            Player(name: "Logan Reese", number: 9, position: .cm)
+        ]
+
+        let waterPoloStarterIDs = Array(waterPoloPlayers.prefix(7)).map(\.id)
+        let waterPoloGoalkeeperDepth = Team.goalkeeperDepthIDs(from: waterPoloPlayers)
+        let waterPoloTeam = Team(
+            name: "Water Polo Demo",
+            players: waterPoloPlayers,
+            fieldSize: 7,
+            startingOnFieldIDs: waterPoloStarterIDs,
+            primaryFormation: .f433,
+            primaryGoalkeeperID: waterPoloGoalkeeperDepth.primary,
+            secondaryGoalkeeperID: waterPoloGoalkeeperDepth.secondary,
+            thirdGoalkeeperID: waterPoloGoalkeeperDepth.third,
+            sportID: SportCatalog.waterPoloID,
+            joinCode: "POLO11"
+        )
+
+        teams = [team, waterPoloTeam]
     }
 
     // MARK: - Migration

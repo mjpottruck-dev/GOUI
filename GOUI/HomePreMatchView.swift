@@ -11,6 +11,8 @@ struct HomePreMatchView: View {
     @EnvironmentObject var roleManager: RoleManager
     @EnvironmentObject var membershipStore: TeamMembershipStore
     @EnvironmentObject var permissionService: PermissionService
+    @EnvironmentObject var appState: AppState
+    @Environment(\.dismiss) private var dismiss
 
     @State private var selectedTemplateID: String? = nil
     @State private var selectedSeasonID: UUID? = nil
@@ -117,6 +119,17 @@ struct HomePreMatchView: View {
                             team.lastTemplateID = template?.id
                             teamStore.updateTeam(team)
                         }
+                        if let team = selectedTeam {
+                            store.resetForNewMatch(
+                                team: team,
+                                formation: team.primaryFormation,
+                                seasonID: teamStore.activeSeasonID(for: teamID),
+                                template: template
+                            )
+                        }
+                        appState.currentTeamID = teamID
+                        appState.selectedTab = .game
+                        dismiss()
                         onStartMatch(teamID, template)
                     } label: {
                         Text(startMatchLabel)
