@@ -19,23 +19,23 @@ struct TeamHomeView: View {
             } else {
                 coachHome
             }
-        }
-        .sheet(isPresented: $showTeamSwitcher) {
-            TeamSwitcherSheet(teamStore: teamStore) { picked in
-                selectedTeamID = picked
+            .sheet(isPresented: $showTeamSwitcher) {
+                TeamSwitcherSheet(teamStore: teamStore) { picked in
+                    selectedTeamID = picked
+                }
             }
-        }
-        .sheet(isPresented: $showCreateTeam) {
-            CreateTeamView(teamStore: teamStore) { teamID in
-                selectedTeamID = teamID
+            .sheet(isPresented: $showCreateTeam) {
+                CreateTeamView(teamStore: teamStore) { teamID in
+                    selectedTeamID = teamID
+                }
             }
-        }
-        .sheet(isPresented: $showJoinTeam) {
-            JoinTeamByCodeView(teamStore: teamStore)
-        }
-        .onAppear {
-            if selectedTeamID == nil {
-                selectedTeamID = activeTeams.first?.id
+            .sheet(isPresented: $showJoinTeam) {
+                JoinTeamByCodeView(teamStore: teamStore)
+            }
+            .onAppear {
+                if selectedTeamID == nil {
+                    selectedTeamID = activeTeams.first?.id
+                }
             }
         }
     }
