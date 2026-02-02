@@ -46,6 +46,10 @@ struct StatsView: View {
         Array(leaderboard.prefix(3))
     }
 
+    private var spotlightPlayer: Player? {
+        leaderboard.first?.player ?? team?.players.first
+    }
+
     var body: some View {
         ZStack {
             GoStatsTheme.bg.ignoresSafeArea()
@@ -112,9 +116,9 @@ struct StatsView: View {
     private var seasonCard: some View {
         LiquidGlassContainer {
             VStack(alignment: .leading, spacing: 10) {
-                Text("Season")
+                Text("SEASON")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(GoStatsTheme.text2)
+                    .foregroundStyle(GoStatsTheme.primary)
 
                 if seasons.isEmpty {
                     Text("No seasons available")
@@ -213,12 +217,8 @@ struct StatsView: View {
                     .foregroundStyle(GoStatsTheme.primary)
 
                 HStack(spacing: 10) {
-                    statChip("Wins", "\(wins)")
-                    statChip("Losses", "\(losses)")
-                    statChip("\(sport.scoringRules.scoreLabel) For", "\(matches.reduce(0) { $0 + $1.goalsFor })")
-                }
-                HStack(spacing: 10) {
                     statChip("Matches", "\(matches.count)")
+                    statChip("\(sport.scoringRules.scoreLabel) For", "\(matches.reduce(0) { $0 + $1.goalsFor })")
                     statChip("\(sport.scoringRules.scoreLabel) Against", "\(matches.reduce(0) { $0 + $1.goalsAgainst })")
                 }
             }
@@ -271,7 +271,8 @@ struct StatsView: View {
                     team: team,
                     sport: sport,
                     matches: matches,
-                    seasons: seasons
+                    seasons: seasons,
+                    spotlightPlayer: spotlightPlayer
                 )
             } else {
                 LiquidGlassContainer(cornerRadius: 22) {
@@ -351,14 +352,6 @@ struct StatsView: View {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(Color(uiColor: .secondarySystemGroupedBackground).opacity(0.55))
         )
-    }
-
-    private var wins: Int {
-        matches.filter { $0.goalsFor > $0.goalsAgainst }.count
-    }
-
-    private var losses: Int {
-        matches.filter { $0.goalsFor < $0.goalsAgainst }.count
     }
 
     private var primaryStatType: StatType {
