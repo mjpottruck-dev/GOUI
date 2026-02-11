@@ -142,7 +142,7 @@ struct HomeArchiveView: View {
                     List {
                         ForEach(team.matches) { m in
                             NavigationLink {
-                                MatchDetailView(match: m, team: team, sport: SportCatalog.sport(for: team.sportID))
+                                MatchDetailView(match: m, team: team)
                             } label: {
                                 matchRow(match: m)
                                     .contentShape(Rectangle())
@@ -240,3 +240,4 @@ struct HomeArchiveView: View {
         return teamStore.teams.first(where: { $0.id == id })
     }
 }
+

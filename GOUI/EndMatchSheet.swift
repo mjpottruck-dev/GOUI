@@ -103,10 +103,8 @@ struct EndMatchSheet: View {
                 }
 
                 Section {
-                    if store.sport.id == SportCatalog.defaultSportID {
-                        Button("Export → MaxPreps (.txt)") {
-                            exportMaxPreps()
-                        }
+                    Button("Export → MaxPreps (.txt)") {
+                        exportMaxPreps()
                     }
 
                     Button(isMeetSport ? "Save Meet" : "Save Match") { saveMatch() }

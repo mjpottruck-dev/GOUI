@@ -32,8 +32,6 @@ struct FieldPlayerPickerView: View {
                     Button {
                         onPickPlayer(p)
                     } label: {
-                        let sport = fieldStore?.sport ?? SportCatalog.defaultSport
-                        let positionLabel = p.displayPosition(for: sport) ?? "No Position"
                         HStack {
                             Text("#\(p.number)")
                                 .font(.headline)
@@ -41,7 +39,7 @@ struct FieldPlayerPickerView: View {
 
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(p.name)
-                                Text(positionLabel)
+                                Text(p.position.rawValue)
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }

@@ -2,7 +2,7 @@ import SwiftUI
 
 struct EventFlowSheet: View {
 
-    let eventType: EventType
+    let kind: MatchActionKind
     let onConfirm: (MatchAction) -> Void
     let onCancel: () -> Void
 
@@ -21,11 +21,11 @@ struct EventFlowSheet: View {
                                 .font(.system(size: 12, weight: .semibold))
                                 .foregroundStyle(GoStatsTheme.text2)
 
-                            Text(eventType.label)
+                            Text(kind.rawValue)
                                 .font(.system(size: 20, weight: .semibold))
                                 .foregroundStyle(GoStatsTheme.text)
 
-                            if eventType.uiAction == .shot || eventType.uiAction == .shotPenalty {
+                            if kind == .shot || kind == .pkAttempt {
                                 Toggle("On Target", isOn: $onTarget)
                                     .tint(GoStatsTheme.teal)
                                     .font(.system(size: 14, weight: .semibold))
@@ -55,8 +55,8 @@ struct EventFlowSheet: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Add") {
                         GoStatsTheme.hapticTap()
-                        var action = MatchAction(eventTypeID: eventType.id, seconds: 0)
-                        if eventType.uiAction == .shot || eventType.uiAction == .shotPenalty { action.isOnTarget = onTarget }
+                        var action = MatchAction(kind: kind, seconds: 0)
+                        if kind == .shot || kind == .pkAttempt { action.isOnTarget = onTarget }
                         onConfirm(action)
                         dismiss()
                     }
@@ -66,3 +66,4 @@ struct EventFlowSheet: View {
         }
     }
 }
+

@@ -39,10 +39,10 @@ enum MaxPrepsExport {
             let minutes = (seconds[player.id] ?? 0) / 60
             return [
                 jerseyValue(for: player),
-                "\(line.value(for: "goals"))",
-                "\(line.value(for: "assists"))",
-                "\(line.value(for: "shots"))",
-                "\(line.value(for: "shotsOnTarget"))",
+                "\(line.goals)",
+                "\(line.assists)",
+                "\(line.shots)",
+                "\(line.shotsOnTarget)",
                 "\(minutes)",
                 "0",
                 "0"
@@ -62,10 +62,10 @@ enum MaxPrepsExport {
             return [
                 jerseyValue(for: player),
                 "\(minutes)",
-                "\(line.value(for: "saves"))",
-                "\(line.value(for: "pkSaved"))",
-                "\(line.value(for: "pkConceded"))",
-                "\(line.value(for: "goalsConceded"))"
+                "\(line.saves)",
+                "\(line.pkSaved)",
+                "\(line.pkConceded)",
+                "\(line.goalsConceded)"
             ]
         }
     }
