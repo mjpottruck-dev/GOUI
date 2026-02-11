@@ -8,6 +8,13 @@ struct HomePreMatchView: View {
     @Binding var selectedTeamID: UUID?
     var onStartMatch: (UUID) -> Void
 
+    private var startButtonTitle: String {
+        if store.isActive {
+            return store.isRunning ? "Game In Progress" : "Resume Game"
+        }
+        return "Start Match"
+    }
+
     var body: some View {
         ZStack {
             GoStatsTheme.bg.ignoresSafeArea()
@@ -40,7 +47,7 @@ struct HomePreMatchView: View {
                         selectedTeamID = tid
                         onStartMatch(tid)
                     } label: {
-                        Text("Start Match")
+                        Text(startButtonTitle)
                             .font(.system(size: 18, weight: .semibold))
                             .foregroundStyle(.white)
                             .frame(maxWidth: .infinity)

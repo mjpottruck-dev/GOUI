@@ -2,7 +2,7 @@ import SwiftUI
 
 struct MatchView: View {
 
-    @ObservedObject var store: MatchStore
+    @EnvironmentObject private var store: MatchSessionStore
     var teamStore: TeamStore
     let teamID: UUID
 
@@ -485,7 +485,10 @@ struct MatchView: View {
         if store.hasSplitHalf {
             return "End Match"
         }
-        return store.isRunning ? "Pause" : "Start"
+        if store.isRunning {
+            return "Pause"
+        }
+        return store.isActive ? "Resume Game" : "Start Game"
     }
 
     private func handleStartPause() {

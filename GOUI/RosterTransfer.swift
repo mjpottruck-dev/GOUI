@@ -2,7 +2,7 @@ import Foundation
 import UniformTypeIdentifiers
 
 extension UTType {
-    static let goUIRoster = UTType(exportedAs: "com.maxpottruck.goui.roster+json", conformingTo: .json)
+    static let goUIRoster = UTType(exportedAs: "com.myapp.roster+json", conformingTo: .json)
 }
 
 struct RosterExport: Codable {

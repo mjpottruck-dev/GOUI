@@ -14,7 +14,6 @@ struct MainTabsView: View {
 
             TabView {
                 MatchView(
-                    store: store,
                     teamStore: teamStore,
                     teamID: teamID
                 )

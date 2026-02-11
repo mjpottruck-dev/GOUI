@@ -3,7 +3,7 @@ import UniformTypeIdentifiers
 
 struct GoStatsRootView: View {
 
-    @StateObject private var store = MatchStore()
+    @StateObject private var sessionStore = MatchSessionStore()
 
     @State private var teamStore = TeamStore()
 
@@ -11,6 +11,7 @@ struct GoStatsRootView: View {
     @State private var goToTabs = false
     @State private var showSplash = true
     @State private var incomingRosterURL: URL? = nil
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         ZStack {
@@ -18,26 +19,27 @@ struct GoStatsRootView: View {
 
             NavigationStack {
                 HomePreMatchView(
-                    store: store,
+                    store: sessionStore,
                     teamStore: teamStore,
                     selectedTeamID: $selectedTeamID,
                     onStartMatch: { teamID in
                         selectedTeamID = teamID
                         if let team = teamStore.teams.first(where: { $0.id == teamID }),
-                           store.currentTeamID != teamID || store.events.isEmpty {
-                            store.resetForNewMatch(
+                           !sessionStore.isActive || sessionStore.currentTeamID != teamID {
+                            sessionStore.resetForNewMatch(
                                 team: team,
                                 formation: team.primaryFormation,
                                 seasonID: teamStore.activeSeasonID
                             )
                         }
+                        sessionStore.refreshElapsedFromClock()
                         goToTabs = true
                     }
                 )
                 .navigationDestination(isPresented: $goToTabs) {
                     if let tid = selectedTeamID {
                         MainTabsView(
-                            store: store,
+                            store: sessionStore,
                             teamStore: teamStore,
                             teamID: tid,
                             incomingRosterURL: $incomingRosterURL
@@ -50,6 +52,7 @@ struct GoStatsRootView: View {
             .background(GoStatsTheme.bg)
         }
         .tint(GoStatsTheme.primary)
+        .environmentObject(sessionStore)
         .overlay {
             if showSplash {
                 SplashView(onSkip: {
@@ -73,6 +76,11 @@ struct GoStatsRootView: View {
                     selectedTeamID = teamID
                     goToTabs = true
                 }
+            }
+        }
+        .onChange(of: scenePhase) { _, newValue in
+            if newValue == .active {
+                sessionStore.refreshElapsedFromClock()
             }
         }
     }
