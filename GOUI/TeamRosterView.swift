@@ -33,44 +33,8 @@ struct TeamRosterView: View {
 
     var body: some View {
         let _ = DebugRenderLogger.log("RosterView", enabled: DebugSettings.renderCountsEnabled)
-
         NavigationStack {
-            ZStack {
-                GoStatsTheme.bg.ignoresSafeArea()
-
-                ScrollView {
-                    LazyVStack(spacing: 12) {
-                        rosterHeader
-
-                        rosterFilters
-
-                        if displayedPlayers.isEmpty {
-                            emptyState
-                        } else {
-                            ForEach(displayedPlayers) { player in
-                                PlayerRowView(
-                                    player: player,
-                                    isStarter: team?.startingOnFieldIDs.contains(player.id) == true,
-                                    sport: sport
-                                )
-                                .equatable()
-                                .onTapGesture {
-                                    editingPlayer = player
-                                }
-                                .swipeActions(edge: .trailing) {
-                                    Button(role: .destructive) {
-                                        deletePlayer(player)
-                                    } label: {
-                                        Label("Delete", systemImage: "trash")
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-                }
-            }
+            rosterContent
             .navigationTitle(team?.name ?? "Roster")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -132,22 +96,14 @@ struct TeamRosterView: View {
                     rosterErrorMessage = error.localizedDescription
                 }
             }
-            .alert("Import Error", isPresented: Binding(
-                get: { rosterErrorMessage != nil },
-                set: { _ in rosterErrorMessage = nil }
-            )) {
+            .alert("Import Error", isPresented: importErrorPresented) {
                 Button("OK", role: .cancel) {}
             } message: {
                 Text(rosterErrorMessage ?? "")
             }
             .confirmationDialog(
                 "Import Roster",
-                isPresented: Binding(
-                    get: { importedPreview != nil },
-                    set: { isPresented in
-                        if !isPresented { importedPreview = nil }
-                    }
-                ),
+                isPresented: importPreviewPresented,
                 titleVisibility: .visible
             ) {
                 Button("Merge with Current Team") {
@@ -168,12 +124,7 @@ struct TeamRosterView: View {
             }
             .alert(
                 "Duplicate Number Found",
-                isPresented: Binding(
-                    get: { pendingConflict != nil },
-                    set: { isPresented in
-                        if !isPresented { pendingConflict = nil }
-                    }
-                ),
+                isPresented: conflictAlertPresented,
                 presenting: pendingConflict
             ) { player in
                 Button("Replace") {
@@ -189,6 +140,70 @@ struct TeamRosterView: View {
                 ShareSheet(activityItems: payload.items)
             }
         }
+    }
+
+    private var rosterContent: some View {
+        ZStack {
+            GoStatsTheme.bg.ignoresSafeArea()
+
+            ScrollView {
+                LazyVStack(spacing: 12) {
+                    rosterHeader
+
+                    rosterFilters
+
+                    if displayedPlayers.isEmpty {
+                        emptyState
+                    } else {
+                        ForEach(displayedPlayers) { player in
+                            PlayerRowView(
+                                player: player,
+                                isStarter: team?.startingOnFieldIDs.contains(player.id) == true,
+                                sport: sport
+                            )
+                            .equatable()
+                            .onTapGesture {
+                                editingPlayer = player
+                            }
+                            .swipeActions(edge: .trailing) {
+                                Button(role: .destructive) {
+                                    deletePlayer(player)
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
+                                }
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+            }
+        }
+    }
+
+    private var importErrorPresented: Binding<Bool> {
+        Binding(
+            get: { rosterErrorMessage != nil },
+            set: { _ in rosterErrorMessage = nil }
+        )
+    }
+
+    private var importPreviewPresented: Binding<Bool> {
+        Binding(
+            get: { importedPreview != nil },
+            set: { isPresented in
+                if !isPresented { importedPreview = nil }
+            }
+        )
+    }
+
+    private var conflictAlertPresented: Binding<Bool> {
+        Binding(
+            get: { pendingConflict != nil },
+            set: { isPresented in
+                if !isPresented { pendingConflict = nil }
+            }
+        )
     }
 
     private var rosterHeader: some View {
