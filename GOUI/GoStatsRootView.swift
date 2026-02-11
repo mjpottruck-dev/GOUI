@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct GoStatsRootView: View {
 
@@ -9,6 +10,7 @@ struct GoStatsRootView: View {
     @State private var selectedTeamID: UUID? = nil
     @State private var goToTabs = false
     @State private var showSplash = true
+    @State private var incomingRosterURL: URL? = nil
 
     var body: some View {
         ZStack {
@@ -21,7 +23,8 @@ struct GoStatsRootView: View {
                     selectedTeamID: $selectedTeamID,
                     onStartMatch: { teamID in
                         selectedTeamID = teamID
-                        if let team = teamStore.teams.first(where: { $0.id == teamID }) {
+                        if let team = teamStore.teams.first(where: { $0.id == teamID }),
+                           store.currentTeamID != teamID || store.events.isEmpty {
                             store.resetForNewMatch(
                                 team: team,
                                 formation: team.primaryFormation,
@@ -36,7 +39,8 @@ struct GoStatsRootView: View {
                         MainTabsView(
                             store: store,
                             teamStore: teamStore,
-                            teamID: tid
+                            teamID: tid,
+                            incomingRosterURL: $incomingRosterURL
                         )
                     } else {
                         Text("No team selected")
@@ -58,6 +62,18 @@ struct GoStatsRootView: View {
         }
         .task {
             await runSplashSequenceIfNeeded()
+        }
+        .onOpenURL { url in
+            let contentType = try? url.resourceValues(forKeys: [.contentTypeKey]).contentType
+            let matchesType = (contentType?.conforms(to: .goUIRoster) == true)
+                || (contentType?.conforms(to: .json) == true)
+            if matchesType || url.pathExtension.lowercased() == "json" {
+                incomingRosterURL = url
+                if !goToTabs, let teamID = selectedTeamID ?? teamStore.teams.first?.id {
+                    selectedTeamID = teamID
+                    goToTabs = true
+                }
+            }
         }
     }
 

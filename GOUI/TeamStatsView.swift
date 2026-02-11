@@ -8,6 +8,7 @@ struct TeamStatsView: View {
     @State private var customEnd: Date = Date()
     @State private var searchText: String = ""
     @State private var sortOrder: PlayerSort = .position
+    @State private var rosterFilter: RosterFilter = .all
     @FocusState private var isSearchFocused: Bool
 
     private struct Row: Identifiable {
@@ -44,6 +45,12 @@ struct TeamStatsView: View {
         case nameZA = "Name (Z–A)"
 
         var id: String { rawValue }
+    }
+
+    private enum RosterFilter: Hashable {
+        case all
+        case starters
+        case goalies
     }
 
     private static let positionOrder: [Position] = [
@@ -165,8 +172,19 @@ struct TeamStatsView: View {
 
     private var filteredRows: [Row] {
         let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return rows }
-        return rows.filter { $0.name.localizedCaseInsensitiveContains(trimmed) }
+        let starters = Set(team.startingOnFieldIDs)
+        return rows.filter { row in
+            let matchesSearch = trimmed.isEmpty || row.name.localizedCaseInsensitiveContains(trimmed)
+            guard matchesSearch else { return false }
+            switch rosterFilter {
+            case .all:
+                return true
+            case .starters:
+                return starters.contains(row.id)
+            case .goalies:
+                return row.position == .gk
+            }
+        }
     }
 
     private var sortedRows: [Row] {
@@ -207,94 +225,115 @@ struct TeamStatsView: View {
         let r = rows
         let s = teamSummary
 
-        List {
-            Section("Filter") {
-                Picker("Range", selection: $range) {
-                    ForEach(StatsDateRange.allCases) { rr in
-                        Text(rr.rawValue).tag(rr)
-                    }
-                }
+        ZStack {
+            GoStatsTheme.bg.ignoresSafeArea()
 
-                if range == .custom {
-                    DatePicker("Start", selection: $customStart, displayedComponents: [.date])
-                    DatePicker("End", selection: $customEnd, displayedComponents: [.date])
-                }
+            ScrollView {
+                VStack(spacing: 12) {
+                    GlassCard(level: .surface) {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Picker("Range", selection: $range) {
+                                ForEach(StatsDateRange.allCases) { rr in
+                                    Text(rr.rawValue).tag(rr)
+                                }
+                            }
+                            .pickerStyle(.menu)
 
-                HStack(spacing: 10) {
-                    Button {
-                        isSearchFocused = true
-                    } label: {
-                        Image(systemName: "magnifyingglass")
-                            .foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.plain)
+                            if range == .custom {
+                                DatePicker("Start", selection: $customStart, displayedComponents: [.date])
+                                DatePicker("End", selection: $customEnd, displayedComponents: [.date])
+                            }
 
-                    TextField("Search player", text: $searchText)
-                        .textInputAutocapitalization(.words)
-                        .autocorrectionDisabled()
-                        .focused($isSearchFocused)
+                            Picker("Roster Filter", selection: $rosterFilter) {
+                                Text("All").tag(RosterFilter.all)
+                                Text("Starters").tag(RosterFilter.starters)
+                                Text("Goalies").tag(RosterFilter.goalies)
+                            }
+                            .pickerStyle(.segmented)
 
-                    if !searchText.isEmpty {
-                        Button {
-                            searchText = ""
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundStyle(.secondary)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
+                            HStack(spacing: 10) {
+                                Button { isSearchFocused = true } label: {
+                                    Image(systemName: "magnifyingglass")
+                                        .foregroundStyle(.secondary)
+                                }
+                                .buttonStyle(.plain)
 
-                Picker("Sort", selection: $sortOrder) {
-                    ForEach(PlayerSort.allCases) { sort in
-                        Text(sort.rawValue).tag(sort)
-                    }
-                }
+                                TextField("Search player", text: $searchText)
+                                    .textInputAutocapitalization(.words)
+                                    .autocorrectionDisabled()
+                                    .focused($isSearchFocused)
 
-                Text("Matches in range: \(filteredMatches.count)")
-                    .foregroundStyle(.secondary)
-            }
+                                if !searchText.isEmpty {
+                                    Button { searchText = "" } label: {
+                                        Image(systemName: "xmark.circle.fill")
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
 
-            Section("Team Summary") {
-                statLine("Record", "\(s.wins)-\(s.losses)-\(s.ties)")
-                statLine("Goals For / Against", "\(s.gf) / \(s.ga)")
-            }
+                            Picker("Sort", selection: $sortOrder) {
+                                ForEach(PlayerSort.allCases) { sort in
+                                    Text(sort.rawValue).tag(sort)
+                                }
+                            }
+                            .pickerStyle(.menu)
 
-            Section("Leaders") {
-                leaderLine("Goals", r) { $0.goals }
-                leaderLine("Assists", r) { $0.assists }
-                leaderLine("Shots", r) { $0.shots }
-                leaderLine("Shots on Target", r) { $0.shotsOnTarget }
-                leaderLine("Minutes Played", r) { $0.minutesPlayed }
-                leaderLine("Saves", r) { $0.saves }
-                leaderLine("Impact Score", r) { $0.impactScore }
-            }
-
-            Section("All Players") {
-                ForEach(sortedRows) { p in
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("\(p.number) • \(p.name) (\(p.position.rawValue))")
-                            .font(.headline)
-
-                        Text("MP \(p.matchesPlayed) • Min \(p.minutesPlayed)")
-                            .foregroundStyle(.secondary)
-
-                        Text("G \(p.goals) • A \(p.assists) • Sh \(p.shots) • SOT \(p.shotsOnTarget)")
-                            .foregroundStyle(.secondary)
-
-                        let hasGK = (p.saves + p.goalsConceded + p.pkFaced + p.pkSaved + p.pkConceded) > 0
-                        if hasGK {
-                            Text("GK: Saves \(p.saves) • Conceded \(p.goalsConceded) • PK \(p.pkSaved)/\(p.pkFaced)")
-                                .foregroundStyle(.secondary)
-                        }
-
-                        if p.yellowCards > 0 || p.redCards > 0 {
-                            Text("Cards: YC \(p.yellowCards) • RC \(p.redCards)")
-                                .foregroundStyle(.secondary)
+                            Text("Matches in range: \(filteredMatches.count)")
+                                .font(.footnote)
+                                .foregroundStyle(GoStatsTheme.text2)
                         }
                     }
-                    .padding(.vertical, 6)
+
+                    GlassCard(level: .surface) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            statLine("Record", "\(s.wins)-\(s.losses)-\(s.ties)")
+                            statLine("Goals For / Against", "\(s.gf) / \(s.ga)")
+                        }
+                    }
+
+                    GlassCard(level: .surface) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            leaderLine("Goals", r) { $0.goals }
+                            leaderLine("Assists", r) { $0.assists }
+                            leaderLine("Shots", r) { $0.shots }
+                            leaderLine("Shots on Target", r) { $0.shotsOnTarget }
+                        }
+                    }
+
+                    ForEach(sortedRows) { row in
+                        GlassCard(level: .surface) {
+                            HStack(alignment: .top, spacing: 12) {
+                                Text("\(row.number)")
+                                    .font(.system(size: 18, weight: .bold))
+                                    .foregroundStyle(.white)
+                                    .frame(width: 44, height: 44)
+                                    .background(Circle().fill(GoStatsTheme.primary))
+
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text(row.name)
+                                        .font(.system(size: 17, weight: .semibold))
+                                        .foregroundStyle(GoStatsTheme.text)
+                                    Text(row.position.rawValue)
+                                        .font(.subheadline)
+                                        .foregroundStyle(GoStatsTheme.text2)
+
+                                    FlowLayout(spacing: 6) {
+                                        statPill("MP", row.matchesPlayed)
+                                        statPill("Min", row.minutesPlayed)
+                                        statPill("G", row.goals)
+                                        statPill("A", row.assists)
+                                        statPill("Sh", row.shots)
+                                        statPill("SOT", row.shotsOnTarget)
+                                        statPill("Sv", row.saves)
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
             }
         }
         .navigationTitle("Team Stats")
@@ -330,5 +369,58 @@ struct TeamStatsView: View {
         let cal = Calendar.current
         let start = cal.startOfDay(for: date)
         return cal.date(byAdding: DateComponents(day: 1, second: -1), to: start) ?? date
+    }
+
+    @ViewBuilder
+    private func statPill(_ label: String, _ value: Int) -> some View {
+        if value > 0 {
+            Text("\(label) \(value)")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(GoStatsTheme.text)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
+                .background(Capsule().fill(Color(uiColor: .secondarySystemGroupedBackground).opacity(0.75)))
+        }
+    }
+}
+
+private struct FlowLayout: Layout {
+    var spacing: CGFloat = 6
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = proposal.width ?? .infinity
+        var x: CGFloat = 0
+        var y: CGFloat = 0
+        var rowHeight: CGFloat = 0
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if x + size.width > width {
+                x = 0
+                y += rowHeight + spacing
+                rowHeight = 0
+            }
+            rowHeight = max(rowHeight, size.height)
+            x += size.width + spacing
+        }
+        return CGSize(width: min(width, x), height: y + rowHeight)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var x = bounds.minX
+        var y = bounds.minY
+        var rowHeight: CGFloat = 0
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if x + size.width > bounds.maxX {
+                x = bounds.minX
+                y += rowHeight + spacing
+                rowHeight = 0
+            }
+            subview.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
+        }
     }
 }

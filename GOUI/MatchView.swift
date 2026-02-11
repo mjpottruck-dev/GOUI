@@ -12,6 +12,7 @@ struct MatchView: View {
     @State private var showHaptics = true
     @State private var showFormationPicker = false
     @State private var showSplitSheet = false
+    @State private var showResetConfirm = false
 
     @State private var activeQuickEvent: MatchActionKind? = nil
     @State private var showFieldOverlay = false
@@ -50,6 +51,13 @@ struct MatchView: View {
         .navigationTitle("Match")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button("Reset") {
+                    showResetConfirm = true
+                }
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(.orange)
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 Button("End") { showingEndSheet = true }
                     .font(.system(size: 14, weight: .semibold))
@@ -112,6 +120,16 @@ struct MatchView: View {
                 },
                 onKeepPaused: {}
             )
+        }
+        .confirmationDialog("Reset current match?", isPresented: $showResetConfirm, titleVisibility: .visible) {
+            Button("Reset Match", role: .destructive) {
+                if let team = teamStore.teams.first(where: { $0.id == teamID }) {
+                    store.resetForNewMatch(team: team, formation: resolvedFormation, seasonID: teamStore.activeSeasonID)
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This clears timer, score, events, and live player stats.")
         }
         .onAppear { store.loadSampleIfEmpty() }
         .onChange(of: scenePhase) { _, newValue in
