@@ -6,6 +6,7 @@ struct MainTabsView: View {
     @ObservedObject var store: MatchStore
     @Bindable var teamStore: TeamStore
     let teamID: UUID
+    @Binding var incomingRosterURL: URL?
 
     var body: some View {
         ZStack {
@@ -19,7 +20,7 @@ struct MainTabsView: View {
                 )
                 .tabItem { Label("Match", systemImage: "soccerball") }
 
-                TeamRosterView(teamStore: teamStore, teamID: teamID)
+                TeamRosterView(teamStore: teamStore, teamID: teamID, incomingRosterURL: $incomingRosterURL)
                     .tabItem { Label("Roster", systemImage: "person.3") }
 
                 StatsView(teamStore: teamStore, teamID: teamID)

@@ -1,8 +1,10 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct TeamRosterView: View {
     @Bindable var teamStore: TeamStore
     let teamID: UUID
+    @Binding var incomingRosterURL: URL?
 
     @State private var showingAddPlayer = false
     @State private var editingPlayer: Player? = nil
@@ -10,6 +12,13 @@ struct TeamRosterView: View {
     @State private var selectedFilter: RosterFilter = .all
     @State private var displayedPlayers: [Player] = []
     @State private var refreshTask: Task<Void, Never>? = nil
+    @State private var shareSheetPayload: ShareSheetPayload? = nil
+    @State private var showingImportPicker = false
+    @State private var importedPreview: RosterExport? = nil
+    @State private var rosterErrorMessage: String? = nil
+    @State private var conflictQueue: [Player] = []
+    @State private var pendingConflict: Player? = nil
+    @State private var isReplacingRoster = false
 
     private let sport = SportDefinition.current
 
@@ -63,6 +72,25 @@ struct TeamRosterView: View {
                 }
             }
             .navigationTitle(team?.name ?? "Roster")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        Button {
+                            shareRoster()
+                        } label: {
+                            Label("Share Roster", systemImage: "square.and.arrow.up")
+                        }
+
+                        Button {
+                            showingImportPicker = true
+                        } label: {
+                            Label("Import Roster", systemImage: "square.and.arrow.down")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                    }
+                }
+            }
             .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always))
             .sheet(isPresented: $showingAddPlayer) {
                 AddPlayerView { newPlayer in
@@ -85,6 +113,80 @@ struct TeamRosterView: View {
             }
             .onChange(of: teamStore.teams) { _, _ in
                 refreshPlayers()
+            }
+            .onChange(of: incomingRosterURL) { _, newValue in
+                guard let url = newValue else { return }
+                importRoster(from: url)
+                incomingRosterURL = nil
+            }
+            .fileImporter(
+                isPresented: $showingImportPicker,
+                allowedContentTypes: [.goUIRoster, .json],
+                allowsMultipleSelection: false
+            ) { result in
+                switch result {
+                case .success(let urls):
+                    guard let url = urls.first else { return }
+                    importRoster(from: url)
+                case .failure(let error):
+                    rosterErrorMessage = error.localizedDescription
+                }
+            }
+            .alert("Import Error", isPresented: Binding(
+                get: { rosterErrorMessage != nil },
+                set: { _ in rosterErrorMessage = nil }
+            )) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(rosterErrorMessage ?? "")
+            }
+            .confirmationDialog(
+                "Import Roster",
+                isPresented: Binding(
+                    get: { importedPreview != nil },
+                    set: { isPresented in
+                        if !isPresented { importedPreview = nil }
+                    }
+                ),
+                titleVisibility: .visible
+            ) {
+                Button("Merge with Current Team") {
+                    isReplacingRoster = false
+                    beginImport()
+                }
+                Button("Replace Current Roster", role: .destructive) {
+                    isReplacingRoster = true
+                    beginImport()
+                }
+                Button("Cancel", role: .cancel) {
+                    importedPreview = nil
+                }
+            } message: {
+                if let preview = importedPreview {
+                    Text("Team: \(preview.team.name)\nPlayers: \(preview.playerCount)")
+                }
+            }
+            .alert(
+                "Duplicate Number Found",
+                isPresented: Binding(
+                    get: { pendingConflict != nil },
+                    set: { isPresented in
+                        if !isPresented { pendingConflict = nil }
+                    }
+                ),
+                presenting: pendingConflict
+            ) { player in
+                Button("Replace") {
+                    resolveConflict(for: player, replace: true)
+                }
+                Button("Skip") {
+                    resolveConflict(for: player, replace: false)
+                }
+            } message: { player in
+                Text("A player with #\(player.number) already exists. Replace with \(player.name)?")
+            }
+            .sheet(item: $shareSheetPayload) { payload in
+                ShareSheet(activityItems: payload.items)
             }
         }
     }
@@ -183,6 +285,95 @@ struct TeamRosterView: View {
 
     private func deletePlayer(_ player: Player) {
         teamStore.deletePlayer(player, from: teamID)
+    }
+
+    private func shareRoster() {
+        guard let team else { return }
+        do {
+            let url = try RosterTransferService.exportFile(for: team)
+            shareSheetPayload = ShareSheetPayload(items: [url])
+        } catch {
+            rosterErrorMessage = error.localizedDescription
+        }
+    }
+
+    private func importRoster(from url: URL) {
+        do {
+            importedPreview = try RosterTransferService.importRoster(from: url)
+        } catch {
+            rosterErrorMessage = error.localizedDescription
+        }
+    }
+
+    private func beginImport() {
+        guard let incoming = importedPreview,
+              let teamIndex = teamStore.teams.firstIndex(where: { $0.id == teamID }) else {
+            return
+        }
+
+        if isReplacingRoster {
+            var updated = teamStore.teams[teamIndex]
+            updated.name = incoming.team.name
+            updated.players = incoming.team.players
+            updated.fieldSize = incoming.team.fieldSize
+            updated.primaryFormation = incoming.team.primaryFormation
+            updated.startingOnFieldIDs = incoming.team.startingOnFieldIDs.filter { id in
+                incoming.team.players.contains(where: { $0.id == id })
+            }
+            updated.primaryGoalkeeperID = incoming.team.primaryGoalkeeperID
+            updated.secondaryGoalkeeperID = incoming.team.secondaryGoalkeeperID
+            updated.thirdGoalkeeperID = incoming.team.thirdGoalkeeperID
+            teamStore.updateTeam(updated)
+            importedPreview = nil
+            return
+        }
+
+        conflictQueue = incoming.team.players
+        importedPreview = nil
+        processNextConflictOrInsert()
+    }
+
+    private func processNextConflictOrInsert() {
+        guard let teamIndex = teamStore.teams.firstIndex(where: { $0.id == teamID }) else {
+            conflictQueue = []
+            pendingConflict = nil
+            return
+        }
+
+        while !conflictQueue.isEmpty {
+            let next = conflictQueue.removeFirst()
+            if teamStore.teams[teamIndex].players.contains(where: { $0.number == next.number }) {
+                pendingConflict = next
+                return
+            }
+            teamStore.addPlayer(next, to: teamID)
+        }
+
+        pendingConflict = nil
+    }
+
+    private func resolveConflict(for incomingPlayer: Player, replace: Bool) {
+        defer {
+            pendingConflict = nil
+            processNextConflictOrInsert()
+        }
+        guard replace,
+              let teamIndex = teamStore.teams.firstIndex(where: { $0.id == teamID }),
+              let existingIndex = teamStore.teams[teamIndex].players.firstIndex(where: { $0.number == incomingPlayer.number }) else {
+            return
+        }
+
+        var updatedTeam = teamStore.teams[teamIndex]
+        let existing = updatedTeam.players[existingIndex]
+        var replacement = incomingPlayer
+        replacement.id = existing.id
+        updatedTeam.players[existingIndex] = replacement
+        teamStore.updateTeam(updatedTeam)
+    }
+
+    private struct ShareSheetPayload: Identifiable {
+        let id = UUID()
+        let items: [Any]
     }
 }
 
