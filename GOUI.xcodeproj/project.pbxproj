@@ -33,6 +33,7 @@
 		21F7FE982F257FD200041256 /* Exceptions for "GOUI" folder in "GOUI" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				Info.plist,
 			);
 			target = 212D86C22F18306900F6E788 /* GOUI */;
 		};
