@@ -5,10 +5,6 @@ struct RosterView: View {
 
     @State private var showingAddPlayer = false
 
-    private var sport: any SportDefinition {
-        SportCatalog.sport(for: team.sportID)
-    }
-
     var body: some View {
         List {
             Section {
@@ -25,7 +21,7 @@ struct RosterView: View {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("\(player.number) • \(player.name)")
                                     .font(.headline)
-                                Text(player.displayPosition(for: sport) ?? "No Position")
+                                Text(player.position.rawValue)
                                     .foregroundStyle(.secondary)
                             }
                             Spacer()
@@ -47,9 +43,9 @@ struct RosterView: View {
             }
         }
         .sheet(isPresented: $showingAddPlayer) {
-            AddPlayerView(onCreate: { newPlayer in
+            AddPlayerView { newPlayer in
                 team.players.append(newPlayer)
-            }, sport: sport)
+            }
         }
     }
 
@@ -65,3 +61,4 @@ struct RosterView: View {
         return a.number < b.number
     }
 }
+

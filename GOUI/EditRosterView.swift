@@ -16,7 +16,6 @@ struct EditRosterView: View {
 
     let onSave: (Team) -> Void
     let existingTeamID: UUID
-    let sport: any SportDefinition
 
     init(team: Team, onSave: @escaping (Team) -> Void) {
         self._teamName = State(initialValue: team.name)
@@ -31,7 +30,6 @@ struct EditRosterView: View {
         self._matches = State(initialValue: team.matches)
         self.onSave = onSave
         self.existingTeamID = team.id
-        self.sport = SportCatalog.sport(for: team.sportID)
     }
 
     var body: some View {
@@ -44,11 +42,9 @@ struct EditRosterView: View {
                         Text("Field Size: \(fieldSize)")
                     }
 
-                    if sport.supportsPositions {
-                        Picker("Primary Formation", selection: $primaryFormation) {
-                            ForEach(Formation.allCases) { formation in
-                                Text(formation.rawValue).tag(formation)
-                            }
+                    Picker("Primary Formation", selection: $primaryFormation) {
+                        ForEach(Formation.allCases) { formation in
+                            Text(formation.rawValue).tag(formation)
                         }
                     }
                 }
@@ -65,7 +61,7 @@ struct EditRosterView: View {
                             HStack {
                                 Text("#\(p.number) \(p.name)")
                                 Spacer()
-                                Text(p.displayPosition(for: sport) ?? "No Position")
+                                Text(p.position.rawValue)
                                     .foregroundColor(.secondary)
 
                                 if startingOnFieldIDs.contains(p.id) {
@@ -84,32 +80,30 @@ struct EditRosterView: View {
                         .foregroundColor(starterCountColor)
                 }
 
-                if sport.supportsGoalie {
-                    Section("Goalkeepers") {
-                        if goalkeeperOptions.isEmpty {
-                            Text("Add goalkeepers to assign a primary, secondary, and third option.")
-                                .font(.footnote)
-                                .foregroundColor(.secondary)
-                        } else {
-                            Picker("Primary Goalkeeper", selection: $primaryGoalkeeperID) {
-                                Text("None").tag(nil as UUID?)
-                                ForEach(goalkeeperOptions) { player in
-                                    Text(goalkeeperLabel(for: player)).tag(Optional(player.id))
-                                }
+                Section("Goalkeepers") {
+                    if goalkeeperOptions.isEmpty {
+                        Text("Add goalkeepers to assign a primary, secondary, and third option.")
+                            .font(.footnote)
+                            .foregroundColor(.secondary)
+                    } else {
+                        Picker("Primary Goalkeeper", selection: $primaryGoalkeeperID) {
+                            Text("None").tag(nil as UUID?)
+                            ForEach(goalkeeperOptions) { player in
+                                Text(goalkeeperLabel(for: player)).tag(Optional(player.id))
                             }
+                        }
 
-                            Picker("Secondary Goalkeeper", selection: $secondaryGoalkeeperID) {
-                                Text("None").tag(nil as UUID?)
-                                ForEach(goalkeeperOptions) { player in
-                                    Text(goalkeeperLabel(for: player)).tag(Optional(player.id))
-                                }
+                        Picker("Secondary Goalkeeper", selection: $secondaryGoalkeeperID) {
+                            Text("None").tag(nil as UUID?)
+                            ForEach(goalkeeperOptions) { player in
+                                Text(goalkeeperLabel(for: player)).tag(Optional(player.id))
                             }
+                        }
 
-                            Picker("Third Goalkeeper", selection: $thirdGoalkeeperID) {
-                                Text("None").tag(nil as UUID?)
-                                ForEach(goalkeeperOptions) { player in
-                                    Text(goalkeeperLabel(for: player)).tag(Optional(player.id))
-                                }
+                        Picker("Third Goalkeeper", selection: $thirdGoalkeeperID) {
+                            Text("None").tag(nil as UUID?)
+                            ForEach(goalkeeperOptions) { player in
+                                Text(goalkeeperLabel(for: player)).tag(Optional(player.id))
                             }
                         }
                     }
@@ -138,10 +132,9 @@ struct EditRosterView: View {
                             fieldSize: fieldSize,
                             startingOnFieldIDs: clamped,
                             primaryFormation: primaryFormation,
-                            primaryGoalkeeperID: sport.supportsGoalie ? resolvedDepth.primary : nil,
-                            secondaryGoalkeeperID: sport.supportsGoalie ? resolvedDepth.secondary : nil,
-                            thirdGoalkeeperID: sport.supportsGoalie ? resolvedDepth.third : nil,
-                            sportID: sport.id,
+                            primaryGoalkeeperID: resolvedDepth.primary,
+                            secondaryGoalkeeperID: resolvedDepth.secondary,
+                            thirdGoalkeeperID: resolvedDepth.third,
                             matches: matches
                         )
                         onSave(team)

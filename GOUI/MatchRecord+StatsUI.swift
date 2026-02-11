@@ -6,14 +6,10 @@ extension MatchRecord {
         playerStats.values.reduce(0) { $0 + $1[keyPath: keyPath] }
     }
 
-    private func sum(statID: String) -> Int {
-        playerStats.values.reduce(0) { $0 + $1.value(for: statID) }
-    }
-
-    var totalShots: Int { sum(statID: "shots") }
-    var totalShotsOnTarget: Int { sum(statID: "shotsOnTarget") }
-    var totalSaves: Int { sum(statID: "saves") }
-    var totalPkSaved: Int { sum(statID: "pkSaved") }
+    var totalShots: Int { sum(\.shots) }
+    var totalShotsOnTarget: Int { sum(\.shotsOnTarget) }
+    var totalSaves: Int { sum(\.saves) }
+    var totalPkSaved: Int { sum(\.pkSaved) }
 
     var conversionPercent: Double {
         guard totalShots > 0 else { return 0 }
@@ -34,3 +30,4 @@ extension MatchRecord {
         return String(format: "%02d:%02d", m, s)
     }
 }
+

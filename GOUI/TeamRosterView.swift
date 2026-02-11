@@ -22,9 +22,7 @@ struct TeamRosterView: View {
     @EnvironmentObject var membershipStore: TeamMembershipStore
     @EnvironmentObject var statKeeperRequestStore: StatKeeperRequestStore
 
-    private var sport: any SportDefinition {
-        SportCatalog.sport(for: team?.sportID)
-    }
+    private let sport = SportDefinition.current
 
     private var teamIndex: Int? {
         teamStore.teams.firstIndex(where: { $0.id == teamID })
@@ -102,9 +100,9 @@ struct TeamRosterView: View {
                 }
             }
             .sheet(isPresented: $showingAddPlayer) {
-                AddPlayerView(onCreate: { newPlayer in
+                AddPlayerView { newPlayer in
                     addPlayer(newPlayer)
-                }, sport: sport)
+                }
             }
             .sheet(isPresented: $showSwitcher) {
                 TeamSwitcherSheet(teamStore: teamStore) { picked in
@@ -320,7 +318,7 @@ private func sortPlayers(_ a: Player, _ b: Player) -> Bool {
 private struct PlayerRowView: View, Equatable {
     let player: Player
     let isStarter: Bool
-    let sport: any SportDefinition
+    let sport: SportDefinition
 
     static func == (lhs: PlayerRowView, rhs: PlayerRowView) -> Bool {
         lhs.player.id == rhs.player.id
@@ -399,10 +397,10 @@ private struct EditPlayerSheet: View {
     @State private var profile: PlayerProfile
 
     let playerID: UUID
-    let sport: any SportDefinition
+    let sport: SportDefinition
     let onSave: (Player) -> Void
 
-    init(player: Player, sport: any SportDefinition, onSave: @escaping (Player) -> Void) {
+    init(player: Player, sport: SportDefinition, onSave: @escaping (Player) -> Void) {
         self._name = State(initialValue: player.name)
         self._numberText = State(initialValue: player.jersey.isEmpty ? "\(player.number)" : player.jersey)
         self._position = State(initialValue: player.position)

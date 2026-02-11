@@ -2,7 +2,6 @@ import SwiftUI
 
 struct TeamStatsView: View {
     let team: Team
-    let sport: any SportDefinition
 
     @State private var range: StatsDateRange = .allTime
     @State private var customStart: Date = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date()
@@ -20,7 +19,22 @@ struct TeamStatsView: View {
 
         let matchesPlayed: Int
         let minutesPlayed: Int
-        let statTotals: [String: Int]
+
+        let goals: Int
+        let assists: Int
+        let shots: Int
+        let shotsOnTarget: Int
+
+        let yellowCards: Int
+        let redCards: Int
+
+        let saves: Int
+        let goalsConceded: Int
+
+        let pkFaced: Int
+        let pkSaved: Int
+        let pkConceded: Int
+
         let impactScore: Int
     }
 
@@ -55,7 +69,20 @@ struct TeamStatsView: View {
         var secondsByPlayer: [UUID: Int] = [:]
         var matchesCountByPlayer: [UUID: Int] = [:]
 
-        var statsByPlayer: [UUID: [String: Int]] = [:]
+        var goalsByPlayer: [UUID: Int] = [:]
+        var assistsByPlayer: [UUID: Int] = [:]
+        var shotsByPlayer: [UUID: Int] = [:]
+        var sotByPlayer: [UUID: Int] = [:]
+
+        var yellowsByPlayer: [UUID: Int] = [:]
+        var redsByPlayer: [UUID: Int] = [:]
+
+        var savesByPlayer: [UUID: Int] = [:]
+        var concededByPlayer: [UUID: Int] = [:]
+
+        var pkFacedByPlayer: [UUID: Int] = [:]
+        var pkSavedByPlayer: [UUID: Int] = [:]
+        var pkConcededByPlayer: [UUID: Int] = [:]
 
         for match in matches {
             for (pid, secs) in match.playerSeconds {
@@ -64,9 +91,20 @@ struct TeamStatsView: View {
             }
 
             for (pid, stat) in match.playerStats {
-                for statType in sport.statSchema where statType.countsForPlayer {
-                    statsByPlayer[pid, default: [:]][statType.id, default: 0] += stat.value(for: statType.id)
-                }
+                goalsByPlayer[pid, default: 0] += stat.goals
+                assistsByPlayer[pid, default: 0] += stat.assists
+                shotsByPlayer[pid, default: 0] += stat.shots
+                sotByPlayer[pid, default: 0] += stat.shotsOnTarget
+
+                yellowsByPlayer[pid, default: 0] += stat.yellowCards
+                redsByPlayer[pid, default: 0] += stat.redCards
+
+                savesByPlayer[pid, default: 0] += stat.saves
+                concededByPlayer[pid, default: 0] += stat.goalsConceded
+
+                pkFacedByPlayer[pid, default: 0] += stat.pkFaced
+                pkSavedByPlayer[pid, default: 0] += stat.pkSaved
+                pkConcededByPlayer[pid, default: 0] += stat.pkConceded
             }
         }
 
@@ -75,8 +113,32 @@ struct TeamStatsView: View {
             let mins = secs / 60
             let mp = matchesCountByPlayer[p.id, default: 0]
 
-            let statTotals = statsByPlayer[p.id, default: [:]]
-            let score = statTotals.values.reduce(0, +)
+            let g = goalsByPlayer[p.id, default: 0]
+            let a = assistsByPlayer[p.id, default: 0]
+            let sh = shotsByPlayer[p.id, default: 0]
+            let sot = sotByPlayer[p.id, default: 0]
+
+            let yc = yellowsByPlayer[p.id, default: 0]
+            let rc = redsByPlayer[p.id, default: 0]
+
+            let sv = savesByPlayer[p.id, default: 0]
+            let gc = concededByPlayer[p.id, default: 0]
+
+            let pkF = pkFacedByPlayer[p.id, default: 0]
+            let pkS = pkSavedByPlayer[p.id, default: 0]
+            let pkC = pkConcededByPlayer[p.id, default: 0]
+
+            let score =
+                (g * 6) +
+                (a * 4) +
+                (sot * 2) +
+                (sh * 1) +
+                (sv * 2) +
+                (pkS * 3) -
+                (yc * 1) -
+                (rc * 3) -
+                (gc * 2) -
+                (pkC * 2)
 
             return Row(
                 id: p.id,
@@ -85,7 +147,17 @@ struct TeamStatsView: View {
                 position: p.position,
                 matchesPlayed: mp,
                 minutesPlayed: mins,
-                statTotals: statTotals,
+                goals: g,
+                assists: a,
+                shots: sh,
+                shotsOnTarget: sot,
+                yellowCards: yc,
+                redCards: rc,
+                saves: sv,
+                goalsConceded: gc,
+                pkFaced: pkF,
+                pkSaved: pkS,
+                pkConceded: pkC,
                 impactScore: score
             )
         }
@@ -185,31 +257,39 @@ struct TeamStatsView: View {
 
             Section("Team Summary") {
                 statLine("Record", "\(s.wins)-\(s.losses)-\(s.ties)")
-                statLine("\(sport.scoringRules.scoreLabel) For / Against", "\(s.gf) / \(s.ga)")
+                statLine("Goals For / Against", "\(s.gf) / \(s.ga)")
             }
 
             Section("Leaders") {
-                ForEach(leaderStatTypes, id: \.id) { stat in
-                    leaderLine(stat.displayName, r) { row in
-                        row.statTotals[stat.id, default: 0]
-                    }
-                }
+                leaderLine("Goals", r) { $0.goals }
+                leaderLine("Assists", r) { $0.assists }
+                leaderLine("Shots", r) { $0.shots }
+                leaderLine("Shots on Target", r) { $0.shotsOnTarget }
                 leaderLine("Minutes Played", r) { $0.minutesPlayed }
+                leaderLine("Saves", r) { $0.saves }
                 leaderLine("Impact Score", r) { $0.impactScore }
             }
 
             Section("All Players") {
                 ForEach(sortedRows) { p in
                     VStack(alignment: .leading, spacing: 6) {
-                        let positionLabel = sport.supportsPositions ? p.position.rawValue : "No Position"
-                        Text("\(p.number) • \(p.name) (\(positionLabel))")
+                        Text("\(p.number) • \(p.name) (\(p.position.rawValue))")
                             .font(.headline)
 
                         Text("MP \(p.matchesPlayed) • Min \(p.minutesPlayed)")
                             .foregroundStyle(.secondary)
 
-                        if !summaryStatTypes.isEmpty {
-                            Text(summaryStatText(for: p))
+                        Text("G \(p.goals) • A \(p.assists) • Sh \(p.shots) • SOT \(p.shotsOnTarget)")
+                            .foregroundStyle(.secondary)
+
+                        let hasGK = (p.saves + p.goalsConceded + p.pkFaced + p.pkSaved + p.pkConceded) > 0
+                        if hasGK {
+                            Text("GK: Saves \(p.saves) • Conceded \(p.goalsConceded) • PK \(p.pkSaved)/\(p.pkFaced)")
+                                .foregroundStyle(.secondary)
+                        }
+
+                        if p.yellowCards > 0 || p.redCards > 0 {
+                            Text("Cards: YC \(p.yellowCards) • RC \(p.redCards)")
                                 .foregroundStyle(.secondary)
                         }
                     }
@@ -250,22 +330,5 @@ struct TeamStatsView: View {
         let cal = Calendar.current
         let start = cal.startOfDay(for: date)
         return cal.date(byAdding: DateComponents(day: 1, second: -1), to: start) ?? date
-    }
-
-    private var leaderStatTypes: [StatType] {
-        Array(sport.statSchema.filter { $0.countsForPlayer }.prefix(4))
-    }
-
-    private var summaryStatTypes: [StatType] {
-        Array(sport.statSchema.filter { $0.countsForPlayer }.prefix(4))
-    }
-
-    private func summaryStatText(for row: Row) -> String {
-        summaryStatTypes.map { stat in
-            let value = row.statTotals[stat.id, default: 0]
-            let label = stat.shortLabel ?? stat.displayName
-            return "\(label) \(value)"
-        }
-        .joined(separator: " • ")
     }
 }
