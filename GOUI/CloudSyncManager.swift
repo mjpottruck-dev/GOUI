@@ -21,13 +21,28 @@ struct SyncResult {
 }
 
 final class CloudSyncManager {
+    enum CloudSyncError: LocalizedError {
+        case unavailable(String)
+
+        var errorDescription: String? {
+            switch self {
+            case .unavailable(let reason):
+                return "CloudKit unavailable: \(reason)"
+            }
+        }
+    }
+
+    private let container: CKContainer
     private let database: CKDatabase
 
     init(container: CKContainer = CKContainer.default()) {
+        self.container = container
         self.database = container.privateCloudDatabase
     }
 
     func sync(payload: SyncPayload, localMatches: [UUID: [MatchRecord]]) async throws -> SyncResult {
+        try await ensureCloudKitAvailable()
+
         let recordsToSave = makeRecords(from: payload.teams)
         let recordIDsToDelete = payload.deletedTeamIDs.map { CKRecord.ID(recordName: $0.uuidString) }
             + payload.deletedPlayerIDs.map { CKRecord.ID(recordName: $0.uuidString) }
@@ -52,6 +67,25 @@ final class CloudSyncManager {
             deletedPlayerIDs: [],
             lastSyncDate: Date()
         )
+    }
+
+    private func ensureCloudKitAvailable() async throws {
+        let status = try await container.accountStatus()
+
+        switch status {
+        case .available:
+            return
+        case .noAccount:
+            throw CloudSyncError.unavailable("No iCloud account is signed in")
+        case .restricted:
+            throw CloudSyncError.unavailable("The account is restricted")
+        case .couldNotDetermine:
+            throw CloudSyncError.unavailable("Could not determine account status")
+        case .temporarilyUnavailable:
+            throw CloudSyncError.unavailable("The iCloud account is temporarily unavailable")
+        @unknown default:
+            throw CloudSyncError.unavailable("Unknown CloudKit account status")
+        }
     }
 
     private func modifyRecords(recordsToSave: [CKRecord], recordIDsToDelete: [CKRecord.ID]) async throws {
