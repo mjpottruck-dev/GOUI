@@ -1,7 +1,12 @@
 import Foundation
 import SwiftUI
 
-final class MatchStore: ObservableObject {
+final class MatchSessionStore: ObservableObject {
+
+    // MARK: - Session lifecycle
+    @Published var isActive: Bool = false
+    @Published var startTime: Date? = nil
+    @Published var elapsedTime: TimeInterval = 0
 
     // MARK: - Score
     @Published var goalsFor: Int = 0
@@ -12,7 +17,9 @@ final class MatchStore: ObservableObject {
     @Published private(set) var elapsedSeconds: Int = 0
     @Published var hasSplitHalf: Bool = false
 
-    private var startDate: Date? = nil
+    private var startDate: Date? = nil {
+        didSet { startTime = startDate }
+    }
     private var accumulatedSeconds: Int = 0
     private var lastPlayerUpdateSeconds: Int = 0
     private var timer: Timer?
@@ -74,6 +81,7 @@ final class MatchStore: ObservableObject {
     // MARK: - Controls
     func startGame() {
         guard !isRunning else { return }
+        isActive = true
         isRunning = true
         startDate = Date()
         lastPlayerUpdateSeconds = elapsedSeconds
@@ -107,6 +115,7 @@ final class MatchStore: ObservableObject {
         } else {
             elapsedSeconds = accumulatedSeconds
         }
+        elapsedTime = TimeInterval(elapsedSeconds)
         updatePlayerSecondsIfNeeded()
     }
 
@@ -126,6 +135,9 @@ final class MatchStore: ObservableObject {
     // MARK: - Reset
     func resetForNewMatch(team: Team?, formation: Formation?, seasonID: UUID?) {
         pauseGame()
+        isActive = false
+        startTime = nil
+        elapsedTime = 0
         accumulatedSeconds = 0
         elapsedSeconds = 0
         hasSplitHalf = false
@@ -179,6 +191,11 @@ final class MatchStore: ObservableObject {
         if players.isEmpty {
             loadSampleIfEmpty()
         }
+    }
+
+    func resumeIfNeeded() {
+        guard isActive, !isRunning else { return }
+        startGame()
     }
 
     // MARK: - Undo
@@ -470,3 +487,5 @@ final class MatchStore: ObservableObject {
         onFieldIDs = Set(sample.map { $0.id })
     }
 }
+
+typealias MatchStore = MatchSessionStore

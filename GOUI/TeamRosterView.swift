@@ -19,6 +19,8 @@ struct TeamRosterView: View {
     @State private var conflictQueue: [Player] = []
     @State private var pendingConflict: Player? = nil
     @State private var isReplacingRoster = false
+    @State private var showProximityShare = false
+    @StateObject private var proximityShare = RosterProximityShareService()
 
     private let sport = SportDefinition.current
 
@@ -42,7 +44,13 @@ struct TeamRosterView: View {
                         Button {
                             shareRoster()
                         } label: {
-                            Label("Share Roster", systemImage: "square.and.arrow.up")
+                            Label("Share Roster (AirDrop)", systemImage: "square.and.arrow.up")
+                        }
+
+                        Button {
+                            startProximityShare()
+                        } label: {
+                            Label("Share Roster Nearby", systemImage: "dot.radiowaves.left.and.right")
                         }
 
                         Button {
@@ -139,6 +147,43 @@ struct TeamRosterView: View {
             .sheet(item: $shareSheetPayload) { payload in
                 ShareSheet(activityItems: payload.items)
             }
+            .sheet(isPresented: $showProximityShare, onDismiss: {
+                proximityShare.stop()
+            }) {
+                proximityShareSheet
+            }
+        }
+    }
+
+    private var proximityShareSheet: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 14) {
+                Text("Nearby Roster Share")
+                    .font(.title3.weight(.semibold))
+                Text("This uses local peer discovery over Bluetooth/Wi-Fi and encrypted transfer. Bring both devices close together.")
+                    .foregroundStyle(.secondary)
+
+                Text(proximityShare.status)
+                    .font(.callout.weight(.medium))
+
+                if let payload = proximityShare.receivedPayload {
+                    Divider()
+                    Text("Received Team: \(payload.teamName)")
+                        .font(.headline)
+                    Text("Players: \(payload.players.count)")
+                        .foregroundStyle(.secondary)
+
+                    Button("Import Received Roster") {
+                        importReceivedRoster(payload)
+                    }
+                    .buttonStyle(GlassPillButtonStyle(fill: GoStatsTheme.primary))
+                }
+
+                Spacer()
+            }
+            .padding(16)
+            .navigationTitle("Share Roster")
+            .navigationBarTitleDisplayMode(.inline)
         }
     }
 
@@ -310,6 +355,26 @@ struct TeamRosterView: View {
         } catch {
             rosterErrorMessage = error.localizedDescription
         }
+    }
+
+    private func startProximityShare() {
+        guard let team else { return }
+        proximityShare.startSharing(RosterSharePayload(team: team))
+        showProximityShare = true
+    }
+
+    private func importReceivedRoster(_ payload: RosterSharePayload) {
+        let players = payload.players.map {
+            Player(
+                id: $0.id,
+                name: $0.name,
+                number: $0.jerseyNumber,
+                position: $0.position,
+                isGoalie: $0.isGoalie
+            )
+        }
+        importedPreview = RosterExport(team: Team(name: payload.teamName, players: players, startingOnFieldIDs: payload.players.filter(\.isStarter).map(\.id)))
+        showProximityShare = false
     }
 
     private func importRoster(from url: URL) {
