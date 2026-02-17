@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 // MARK: - iOS 26 "Liquid Glass" Container (Dark Mode compatible)
 //
