@@ -14,7 +14,7 @@ struct HomeInMatchView: View {
             ScrollView {
                 VStack(spacing: 16) {
 
-                    LiquidGlassContainer(cornerRadius: 22) {
+                    LiquidGlassContainer(cornerRadius: GoStatsTheme.rCard) {
                         HStack {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(teamName)
@@ -37,21 +37,21 @@ struct HomeInMatchView: View {
                                     .padding(.horizontal, 12)
                                     .padding(.vertical, 8)
                                     .background(
-                                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                        RoundedRectangle(cornerRadius: GoStatsTheme.rCard, style: .continuous)
                                             .fill(Color(uiColor: .secondarySystemGroupedBackground).opacity(0.6))
                                     )
                             }
                         }
                     }
 
-                    LiquidGlassContainer(cornerRadius: 22) {
+                    LiquidGlassContainer(cornerRadius: GoStatsTheme.rCard) {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("CURRENT FORMATION")
                                 .font(.system(size: 12, weight: .semibold))
                                 .foregroundStyle(GoStatsTheme.text2)
 
                             Text(store.formation?.rawValue ?? "Not set")
-                                .font(.system(size: 18, weight: .semibold, design: .monospaced))
+                                .font(.custom("DM Mono", size: 18))
                                 .foregroundStyle(GoStatsTheme.text)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)

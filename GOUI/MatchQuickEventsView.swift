@@ -42,7 +42,7 @@ struct MatchQuickEventsView_Old: View {
             }
         }
         .padding()
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: GoStatsTheme.rCard, style: .continuous))
     }
 
     // MARK: - Layout helpers
@@ -60,30 +60,32 @@ struct MatchQuickEventsView_Old: View {
     }
 }
 
-// MARK: - A button that cannot be “tinted blue” by parent styles
+// MARK: - Event button: white bg + thin border + dark text; Goal gets filled dark bg
 private struct ColoredActionButton: View {
     let title: String
     let icon: String
     let color: Color
     let action: () -> Void
 
+    private var isGoal: Bool { title == "Goal" }
+
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: icon)
-                .font(.headline)
+                .font(.custom("DM Sans", size: 16).weight(.medium))
             Text(title)
-                .font(.headline)
+                .font(.custom("DM Sans", size: 16).weight(.medium))
         }
-        .foregroundStyle(.white)
+        .foregroundStyle(isGoal ? .white : GoStatsTheme.text)
         .frame(maxWidth: .infinity)
         .padding(.vertical, 14)
         .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(color.opacity(0.92))
+            RoundedRectangle(cornerRadius: GoStatsTheme.rCard, style: .continuous)
+                .fill(isGoal ? GoStatsTheme.positive : Color.white)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(.white.opacity(0.12), lineWidth: 1)
+            RoundedRectangle(cornerRadius: GoStatsTheme.rCard, style: .continuous)
+                .stroke(GoStatsTheme.cardBorder, lineWidth: GoStatsTheme.cardBorderWidth)
         )
         .contentShape(Rectangle())
         .onTapGesture { action() }

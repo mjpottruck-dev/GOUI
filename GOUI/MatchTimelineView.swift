@@ -9,23 +9,25 @@ struct MatchTimelineView: View {
     }
 
     var body: some View {
-        LiquidGlassContainer(cornerRadius: 22) {
+        LiquidGlassContainer(cornerRadius: GoStatsTheme.rCard) {
             VStack(alignment: .leading, spacing: 12) {
 
                 Text("PLAY-BY-PLAY")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.custom("DM Sans", size: 10).weight(.medium)).tracking(1)
                     .foregroundStyle(GoStatsTheme.text2)
 
                 if events.isEmpty {
                     HStack(spacing: 10) {
                         Image(systemName: "clock")
                             .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(GoStatsTheme.text2)
+                            .foregroundStyle(GoStatsTheme.emptyStateColor)
 
                         Text("No events yet.")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(GoStatsTheme.text2)
+                            .font(.custom("DM Sans", size: 13))
+                            .foregroundStyle(GoStatsTheme.emptyStateColor)
                     }
+                    .frame(maxWidth: .infinity)
+                    .multilineTextAlignment(.center)
                     .padding(.vertical, 6)
                 } else {
                     VStack(spacing: 10) {
@@ -41,7 +43,7 @@ struct MatchTimelineView: View {
     private func row(_ e: MatchEvent) -> some View {
         HStack(spacing: 12) {
             Text(timeString(e.seconds))
-                .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                .font(.custom("DM Mono", size: 13))
                 .foregroundStyle(GoStatsTheme.text2)
                 .frame(width: 56, alignment: .leading)
 
@@ -60,19 +62,19 @@ struct MatchTimelineView: View {
             Spacer()
 
             Text(e.kind.rawValue)
-                .font(.system(size: 12, weight: .semibold))
+                .font(.custom("DM Sans", size: 10).weight(.medium)).tracking(1)
                 .foregroundStyle(GoStatsTheme.text2)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
                 .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    RoundedRectangle(cornerRadius: GoStatsTheme.rCard, style: .continuous)
                         .fill(Color(uiColor: .secondarySystemGroupedBackground).opacity(0.55))
                 )
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
         .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: GoStatsTheme.rCard, style: .continuous)
                 .fill(Color(uiColor: .secondarySystemGroupedBackground).opacity(0.45))
         )
     }

@@ -8,7 +8,7 @@ public struct BottomActionTray<Content: View>: View {
     }
 
     public var body: some View {
-        GlassCard(level: .surface, cornerRadius: 20) {
+        GlassCard(level: .surface, cornerRadius: GoStatsTheme.rCard) {
             content
         }
         .padding(.horizontal, GoStatsTheme.s16)

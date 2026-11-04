@@ -9,25 +9,25 @@ struct SelectablePlayerChip: View {
         HStack(spacing: 12) {
             ZStack {
                 Circle()
-                    .fill(GoStatsTheme.teal.opacity(0.16))
+                    .fill(GoStatsTheme.primary.opacity(0.08))
                     .overlay(
-                        Circle().stroke(GoStatsTheme.teal.opacity(0.30), lineWidth: 1)
+                        Circle().stroke(GoStatsTheme.cardBorder, lineWidth: GoStatsTheme.cardBorderWidth)
                     )
 
                 Text("\(player.number)")
-                    .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                    .font(.custom("DM Mono", size: 14))
                     .foregroundStyle(GoStatsTheme.text)
             }
             .frame(width: 40, height: 40)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(player.name)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.custom("DM Sans", size: 15).weight(.medium))
                     .foregroundStyle(GoStatsTheme.text)
 
                 if let subtitle {
                     Text(subtitle)
-                        .font(.system(size: 12, weight: .regular))
+                        .font(.custom("DM Sans", size: 12))
                         .foregroundStyle(GoStatsTheme.text2)
                 }
             }
@@ -36,17 +36,17 @@ struct SelectablePlayerChip: View {
 
             Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                 .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(isSelected ? GoStatsTheme.teal : GoStatsTheme.text2.opacity(0.6))
+                .foregroundStyle(isSelected ? GoStatsTheme.primary : GoStatsTheme.text2.opacity(0.6))
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
         .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
+            RoundedRectangle(cornerRadius: GoStatsTheme.rCard, style: .continuous)
                 .fill(Color(uiColor: .secondarySystemGroupedBackground).opacity(0.65))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(isSelected ? GoStatsTheme.teal.opacity(0.35) : GoStatsTheme.stroke.opacity(0.25), lineWidth: 1)
+            RoundedRectangle(cornerRadius: GoStatsTheme.rCard, style: .continuous)
+                .stroke(isSelected ? GoStatsTheme.primary.opacity(0.35) : GoStatsTheme.cardBorder, lineWidth: GoStatsTheme.cardBorderWidth)
         )
     }
 }

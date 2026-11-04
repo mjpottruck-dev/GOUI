@@ -37,65 +37,66 @@ public struct ScoreCapsule: View {
 
                 HStack(alignment: .firstTextBaseline) {
                     Text("MATCH")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(GoStatsTheme.text2)
+                        .font(.custom("DM Sans", size: 10).weight(.medium))
+                        .tracking(1)
+                        .foregroundStyle(GoStatsTheme.sectionHeaderColor)
 
                     Spacer()
 
                     Text(timeText)
-                        .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                        .font(.custom("DM Mono", size: 14))
                         .foregroundStyle(GoStatsTheme.text)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
                         .background(
-                            RoundedRectangle(cornerRadius: GoStatsTheme.rChip, style: .continuous)
-                                .fill(GoStatsTheme.teal.opacity(0.12))
+                            RoundedRectangle(cornerRadius: GoStatsTheme.rCard, style: .continuous)
+                                .fill(GoStatsTheme.primary.opacity(0.06))
                         )
                         .overlay(
-                            RoundedRectangle(cornerRadius: GoStatsTheme.rChip, style: .continuous)
-                                .stroke(GoStatsTheme.teal.opacity(0.20), lineWidth: 1)
+                            RoundedRectangle(cornerRadius: GoStatsTheme.rCard, style: .continuous)
+                                .stroke(GoStatsTheme.cardBorder, lineWidth: GoStatsTheme.cardBorderWidth)
                         )
                 }
 
                 HStack(alignment: .center) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(homeName)
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(.custom("DM Sans", size: 15).weight(.medium))
                             .foregroundStyle(GoStatsTheme.text)
                         Text("Home")
-                            .font(.system(size: 12, weight: .regular))
+                            .font(.custom("DM Sans", size: 12))
                             .foregroundStyle(GoStatsTheme.text2)
                     }
 
                     Spacer()
 
                     Text("\(homeScore)")
-                        .font(.system(size: 40, weight: .semibold, design: .monospaced))
+                        .font(.custom("DM Mono", size: 40))
                         .foregroundStyle(GoStatsTheme.text)
 
                     Text("—")
-                        .font(.system(size: 26, weight: .semibold))
+                        .font(.custom("DM Sans", size: 26).weight(.medium))
                         .foregroundStyle(GoStatsTheme.text2)
                         .padding(.horizontal, 6)
 
                     Text("\(awayScore)")
-                        .font(.system(size: 40, weight: .semibold, design: .monospaced))
+                        .font(.custom("DM Mono", size: 40))
                         .foregroundStyle(GoStatsTheme.text)
 
                     Spacer()
 
                     VStack(alignment: .trailing, spacing: 4) {
                         Text(awayName)
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(.custom("DM Sans", size: 15).weight(.medium))
                             .foregroundStyle(GoStatsTheme.text)
                         Text("Away")
-                            .font(.system(size: 12, weight: .regular))
+                            .font(.custom("DM Sans", size: 12))
                             .foregroundStyle(GoStatsTheme.text2)
                     }
                 }
 
                 Divider()
-                    .overlay(GoStatsTheme.stroke.opacity(0.7))
+                    .overlay(GoStatsTheme.cardBorder)
 
                 HStack(spacing: GoStatsTheme.s16) {
                     kpi(title: kpiLeftTitle, value: kpiLeftValue)
@@ -109,10 +110,11 @@ public struct ScoreCapsule: View {
     private func kpi(title: String, value: String) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(title.uppercased())
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(GoStatsTheme.text2)
+                .font(.custom("DM Sans", size: 10).weight(.medium))
+                .tracking(1)
+                .foregroundStyle(GoStatsTheme.sectionHeaderColor)
             Text(value)
-                .font(.system(size: 18, weight: .semibold, design: .monospaced))
+                .font(.custom("DM Mono", size: 18))
                 .foregroundStyle(GoStatsTheme.text)
         }
     }

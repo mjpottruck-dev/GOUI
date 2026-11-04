@@ -6,10 +6,10 @@ struct SoccerFieldView: View {
     var body: some View {
         GeometryReader { geo in
             ZStack {
-                RoundedRectangle(cornerRadius: 18)
+                RoundedRectangle(cornerRadius: GoStatsTheme.rCard)
                     .fill(Color.green.opacity(0.18))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 18)
+                        RoundedRectangle(cornerRadius: GoStatsTheme.rCard)
                             .stroke(Color.white.opacity(0.25), lineWidth: 1)
                     )
 
@@ -20,7 +20,7 @@ struct SoccerFieldView: View {
                     .position(x: geo.size.width / 2, y: geo.size.height / 2)
 
                 // bottom goal box
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: GoStatsTheme.rCard)
                     .stroke(Color.white.opacity(0.25), lineWidth: 1)
                     .frame(width: geo.size.width * 0.55, height: geo.size.height * 0.22)
                     .position(x: geo.size.width / 2, y: geo.size.height * 0.86)

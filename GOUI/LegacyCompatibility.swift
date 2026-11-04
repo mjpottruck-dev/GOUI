@@ -10,8 +10,6 @@ final class MatchPersistenceManager {
     private init() {}
 }
 
-typealias RosterShareManager = RosterProximityShareService
-
 // Legacy spacing/radius namespaces preserved for older UI code.
 enum Spacing {
     static let xxs: CGFloat = 4

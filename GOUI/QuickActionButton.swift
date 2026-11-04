@@ -15,33 +15,39 @@ enum QuickActionKind {
     var tint: Color {
         switch self {
         case .goal, .save, .pkSave, .pkMade:
-            return .green
+            return GoStatsTheme.positive
         case .ownGoal, .card, .conceded, .pkConceded:
             return .red
         case .shot, .pkAttempt:
-            return GoStatsTheme.primary
+            return GoStatsTheme.textPrimary
         }
     }
 }
 
 struct QuickActionButtonStyle: ButtonStyle {
     let kind: QuickActionKind
+    var isGoalButton: Bool = false
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.headline)
-            .foregroundColor(.white)
+            .font(.custom("DM Sans", size: 16).weight(.medium))
+            .foregroundColor(isGoalButton ? .white : GoStatsTheme.text)
             .padding(.vertical, 12)
             .frame(maxWidth: .infinity)
             .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(kind.tint.opacity(configuration.isPressed ? 0.70 : 0.90))
+                RoundedRectangle(cornerRadius: GoStatsTheme.rCard, style: .continuous)
+                    .fill(isGoalButton
+                          ? GoStatsTheme.positive.opacity(configuration.isPressed ? 0.80 : 1.0)
+                          : Color.white.opacity(configuration.isPressed ? 0.90 : 1.0))
+                    .shadow(color: GoStatsTheme.cardShadowColor,
+                            radius: GoStatsTheme.cardShadowRadius,
+                            x: 0, y: GoStatsTheme.cardShadowY)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(.white.opacity(0.12), lineWidth: 1)
+                RoundedRectangle(cornerRadius: GoStatsTheme.rCard, style: .continuous)
+                    .stroke(isGoalButton ? Color.clear : GoStatsTheme.cardBorder,
+                            lineWidth: GoStatsTheme.cardBorderWidth)
             )
             .scaleEffect(configuration.isPressed ? 0.96 : 1.0)
     }
 }
-

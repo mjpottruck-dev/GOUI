@@ -2,13 +2,18 @@ import SwiftUI
 
 struct FormationPickerSheet: View {
 
+    let fieldSize: Int
     let onPick: (Formation) -> Void
     @Environment(\.dismiss) private var dismiss
+
+    private var filteredFormations: [Formation] {
+        Formation.allCases.filter { $0.playerCount == fieldSize }
+    }
 
     var body: some View {
         NavigationStack {
             List {
-                ForEach(Formation.allCases) { f in
+                ForEach(filteredFormations) { f in
                     Button {
                         onPick(f)
                         dismiss()
@@ -16,7 +21,7 @@ struct FormationPickerSheet: View {
                         HStack {
                             VStack(alignment: .leading, spacing: 3) {
                                 Text(f.rawValue)
-                                    .font(.system(size: 16, weight: .semibold, design: .monospaced))
+                                    .font(.custom("DM Mono", size: 16))
                                 Text(f.familyLabel)
                                     .font(.footnote)
                                     .foregroundStyle(.secondary)

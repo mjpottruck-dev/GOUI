@@ -16,10 +16,10 @@ struct FieldView1443: View {
             let fieldSize = CGSize(width: w - (inset * 2), height: h - (inset * 2))
 
             ZStack {
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                RoundedRectangle(cornerRadius: GoStatsTheme.rCard, style: .continuous)
                     .fill(.ultraThinMaterial)
 
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                RoundedRectangle(cornerRadius: GoStatsTheme.rCard, style: .continuous)
                     .fill(Color(uiColor: .secondarySystemGroupedBackground).opacity(0.55))
                     .padding(inset)
 
@@ -42,7 +42,7 @@ struct FieldView1443: View {
         let h = size.height
 
         return ZStack {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
+            RoundedRectangle(cornerRadius: GoStatsTheme.rCard, style: .continuous)
                 .stroke(Color.primary.opacity(0.10), lineWidth: 1)
 
             Path { p in
@@ -129,35 +129,33 @@ struct FieldView1443: View {
         let name = store.displayName(for: player)
         let isSelected = selectedPlayerID == player.id
         let isGoalkeeper = store.activeGoalkeeper()?.id == player.id
+        let isOnField = store.onFieldIDs.contains(player.id)
         return VStack(spacing: 2) {
             Text("\(player.number)")
-                .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                .font(.custom("DM Mono", size: 14))
             Text(name)
-                .font(.system(size: 9, weight: .semibold))
+                .font(.custom("DM Sans", size: 9).weight(.medium))
                 .opacity(0.75)
         }
-        .foregroundStyle(.primary)
+        .foregroundStyle(isOnField ? GoStatsTheme.text : GoStatsTheme.text2)
         .frame(width: 48, height: 48)
         .background(
             Circle()
-                .fill(.thinMaterial)
-                .overlay(
-                    Circle()
-                        .fill(GoStatsTheme.teal.opacity(0.22))
-                )
+                .fill(isOnField ? Color.white : Color(uiColor: .systemGray5))
+                .shadow(color: GoStatsTheme.cardShadowColor,
+                        radius: 4, x: 0, y: 1)
         )
         .overlay(
-            Circle().stroke(Color.primary.opacity(0.14), lineWidth: 1)
+            Circle().stroke(GoStatsTheme.cardBorder, lineWidth: GoStatsTheme.cardBorderWidth)
         )
         .overlay(
             Circle()
-                .stroke(isSelected ? GoStatsTheme.teal : Color.clear, lineWidth: 2)
+                .stroke(isGoalkeeper ? GoStatsTheme.positive : Color.clear, lineWidth: 2.5)
         )
         .overlay(
             Circle()
-                .stroke(isGoalkeeper ? Color.red : Color.clear, lineWidth: 2)
+                .stroke(isSelected ? GoStatsTheme.textPrimary : Color.clear, lineWidth: 2)
         )
-        .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 4)
         .accessibilityLabel("\(player.name) number \(player.number)")
         .contentShape(Circle())
         .onTapGesture {

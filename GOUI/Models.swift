@@ -70,6 +70,21 @@ enum Formation: String, CaseIterable, Identifiable, Codable {
     case f523 = "5-2-3"
     case f541 = "5-4-1"
 
+    // 7v7 (6 outfield + 1 GK)
+    case f7_231 = "2-3-1"
+    case f7_321 = "3-2-1"
+    case f7_312 = "3-1-2"
+    case f7_2121 = "2-1-2-1"
+    case f7_132 = "1-3-2"
+
+    // 9v9 (8 outfield + 1 GK)
+    case f9_332 = "3-3-2"
+    case f9_323 = "3-2-3"
+    case f9_242 = "2-4-2"
+    case f9_3131 = "3-1-3-1"
+    case f9_2312 = "2-3-1-2"
+    case f9_341 = "3-4-1"
+
     var id: String { rawValue }
 
     var familyLabel: String {
@@ -80,6 +95,10 @@ enum Formation: String, CaseIterable, Identifiable, Codable {
             return "Back-three / wingbacks"
         case .f532, .f523, .f541:
             return "Five-at-the-back"
+        case .f7_231, .f7_321, .f7_312, .f7_2121, .f7_132:
+            return "7v7 system"
+        case .f9_332, .f9_323, .f9_242, .f9_3131, .f9_2312, .f9_341:
+            return "9v9 system"
         }
     }
 
@@ -127,11 +146,56 @@ enum Formation: String, CaseIterable, Identifiable, Codable {
             return [[.rwb, .cb, .cb, .cb, .lwb], [.cm, .cm], [.rw, .st, .lw]]
         case .f541:
             return [[.rwb, .cb, .cb, .cb, .lwb], [.rm, .cm, .cm, .lm], [.st]]
+
+        // 7v7 formations (6 outfield)
+        case .f7_231:
+            return [[.cb, .cb], [.rm, .cm, .lm], [.st]]
+        case .f7_321:
+            return [[.cb, .cb, .cb], [.cm, .cm], [.st]]
+        case .f7_312:
+            return [[.cb, .cb, .cb], [.cm], [.st, .st]]
+        case .f7_2121:
+            return [[.cb, .cb], [.cm], [.rm, .lm], [.st]]
+        case .f7_132:
+            return [[.cb], [.rm, .cm, .lm], [.st, .st]]
+
+        // 9v9 formations (8 outfield)
+        case .f9_332:
+            return [[.cb, .cb, .cb], [.rm, .cm, .lm], [.st, .st]]
+        case .f9_323:
+            return [[.cb, .cb, .cb], [.cm, .cm], [.rw, .st, .lw]]
+        case .f9_242:
+            return [[.cb, .cb], [.rm, .cm, .cm, .lm], [.st, .st]]
+        case .f9_3131:
+            return [[.cb, .cb, .cb], [.cm], [.rm, .cm, .lm], [.st]]
+        case .f9_2312:
+            return [[.cb, .cb], [.rm, .cm, .lm], [.cam], [.st, .st]]
+        case .f9_341:
+            return [[.cb, .cb, .cb], [.rm, .cm, .cm, .lm], [.st]]
         }
     }
 
     var slotPositions: [Position] {
         ([.gk] + lineLayout.flatMap { $0 })
+    }
+
+    var playerCount: Int {
+        switch self {
+        case .f7_231, .f7_321, .f7_312, .f7_2121, .f7_132:
+            return 7
+        case .f9_332, .f9_323, .f9_242, .f9_3131, .f9_2312, .f9_341:
+            return 9
+        default:
+            return 11
+        }
+    }
+
+    static func defaultFormation(for fieldSize: Int) -> Formation {
+        switch fieldSize {
+        case 7:  return .f7_231
+        case 9:  return .f9_332
+        default: return .f442_flat
+        }
     }
 }
 
@@ -242,8 +306,13 @@ struct MatchRecord: Identifiable, Codable, Hashable {
     var fieldSize: Int = 7
     var seasonID: UUID? = nil
 
+    var venue: String = ""
+
     var playerSeconds: [UUID: Int] = [:]
     var playerStats: [UUID: PlayerStatLine] = [:]
+
+    /// Timeline events saved with the match (backward-compatible default)
+    var events: [MatchEvent] = []
 }
 
 // MARK: - Team
@@ -256,7 +325,7 @@ struct Team: Identifiable, Codable, Hashable {
     var createdAt: Date = Date()
     var updatedAt: Date = Date()
 
-    var fieldSize: Int = 7
+    var fieldSize: Int = 11
     var startingOnFieldIDs: [UUID] = []
     var primaryFormation: Formation = .f433
     var primaryGoalkeeperID: UUID? = nil

@@ -30,7 +30,7 @@ struct PlayerFieldPicker: View {
 
                 ScrollView {
                     VStack(spacing: 12) {
-                        LiquidGlassContainer(cornerRadius: 22) {
+                        LiquidGlassContainer(cornerRadius: GoStatsTheme.rCard) {
                             VStack(alignment: .leading, spacing: 10) {
                                 Text("PLAYERS")
                                     .font(.system(size: 12, weight: .semibold))
@@ -44,7 +44,7 @@ struct PlayerFieldPicker: View {
                                     } label: {
                                         HStack {
                                             Text("#\(p.number)")
-                                                .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                                                .font(.custom("DM Mono", size: 13))
                                                 .foregroundStyle(GoStatsTheme.text2)
                                                 .frame(width: 50, alignment: .leading)
 

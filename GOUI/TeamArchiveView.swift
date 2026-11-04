@@ -1,7 +1,6 @@
 import SwiftUI
 
 struct TeamArchiveView: View {
-
     var teamStore: TeamStore
     let teamID: UUID
 
@@ -11,70 +10,78 @@ struct TeamArchiveView: View {
 
     var body: some View {
         ZStack {
-            Color(uiColor: .systemGroupedBackground).ignoresSafeArea()
+            GoStatsTheme.bg.ignoresSafeArea()
 
             if let team {
-                List {
-                    // Header row (no Section)
-                    Text("ARCHIVE")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                        .listRowBackground(Color.clear)
+                ScrollView {
+                    VStack(spacing: GoStatsTheme.cardGap) {
+                        if team.matches.isEmpty {
+                            VStack(spacing: 8) {
+                                Image(systemName: "tray")
+                                    .font(.system(size: 28))
+                                    .foregroundStyle(GoStatsTheme.emptyStateColor)
+                                Text("No saved matches yet.")
+                                    .font(.system(size: 13))
+                                    .foregroundStyle(GoStatsTheme.emptyStateColor)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 40)
+                        } else {
+                            ForEach(team.matches) { match in
+                                NavigationLink {
+                                    MatchGameDetailView(match: match, team: team)
+                                } label: {
+                                    VStack(spacing: 12) {
+                                        Text("\(team.name) vs \(match.opponent.isEmpty ? "Opponent" : match.opponent)")
+                                            .font(.system(size: 15, weight: .semibold))
+                                            .foregroundStyle(GoStatsTheme.textPrimary)
 
-                    if team.matches.isEmpty {
-                        Text("No saved matches yet.")
-                            .foregroundStyle(.secondary)
-                            .listRowBackground(Color.clear)
-                    } else {
-                        ForEach(team.matches) { match in
-                            NavigationLink {
-                                MatchDetailView(match: match, team: team)
-                            } label: {
-                                archiveRow(match)
+                                        Text("\(match.goalsFor) - \(match.goalsAgainst)")
+                                            .font(.system(size: 28, weight: .bold))
+                                            .foregroundStyle(GoStatsTheme.textPrimary)
+
+                                        HStack(spacing: 12) {
+                                            Text(match.date.formatted(date: .abbreviated, time: .omitted))
+                                                .font(.system(size: 13))
+                                                .foregroundStyle(GoStatsTheme.textMuted)
+                                            if !match.venue.isEmpty {
+                                                Text(match.venue)
+                                                    .font(.system(size: 13))
+                                                    .foregroundStyle(GoStatsTheme.textMuted)
+                                            }
+                                        }
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .padding(GoStatsTheme.cardPadding)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: GoStatsTheme.cardRadius, style: .continuous)
+                                            .fill(Color.white)
+                                            .shadow(color: GoStatsTheme.cardShadowColor, radius: GoStatsTheme.cardShadowRadius, x: 0, y: GoStatsTheme.cardShadowY)
+                                    )
+                                }
+                                .buttonStyle(.plain)
                             }
                         }
                     }
+                    .padding(.horizontal, GoStatsTheme.cardMargin)
+                    .padding(.top, 16)
+                    .padding(.bottom, 80)
                 }
-                .scrollContentBackground(.hidden)
-
             } else {
-                VStack(spacing: 12) {
+                VStack(spacing: 8) {
                     Image(systemName: "exclamationmark.triangle")
-                        .font(.system(size: 28, weight: .semibold))
-                        .foregroundStyle(.secondary)
-
+                        .font(.system(size: 28))
+                        .foregroundStyle(GoStatsTheme.emptyStateColor)
                     Text("Team not found.")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(.primary)
-
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(GoStatsTheme.textPrimary)
                     Text("Create a team first.")
                         .font(.system(size: 13))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(GoStatsTheme.emptyStateColor)
                 }
             }
         }
-        .navigationTitle("Archive")
+        .navigationTitle("Match Archive")
         .navigationBarTitleDisplayMode(.inline)
-    }
-
-    private func archiveRow(_ match: MatchRecord) -> some View {
-        HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(match.opponent.isEmpty ? "Opponent" : match.opponent)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(.primary)
-
-                Text(match.date.formatted(date: .abbreviated, time: .omitted))
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-            }
-
-            Spacer()
-
-            Text("\(match.goalsFor)–\(match.goalsAgainst)")
-                .font(.system(size: 16, weight: .semibold, design: .monospaced))
-                .foregroundStyle(.primary)
-        }
-        .padding(.vertical, 6)
     }
 }

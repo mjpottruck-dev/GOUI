@@ -16,6 +16,7 @@ final class MatchSessionStore: ObservableObject {
     @Published var isRunning: Bool = false
     @Published private(set) var elapsedSeconds: Int = 0
     @Published var hasSplitHalf: Bool = false
+    @Published var matchEnded: Bool = false
 
     private var startDate: Date? = nil {
         didSet { startTime = startDate }
@@ -80,7 +81,7 @@ final class MatchSessionStore: ObservableObject {
 
     // MARK: - Controls
     func startGame() {
-        guard !isRunning else { return }
+        guard !isRunning, !matchEnded else { return }
         isActive = true
         isRunning = true
         startDate = Date()
@@ -101,12 +102,32 @@ final class MatchSessionStore: ObservableObject {
         refreshElapsedFromClock()
     }
 
-    func splitHalfAndResume() {
+    /// Marks halftime: freezes clock at current time, changes label to 2ND HALF.
+    /// Clock NEVER resets — continues from current time when Resume is tapped.
+    func splitHalf() {
         hasSplitHalf = true
-        if !isRunning {
-            startGame()
-        }
+        // Do NOT reset accumulatedSeconds, elapsedSeconds, or elapsedTime
+        // The clock just stays frozen at its current value
+        updateLiveActivity(lastEvent: "Halftime")
     }
+
+    /// Legacy name kept for backward compatibility
+    func splitHalfAndResume() {
+        splitHalf()
+    }
+
+    /// State 7: Permanently freeze the timer. No resume possible after this.
+    func endMatchFreeze() {
+        refreshElapsedFromClock()
+        stopTimer()
+        isRunning = false
+        matchEnded = true
+        MatchStatePersistence.clear()
+        startDate = nil
+        LiveActivityManager.shared.endActivity()
+    }
+
+    private var lastLiveActivityUpdate: Int = -10
 
     func refreshElapsedFromClock() {
         if isRunning, let startDate {
@@ -117,6 +138,12 @@ final class MatchSessionStore: ObservableObject {
         }
         elapsedTime = TimeInterval(elapsedSeconds)
         updatePlayerSecondsIfNeeded()
+
+        // Update Live Activity every 5 seconds to avoid throttling
+        if isRunning, LiveActivityManager.shared.isActive, elapsedSeconds - lastLiveActivityUpdate >= 5 {
+            lastLiveActivityUpdate = elapsedSeconds
+            updateLiveActivity()
+        }
     }
 
     private func startTimer() {
@@ -141,6 +168,8 @@ final class MatchSessionStore: ObservableObject {
         accumulatedSeconds = 0
         elapsedSeconds = 0
         hasSplitHalf = false
+        matchEnded = false
+        MatchStatePersistence.clear()
         lastPlayerUpdateSeconds = 0
 
         goalsFor = 0
@@ -151,10 +180,19 @@ final class MatchSessionStore: ObservableObject {
 
         currentTeamID = team?.id
         currentSeasonID = seasonID
-        self.formation = formation
 
         if let team {
             fieldSize = team.fieldSize
+
+            // Ensure formation matches team's field size
+            if let f = formation, f.playerCount == fieldSize {
+                self.formation = f
+            } else if let f = Formation.allCases.first(where: { $0.playerCount == fieldSize }) {
+                self.formation = f
+            } else {
+                self.formation = formation
+            }
+
             players = team.players.map { player in
                 var resetPlayer = player
                 resetPlayer.secondsPlayed = 0
@@ -180,6 +218,20 @@ final class MatchSessionStore: ObservableObject {
             goalkeeperDepthIDs = [depth.primary, depth.secondary, depth.third].compactMap { $0 }
             onFieldLineupIDs = team.startingOnFieldIDs
             onFieldIDs = Set(team.startingOnFieldIDs)
+
+            // Goalkeeper auto-placement: ensure marked goalie is in the GK formation slot
+            if let gkID = goalkeeperDepthIDs.first {
+                let fm = formation ?? team.primaryFormation
+                if let gkSlotIdx = fm.slotPositions.firstIndex(of: .gk),
+                   gkSlotIdx < onFieldLineupIDs.count,
+                   onFieldLineupIDs[gkSlotIdx] != gkID,
+                   onFieldIDs.contains(gkID) {
+                    // Swap the GK into the correct slot
+                    if let currentIdx = onFieldLineupIDs.firstIndex(of: gkID) {
+                        onFieldLineupIDs.swapAt(gkSlotIdx, currentIdx)
+                    }
+                }
+            }
         } else {
             fieldSize = 7
             players = []
@@ -196,6 +248,34 @@ final class MatchSessionStore: ObservableObject {
     func resumeIfNeeded() {
         guard isActive, !isRunning else { return }
         startGame()
+    }
+
+    // MARK: - Persistence
+    func saveState(teamName: String, opponent: String) {
+        guard isActive, !matchEnded else { return }
+        MatchStatePersistence.save(from: self, teamName: teamName, opponent: opponent)
+    }
+
+    func restoreState(_ state: MatchStatePersistence.PersistedState) {
+        isActive = state.isActive
+        goalsFor = state.goalsFor
+        goalsAgainst = state.goalsAgainst
+        accumulatedSeconds = state.elapsedSeconds
+        elapsedSeconds = state.elapsedSeconds
+        elapsedTime = TimeInterval(state.elapsedSeconds)
+        hasSplitHalf = state.hasSplitHalf
+        matchEnded = false
+        isRunning = false  // Always restore paused -- user must tap Resume
+        startDate = nil
+        events = state.events
+        fieldSize = state.fieldSize
+        currentTeamID = state.currentTeamID
+        currentSeasonID = state.currentSeasonID
+        lastPlayerUpdateSeconds = state.elapsedSeconds
+    }
+
+    func clearPersistedState() {
+        MatchStatePersistence.clear()
     }
 
     // MARK: - Undo
@@ -350,6 +430,27 @@ final class MatchSessionStore: ObservableObject {
     private func addEvent(kind: MatchActionKind, title: String, detail: String?) {
         let event = MatchEvent(kind: kind, seconds: secondsElapsed, title: title, detail: detail)
         events.insert(event, at: 0)
+        updateLiveActivity(lastEvent: title)
+    }
+
+    // MARK: - Live Activity Bridge
+
+    /// The opponent name for the current match (set when Live Activity starts)
+    var liveActivityOpponent: String = ""
+
+    /// The team name for the current match
+    var liveActivityTeamName: String = ""
+
+    func updateLiveActivity(lastEvent: String = "") {
+        LiveActivityManager.shared.updateActivity(
+            homeScore: goalsFor,
+            awayScore: goalsAgainst,
+            elapsedSeconds: elapsedSeconds,
+            hasSplitHalf: hasSplitHalf,
+            teamName: liveActivityTeamName,
+            opponentName: liveActivityOpponent,
+            lastEvent: lastEvent
+        )
     }
 
     func activeGoalkeeper() -> Player? {

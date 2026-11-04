@@ -267,12 +267,12 @@ final class TeamStore {
             Player(name: "Nico Alvarez", number: 18, position: .cf)
         ]
 
-        let starterIDs = Array(players.prefix(7)).map(\.id)
+        let starterIDs = Array(players.prefix(11)).map(\.id)
         let goalkeeperDepth = Team.goalkeeperDepthIDs(from: players)
         let team = Team(
             name: "Demo Eleven",
             players: players,
-            fieldSize: 7,
+            fieldSize: 11,
             startingOnFieldIDs: starterIDs,
             primaryFormation: .f433,
             primaryGoalkeeperID: goalkeeperDepth.primary,

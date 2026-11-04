@@ -17,7 +17,7 @@ struct SectionCard<Content: View>: View {
         }
         .padding()
         .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: GoStatsTheme.rCard, style: .continuous))
     }
 }
 

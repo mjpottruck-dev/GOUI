@@ -10,50 +10,26 @@ struct GlassQuickButton: View {
         Button(action: action) {
             HStack(spacing: 10) {
                 Image(systemName: systemImage)
-                    .font(.headline)
+                    .font(.custom("DM Sans", size: 16).weight(.medium))
                 Text(title)
-                    .font(.headline)
+                    .font(.custom("DM Sans", size: 16).weight(.medium))
                     .lineLimit(1)
                 Spacer()
             }
+            .foregroundStyle(GoStatsTheme.text)
             .padding(.horizontal, 14)
             .padding(.vertical, 12)
             .frame(maxWidth: .infinity)
+            .background(
+                RoundedRectangle(cornerRadius: GoStatsTheme.rCard, style: .continuous)
+                    .fill(Color.white)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: GoStatsTheme.rCard, style: .continuous)
+                    .stroke(GoStatsTheme.cardBorder, lineWidth: GoStatsTheme.cardBorderWidth)
+            )
         }
         .buttonStyle(.plain)
-        .modifier(GlassOnlyButtonModifier(tint: tint))
-    }
-}
-
-private struct GlassOnlyButtonModifier: ViewModifier {
-    let tint: Color
-
-    func body(content: Content) -> some View {
-        // IMPORTANT:
-        // Liquid Glass only exists in the iOS 18 / Xcode 16 SDK.
-        // If you're not on that SDK, this file MUST compile without referencing glassEffect at all.
-
-        #if swift(>=6.0)
-        if #available(iOS 18.0, *) {
-            // This will ONLY compile if your Xcode has the iOS 18 SDK.
-            return AnyView(
-                content
-                    .glassEffect(.regular.tint(tint).interactive(), in: .capsule)
-            )
-        } else {
-            return AnyView(fallback(content))
-        }
-        #else
-        return AnyView(fallback(content))
-        #endif
-    }
-
-    private func fallback(_ content: Content) -> some View {
-        content
-            .background(.thinMaterial, in: Capsule())
-            .overlay(
-                Capsule().stroke(tint.opacity(0.35), lineWidth: 1)
-            )
     }
 }
 

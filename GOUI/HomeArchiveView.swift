@@ -28,7 +28,7 @@ struct HomeArchiveView: View {
                 .padding(.bottom, 140)
             }
         }
-        .navigationTitle("GoStats")
+        .navigationTitle("GoalStats")
         .navigationBarTitleDisplayMode(.large)
         .onAppear {
             if selectedTeamID == nil {
@@ -56,14 +56,14 @@ struct HomeArchiveView: View {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
                     Text("TEAM")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.custom("DM Sans", size: 10).weight(.medium)).tracking(1)
                         .foregroundStyle(GoStatsTheme.text2)
 
                     Spacer()
 
                     if let team = selectedTeam {
                         Text("\(team.players.count) players")
-                            .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                            .font(.custom("DM Mono", size: 12))
                             .foregroundStyle(GoStatsTheme.text2)
                     }
                 }
@@ -83,7 +83,7 @@ struct HomeArchiveView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
                     .background(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        RoundedRectangle(cornerRadius: GoStatsTheme.rCard, style: .continuous)
                             .fill(GoStatsTheme.teal)
                     )
                 }
@@ -116,18 +116,18 @@ struct HomeArchiveView: View {
     // MARK: - Archive
 
     private var archiveCard: some View {
-        LiquidGlassContainer(cornerRadius: 22) {
+        LiquidGlassContainer(cornerRadius: GoStatsTheme.rCard) {
             VStack(alignment: .leading, spacing: 12) {
 
                 HStack {
                     Text("ARCHIVE")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.custom("DM Sans", size: 10).weight(.medium)).tracking(1)
                         .foregroundStyle(GoStatsTheme.text2)
 
                     Spacer()
 
                     Text("\(selectedTeam?.matches.count ?? 0)")
-                        .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                        .font(.custom("DM Mono", size: 12))
                         .foregroundStyle(GoStatsTheme.text2)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
@@ -142,7 +142,7 @@ struct HomeArchiveView: View {
                     List {
                         ForEach(team.matches) { m in
                             NavigationLink {
-                                MatchDetailView(match: m, team: team)
+                                MatchGameDetailView(match: m, team: team)
                             } label: {
                                 matchRow(match: m)
                                     .contentShape(Rectangle())
@@ -184,24 +184,33 @@ struct HomeArchiveView: View {
         HStack(spacing: 12) {
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(match.opponent.isEmpty ? "Opponent" : match.opponent)
+                Text("\(selectedTeam?.name ?? "Team") vs \(match.opponent.isEmpty ? "Opponent" : match.opponent)")
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(GoStatsTheme.text)
 
-                Text(match.date.formatted(date: .abbreviated, time: .omitted))
-                    .font(.system(size: 12))
-                    .foregroundStyle(GoStatsTheme.text2)
+                HStack(spacing: 8) {
+                    Text(match.date.formatted(date: .abbreviated, time: .omitted))
+                        .font(.system(size: 12))
+                        .foregroundStyle(GoStatsTheme.text2)
+
+                    if !match.venue.isEmpty {
+                        Text(match.venue)
+                            .font(.system(size: 12))
+                            .foregroundStyle(GoStatsTheme.text2)
+                            .lineLimit(1)
+                    }
+                }
             }
 
             Spacer()
 
             Text("\(match.goalsFor)–\(match.goalsAgainst)")
-                .font(.system(size: 16, weight: .semibold, design: .monospaced))
+                .font(.custom("DM Mono", size: 16))
                 .foregroundStyle(GoStatsTheme.text)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 8)
                 .background(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    RoundedRectangle(cornerRadius: GoStatsTheme.rCard, style: .continuous)
                         .fill(Color(uiColor: .secondarySystemGroupedBackground).opacity(0.55))
                 )
 
@@ -212,7 +221,7 @@ struct HomeArchiveView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 12)
         .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: GoStatsTheme.rCard, style: .continuous)
                 .fill(Color(uiColor: .secondarySystemGroupedBackground).opacity(0.50))
         )
     }

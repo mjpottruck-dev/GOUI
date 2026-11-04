@@ -1,63 +1,86 @@
 import SwiftUI
 
 struct RosterHomeView: View {
-
     @Bindable var teamStore: TeamStore
-
     @State private var showingCreateTeam = false
     @State private var editingTeam: Team? = nil
+    @State private var teamToDelete: Team? = nil
 
     var body: some View {
         NavigationStack {
-            List {
-                if teamStore.teams.isEmpty {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("No Teams Yet")
-                            .font(.headline)
-                        Text("Tap + to create your first team.")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.vertical, 8)
-                } else {
-                    ForEach(teamStore.teams) { team in
-                        Button {
-                            editingTeam = team
-                        } label: {
-                            HStack {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(team.name)
-                                        .font(.headline)
-                                    Text("\(team.players.count) players")
-                                        .font(.subheadline)
-                                        .foregroundStyle(.secondary)
+            ZStack {
+                GoStatsTheme.bg.ignoresSafeArea()
+
+                ScrollView {
+                    VStack(spacing: GoStatsTheme.cardGap) {
+                        if teamStore.teams.isEmpty {
+                            VStack(spacing: 8) {
+                                Image(systemName: "person.3")
+                                    .font(.system(size: 28))
+                                    .foregroundStyle(GoStatsTheme.emptyStateColor)
+                                Text("No teams yet. Create your first team.")
+                                    .font(.system(size: 13))
+                                    .foregroundStyle(GoStatsTheme.emptyStateColor)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 40)
+                        } else {
+                            ForEach(teamStore.teams) { team in
+                                Button { editingTeam = team } label: {
+                                    HStack(spacing: 12) {
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            Text(team.name)
+                                                .font(.system(size: 17, weight: .medium))
+                                                .foregroundStyle(GoStatsTheme.textPrimary)
+                                            Text("\(team.players.count) players")
+                                                .font(.system(size: 13))
+                                                .foregroundStyle(GoStatsTheme.textMuted)
+                                        }
+                                        Spacer()
+                                        Image(systemName: "chevron.right")
+                                            .font(.system(size: 13, weight: .semibold))
+                                            .foregroundStyle(GoStatsTheme.textMuted)
+                                    }
+                                    .padding(GoStatsTheme.cardPadding)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: GoStatsTheme.cardRadius, style: .continuous)
+                                            .fill(Color.white)
+                                            .shadow(color: GoStatsTheme.cardShadowColor, radius: GoStatsTheme.cardShadowRadius, x: 0, y: GoStatsTheme.cardShadowY)
+                                    )
                                 }
-                                Spacer()
-                                Image(systemName: "chevron.right")
-                                    .font(.system(size: 12, weight: .semibold))
-                                    .foregroundStyle(.secondary)
+                                .buttonStyle(.plain)
+                                .contextMenu {
+                                    Button(role: .destructive) {
+                                        teamToDelete = team
+                                    } label: {
+                                        Label("Delete", systemImage: "trash")
+                                    }
+                                }
                             }
                         }
-                    }
-                    .onDelete { indexSet in
-                        for idx in indexSet {
-                            let team = teamStore.teams[idx]
-                            teamStore.deleteTeam(team)
+
+                        Button { showingCreateTeam = true } label: {
+                            Text("Create Team")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(.white)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 14)
+                                .background(
+                                    RoundedRectangle(cornerRadius: GoStatsTheme.cardRadius, style: .continuous)
+                                        .fill(GoStatsTheme.textPrimary)
+                                )
                         }
+                        .buttonStyle(.plain)
+                        .padding(.top, 8)
                     }
+                    .padding(.horizontal, GoStatsTheme.cardMargin)
+                    .padding(.top, 16)
+                    .padding(.bottom, 40)
                 }
             }
             .navigationTitle("Teams")
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button { showingCreateTeam = true } label: {
-                        Image(systemName: "plus")
-                    }
-                }
-            }
             .sheet(isPresented: $showingCreateTeam) {
                 CreateTeamView(teamStore: teamStore) { _ in
-                    // CreateTeamView already adds the team + dismisses.
                     showingCreateTeam = false
                 }
             }
@@ -70,7 +93,18 @@ struct RosterHomeView: View {
                     teamStore.updateTeam(merged)
                 }
             }
+            .alert("Delete \(teamToDelete?.name ?? "Team")?", isPresented: Binding(
+                get: { teamToDelete != nil },
+                set: { if !$0 { teamToDelete = nil } }
+            )) {
+                Button("Delete", role: .destructive) {
+                    if let t = teamToDelete { teamStore.deleteTeam(t) }
+                    teamToDelete = nil
+                }
+                Button("Cancel", role: .cancel) { teamToDelete = nil }
+            } message: {
+                Text("This will permanently delete the team and all its players. This cannot be undone.")
+            }
         }
     }
 }
-

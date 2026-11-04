@@ -2,18 +2,20 @@ import Foundation
 
 extension MatchStore {
 
-    func buildMatchRecord(opponent: String, title: String = "", notes: String = "") -> MatchRecord {
+    func buildMatchRecord(opponent: String, title: String = "", notes: String = "", venue: String = "") -> MatchRecord {
         var rec = MatchRecord()
         rec.date = Date()
         rec.opponent = opponent
         rec.title = title
         rec.notes = notes
+        rec.venue = venue
 
         rec.goalsFor = goalsFor
         rec.goalsAgainst = goalsAgainst
         rec.secondsElapsed = elapsedSeconds
         rec.fieldSize = fieldSize
         rec.seasonID = currentSeasonID
+        rec.events = events
 
         rec.playerSeconds = Dictionary(uniqueKeysWithValues: players.map { ($0.id, $0.secondsPlayed) })
 

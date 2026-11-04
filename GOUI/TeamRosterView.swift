@@ -8,19 +8,19 @@ struct TeamRosterView: View {
 
     @State private var showingAddPlayer = false
     @State private var editingPlayer: Player? = nil
+    @State private var showAIImport = false
     @State private var searchText: String = ""
     @State private var selectedFilter: RosterFilter = .all
     @State private var displayedPlayers: [Player] = []
     @State private var refreshTask: Task<Void, Never>? = nil
     @State private var shareSheetPayload: ShareSheetPayload? = nil
-    @State private var showingImportPicker = false
     @State private var importedPreview: RosterExport? = nil
     @State private var rosterErrorMessage: String? = nil
     @State private var conflictQueue: [Player] = []
     @State private var pendingConflict: Player? = nil
     @State private var isReplacingRoster = false
-    @State private var showProximityShare = false
-    @StateObject private var proximityShare = RosterProximityShareService()
+    @StateObject private var sharingService = RosterSharingService()
+    @State private var rippleActive = false
 
     private let sport = SportDefinition.current
 
@@ -33,30 +33,43 @@ struct TeamRosterView: View {
         return teamStore.teams[idx]
     }
 
+    /// Whether the share overlay should be visible
+    private var showShareOverlay: Bool {
+        switch sharingService.state {
+        case .idle, .cancelled:
+            return false
+        case .searching, .peerFound, .sending, .sent, .failed,
+             .receivingInvite, .connecting, .received:
+            return true
+        }
+    }
+
     var body: some View {
         let _ = DebugRenderLogger.log("RosterView", enabled: DebugSettings.renderCountsEnabled)
         NavigationStack {
-            rosterContent
+            ZStack {
+                rosterContent
+
+                if showShareOverlay {
+                    shareOverlay
+                        .transition(.opacity)
+                }
+            }
             .navigationTitle(team?.name ?? "Roster")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
                         Button {
-                            shareRoster()
+                            guard let team else { return }
+                            sharingService.startSharing(team: team)
                         } label: {
-                            Label("Share Roster (AirDrop)", systemImage: "square.and.arrow.up")
+                            Label("Share Roster", systemImage: "dot.radiowaves.left.and.right")
                         }
 
                         Button {
-                            startProximityShare()
+                            showAIImport = true
                         } label: {
-                            Label("Share Roster Nearby", systemImage: "dot.radiowaves.left.and.right")
-                        }
-
-                        Button {
-                            showingImportPicker = true
-                        } label: {
-                            Label("Import Roster", systemImage: "square.and.arrow.down")
+                            Label("Import Roster via AI", systemImage: "square.and.arrow.down")
                         }
                     } label: {
                         Image(systemName: "ellipsis.circle")
@@ -74,8 +87,47 @@ struct TeamRosterView: View {
                     updatePlayer(updated)
                 }
             }
+            .sheet(isPresented: $showAIImport) {
+                AIRosterImportView(teamStore: teamStore, teamID: teamID)
+            }
             .onAppear {
                 refreshPlayers()
+                sharingService.startListening()
+            }
+            .onDisappear {
+                sharingService.stopListening()
+            }
+            .onChange(of: sharingService.state) { _, newState in
+                switch newState {
+                case .searching, .connecting:
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                        rippleActive = true
+                    }
+                default:
+                    rippleActive = false
+                }
+            }
+            .onChange(of: sharingService.receivedRoster?.teamName) { _, newName in
+                guard let roster = sharingService.receivedRoster else { return }
+                let players = roster.players.map { shared in
+                    Player(
+                        name: shared.name,
+                        number: shared.number,
+                        position: Position(rawValue: shared.position) ?? .cm
+                    )
+                }
+                let goalkeeperDepth = Team.goalkeeperDepthIDs(from: players)
+                let newTeam = Team(
+                    name: roster.teamName,
+                    players: players,
+                    startingOnFieldIDs: [],
+                    primaryGoalkeeperID: goalkeeperDepth.primary,
+                    secondaryGoalkeeperID: goalkeeperDepth.secondary,
+                    thirdGoalkeeperID: goalkeeperDepth.third
+                )
+                teamStore.addTeam(newTeam)
+                sharingService.sendAck()
+                sharingService.receivedRoster = nil
             }
             .onChange(of: searchText) { _, _ in
                 refreshPlayers()
@@ -90,19 +142,6 @@ struct TeamRosterView: View {
                 guard let url = newValue else { return }
                 importRoster(from: url)
                 incomingRosterURL = nil
-            }
-            .fileImporter(
-                isPresented: $showingImportPicker,
-                allowedContentTypes: [.goUIRoster, .json],
-                allowsMultipleSelection: false
-            ) { result in
-                switch result {
-                case .success(let urls):
-                    guard let url = urls.first else { return }
-                    importRoster(from: url)
-                case .failure(let error):
-                    rosterErrorMessage = error.localizedDescription
-                }
             }
             .alert("Import Error", isPresented: importErrorPresented) {
                 Button("OK", role: .cancel) {}
@@ -147,43 +186,6 @@ struct TeamRosterView: View {
             .sheet(item: $shareSheetPayload) { payload in
                 ShareSheet(activityItems: payload.items)
             }
-            .sheet(isPresented: $showProximityShare, onDismiss: {
-                proximityShare.stop()
-            }) {
-                proximityShareSheet
-            }
-        }
-    }
-
-    private var proximityShareSheet: some View {
-        NavigationStack {
-            VStack(alignment: .leading, spacing: 14) {
-                Text("Nearby Roster Share")
-                    .font(.title3.weight(.semibold))
-                Text("This uses local peer discovery over Bluetooth/Wi-Fi and encrypted transfer. Bring both devices close together.")
-                    .foregroundStyle(.secondary)
-
-                Text(proximityShare.status)
-                    .font(.callout.weight(.medium))
-
-                if let payload = proximityShare.receivedPayload {
-                    Divider()
-                    Text("Received Team: \(payload.teamName)")
-                        .font(.headline)
-                    Text("Players: \(payload.players.count)")
-                        .foregroundStyle(.secondary)
-
-                    Button("Import Received Roster") {
-                        importReceivedRoster(payload)
-                    }
-                    .buttonStyle(GlassPillButtonStyle(fill: GoStatsTheme.primary))
-                }
-
-                Spacer()
-            }
-            .padding(16)
-            .navigationTitle("Share Roster")
-            .navigationBarTitleDisplayMode(.inline)
         }
     }
 
@@ -252,57 +254,71 @@ struct TeamRosterView: View {
     }
 
     private var rosterHeader: some View {
-        GlassCard(level: .raised) {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Roster")
-                            .font(.system(size: 20, weight: .semibold))
-                            .foregroundStyle(GoStatsTheme.text)
-                        Text("\(team?.players.count ?? 0) players")
-                            .font(.footnote)
-                            .foregroundStyle(GoStatsTheme.text2)
-                    }
-                    Spacer()
-                    Button {
-                        showingAddPlayer = true
-                    } label: {
-                        Label("Add Player", systemImage: "plus")
-                    }
-                    .buttonStyle(GlassPillButtonStyle(fill: GoStatsTheme.primary))
-                }
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Roster")
+                    .font(.system(size: 28, weight: .bold))
+                    .foregroundStyle(GoStatsTheme.textPrimary)
+                Text("\(team?.players.count ?? 0) players")
+                    .font(.system(size: 13))
+                    .foregroundStyle(GoStatsTheme.textMuted)
             }
+            Spacer()
+            Button {
+                showingAddPlayer = true
+            } label: {
+                Label("Add Player", systemImage: "plus")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(
+                        RoundedRectangle(cornerRadius: GoStatsTheme.cardRadius, style: .continuous)
+                            .fill(GoStatsTheme.textPrimary)
+                    )
+            }
+            .buttonStyle(.plain)
         }
+        .padding(GoStatsTheme.cardPadding)
+        .background(
+            RoundedRectangle(cornerRadius: GoStatsTheme.cardRadius, style: .continuous)
+                .fill(Color.white)
+                .shadow(color: GoStatsTheme.cardShadowColor, radius: GoStatsTheme.cardShadowRadius, x: 0, y: GoStatsTheme.cardShadowY)
+        )
     }
 
     private var rosterFilters: some View {
-        GlassCard(level: .surface) {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Filters")
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(GoStatsTheme.text2)
+        VStack(alignment: .leading, spacing: 8) {
+            GoStatsTheme.sectionHeader("FILTERS")
 
-                Picker("Roster Filter", selection: $selectedFilter) {
-                    Text("All").tag(RosterFilter.all)
-                    Text("Starters").tag(RosterFilter.starters)
-                    if sport.supportsGoalie {
-                        Text("Goalies").tag(RosterFilter.goalies)
-                    }
+            Picker("Roster Filter", selection: $selectedFilter) {
+                Text("All").tag(RosterFilter.all)
+                Text("Starters").tag(RosterFilter.starters)
+                if sport.supportsGoalie {
+                    Text("Goalies").tag(RosterFilter.goalies)
                 }
-                .pickerStyle(.segmented)
             }
+            .pickerStyle(.segmented)
         }
+        .padding(GoStatsTheme.cardPadding)
+        .background(
+            RoundedRectangle(cornerRadius: GoStatsTheme.cardRadius, style: .continuous)
+                .fill(Color.white)
+                .shadow(color: GoStatsTheme.cardShadowColor, radius: GoStatsTheme.cardShadowRadius, x: 0, y: GoStatsTheme.cardShadowY)
+        )
     }
 
     private var emptyState: some View {
-        GlassCard(level: .surface) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("No players yet")
-                    .font(.headline)
-                Text("Tap “Add Player” to build your roster.")
-                    .foregroundStyle(.secondary)
-            }
+        VStack(spacing: 8) {
+            Image(systemName: "person.3")
+                .font(.system(size: 28))
+                .foregroundStyle(GoStatsTheme.emptyStateColor)
+            Text("No players yet. Tap Add Player to start.")
+                .font(.system(size: 13))
+                .foregroundStyle(GoStatsTheme.emptyStateColor)
         }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 24)
     }
 
     private func refreshPlayers() {
@@ -347,34 +363,129 @@ struct TeamRosterView: View {
         teamStore.deletePlayer(player, from: teamID)
     }
 
-    private func shareRoster() {
-        guard let team else { return }
-        do {
-            let url = try RosterTransferService.exportFile(for: team)
-            shareSheetPayload = ShareSheetPayload(items: [url])
-        } catch {
-            rosterErrorMessage = error.localizedDescription
+    // MARK: - Share Overlay
+
+    private var shareOverlay: some View {
+        ZStack {
+            Color.black.opacity(0.7)
+                .ignoresSafeArea()
+
+            VStack(spacing: 40) {
+                Spacer()
+
+                switch sharingService.state {
+                case .sent:
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 80, weight: .medium))
+                        .foregroundStyle(.green)
+                    Text("Roster Shared Successfully!")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(.white)
+
+                case .received:
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 80, weight: .medium))
+                        .foregroundStyle(.green)
+                    Text("Roster Received!")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(.white)
+
+                case .receivingInvite(let peerName):
+                    GlassCard(level: .focus) {
+                        VStack(spacing: 16) {
+                            Image(systemName: "person.wave.2.fill")
+                                .font(.system(size: 36, weight: .semibold))
+                                .foregroundStyle(GoStatsTheme.teal)
+                            Text("\(peerName) wants to share a roster")
+                                .font(.system(size: 18, weight: .bold))
+                                .foregroundStyle(GoStatsTheme.text)
+                                .multilineTextAlignment(.center)
+                            HStack(spacing: 12) {
+                                Button { sharingService.declineInvitation() } label: {
+                                    Text("Decline").frame(maxWidth: .infinity)
+                                }
+                                .buttonStyle(GlassPillButtonStyle(fill: Color(.systemGray3)))
+                                Button { sharingService.acceptInvitation() } label: {
+                                    Text("Accept").frame(maxWidth: .infinity)
+                                }
+                                .buttonStyle(GlassPillButtonStyle(fill: GoStatsTheme.teal))
+                            }
+                        }
+                    }
+                    .frame(maxWidth: 320)
+
+                case .failed(let message):
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 80, weight: .medium))
+                        .foregroundStyle(.red)
+                    Text(message)
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(.white)
+
+                default:
+                    ZStack {
+                        ForEach(0..<3, id: \.self) { i in
+                            Circle()
+                                .stroke(GoStatsTheme.teal.opacity(0.6), lineWidth: 2)
+                                .frame(width: 80, height: 80)
+                                .scaleEffect(rippleActive ? 2.5 : 0.8)
+                                .opacity(rippleActive ? 0 : 0.7)
+                                .animation(
+                                    .easeOut(duration: 2.0)
+                                        .repeatForever(autoreverses: false)
+                                        .delay(Double(i) * 0.6),
+                                    value: rippleActive
+                                )
+                        }
+                        Circle()
+                            .fill(GoStatsTheme.teal)
+                            .frame(width: 60, height: 60)
+                        Image(systemName: "dot.radiowaves.left.and.right")
+                            .font(.system(size: 24, weight: .semibold))
+                            .foregroundStyle(.white)
+                    }
+                    Text(shareOverlayStatusText)
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(.white)
+                }
+
+                Spacer()
+
+                if case .searching = sharingService.state {
+                    shareCancelButton
+                } else if case .peerFound = sharingService.state {
+                    shareCancelButton
+                } else if case .sending = sharingService.state {
+                    shareCancelButton
+                } else if case .connecting = sharingService.state {
+                    shareCancelButton
+                }
+
+                Spacer().frame(height: 30)
+            }
         }
     }
 
-    private func startProximityShare() {
-        guard let team else { return }
-        proximityShare.startSharing(RosterSharePayload(team: team))
-        showProximityShare = true
+    private var shareOverlayStatusText: String {
+        switch sharingService.state {
+        case .searching: return "Searching for nearby devices..."
+        case .peerFound(let name): return "Found \(name)... sending"
+        case .sending: return "Sending roster..."
+        case .connecting: return "Receiving roster..."
+        default: return ""
+        }
     }
 
-    private func importReceivedRoster(_ payload: RosterSharePayload) {
-        let players = payload.players.map {
-            Player(
-                id: $0.id,
-                name: $0.name,
-                number: $0.jerseyNumber,
-                position: $0.position,
-                isGoalie: $0.isGoalie
-            )
+    private var shareCancelButton: some View {
+        Button {
+            sharingService.cancelSharing()
+        } label: {
+            Text("Cancel")
+                .font(.system(size: 17, weight: .medium))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 36)
+                .padding(.vertical, 12)
         }
-        importedPreview = RosterExport(team: Team(name: payload.teamName, players: players, startingOnFieldIDs: payload.players.filter(\.isStarter).map(\.id)))
-        showProximityShare = false
     }
 
     private func importRoster(from url: URL) {
@@ -498,7 +609,7 @@ private struct PlayerRowView: View, Equatable {
                     .frame(width: 44, height: 44)
                     .background(
                         Circle()
-                            .fill(GoStatsTheme.primary)
+                            .fill(GoStatsTheme.textPrimary)
                     )
 
                 VStack(alignment: .leading, spacing: 4) {
@@ -514,9 +625,9 @@ private struct PlayerRowView: View, Equatable {
                                 .padding(.vertical, 4)
                                 .background(
                                     Capsule()
-                                        .fill(GoStatsTheme.primary.opacity(0.18))
+                                        .fill(Color(hex: "f0f0f0"))
                                 )
-                                .foregroundStyle(GoStatsTheme.primary)
+                                .foregroundStyle(GoStatsTheme.textPrimary)
                         }
                     }
 
@@ -532,11 +643,11 @@ private struct PlayerRowView: View, Equatable {
                 if sport.supportsGoalie, player.derivedIsGoalie {
                     Label("Goalie", systemImage: "shield.fill")
                         .font(.caption.weight(.semibold))
-                        .foregroundStyle(GoStatsTheme.primary)
+                        .foregroundStyle(GoStatsTheme.textPrimary)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 6)
                         .background(
-                            Capsule().fill(GoStatsTheme.primary.opacity(0.18))
+                            Capsule().fill(Color(hex: "f0f0f0"))
                         )
                 }
             }
@@ -574,83 +685,202 @@ private struct EditPlayerSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section("Player") {
-                    TextField("Name", text: $name)
-                    if !isNameValid {
-                        Text("Name is required.")
-                            .font(.footnote)
-                            .foregroundStyle(.red)
-                    }
+            ZStack {
+                GoStatsTheme.bg.ignoresSafeArea()
 
-                    TextField("Number", text: $numberText)
-                        .keyboardType(.numberPad)
-                    if !isNumberValid {
-                        Text("Number must be between 0 and 99.")
-                            .font(.footnote)
-                            .foregroundStyle(.red)
-                    }
+                ScrollView {
+                    VStack(spacing: 20) {
 
-                    if sport.supportsPositions {
-                        Picker("Primary Position", selection: $position) {
-                            ForEach(Position.rosterPositions) { pos in
-                                Text(pos.rawValue).tag(pos)
+                        // Player avatar
+                        ZStack {
+                            Circle()
+                                .fill(GoStatsTheme.textPrimary)
+                                .frame(width: 80, height: 80)
+                            Text(numberText.isEmpty ? "#" : numberText)
+                                .font(.system(size: 28, weight: .bold))
+                                .foregroundStyle(.white)
+                        }
+                        .padding(.top, 8)
+
+                        // Name + Number card
+                        VStack(alignment: .leading, spacing: 16) {
+                            editField(label: "PLAYER NAME", icon: "person") {
+                                TextField("Full name", text: $name)
+                                    .font(.system(size: 16, weight: .medium))
+                                    .foregroundStyle(GoStatsTheme.textPrimary)
+                            }
+                            if !isNameValid {
+                                Text("Name is required.")
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(.red)
+                                    .padding(.top, -10)
+                            }
+
+                            Divider()
+
+                            editField(label: "JERSEY NUMBER", icon: "number") {
+                                TextField("0–99", text: $numberText)
+                                    .font(.system(size: 16, weight: .medium))
+                                    .foregroundStyle(GoStatsTheme.textPrimary)
+                                    .keyboardType(.numberPad)
+                            }
+                            if !isNumberValid {
+                                Text("Number must be between 0 and 99.")
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(.red)
+                                    .padding(.top, -10)
                             }
                         }
-                        .onChange(of: position) { _, newValue in
-                            positionName = newValue.rawValue
-                            if sport.supportsGoalie {
-                                isGoalie = newValue == .gk
+                        .padding(GoStatsTheme.cardPadding)
+                        .background(editCardBackground)
+
+                        // Position card
+                        if sport.supportsPositions {
+                            VStack(alignment: .leading, spacing: 16) {
+                                editField(label: "PRIMARY POSITION", icon: "mappin.and.ellipse") {
+                                    Picker("", selection: $position) {
+                                        ForEach(Position.rosterPositions) { pos in
+                                            Text(pos.rawValue).tag(pos)
+                                        }
+                                    }
+                                    .pickerStyle(.menu)
+                                    .tint(GoStatsTheme.textPrimary)
+                                }
+                                .onChange(of: position) { _, newValue in
+                                    positionName = newValue.rawValue
+                                    if sport.supportsGoalie {
+                                        isGoalie = newValue == .gk
+                                    }
+                                }
+
+                                Divider()
+
+                                editField(label: "SECONDARY POSITION", icon: "arrow.triangle.swap") {
+                                    Picker("", selection: $secondaryPosition) {
+                                        Text("None").tag(Position?.none)
+                                        ForEach(Position.rosterPositions) { pos in
+                                            Text(pos.rawValue).tag(Optional(pos))
+                                        }
+                                    }
+                                    .pickerStyle(.menu)
+                                    .tint(GoStatsTheme.textPrimary)
+                                }
+
+                                if sport.supportsGoalie {
+                                    Divider()
+                                    HStack {
+                                        Image(systemName: "shield.fill")
+                                            .font(.system(size: 14))
+                                            .foregroundStyle(GoStatsTheme.textMuted)
+                                            .frame(width: 20)
+                                        Text("Goalkeeper")
+                                            .font(.system(size: 10, weight: .semibold))
+                                            .tracking(0.5)
+                                            .textCase(.uppercase)
+                                            .foregroundStyle(GoStatsTheme.textMuted)
+                                        Spacer()
+                                        Toggle("", isOn: $isGoalie)
+                                            .labelsHidden()
+                                            .tint(GoStatsTheme.textPrimary)
+                                    }
+                                }
                             }
+                            .padding(GoStatsTheme.cardPadding)
+                            .background(editCardBackground)
                         }
 
-                        Picker("Secondary Position", selection: $secondaryPosition) {
-                            Text("None").tag(Position?.none)
-                            ForEach(Position.rosterPositions) { pos in
-                                Text(pos.rawValue).tag(Optional(pos))
+                        // Notes card
+                        VStack(alignment: .leading, spacing: 8) {
+                            editField(label: "NOTES", icon: "note.text") {
+                                TextField("Add notes...", text: $notes, axis: .vertical)
+                                    .font(.system(size: 15))
+                                    .foregroundStyle(GoStatsTheme.textPrimary)
+                                    .lineLimit(3...6)
                             }
                         }
-                    } else {
-                        TextField("Position (optional)", text: $positionName)
-                    }
+                        .padding(GoStatsTheme.cardPadding)
+                        .background(editCardBackground)
 
-                    if sport.supportsGoalie {
-                        Toggle("Goalie", isOn: $isGoalie)
-                    }
+                        // Save button
+                        Button {
+                            savePlayer()
+                        } label: {
+                            Text("Save Changes")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(.white)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 16)
+                                .background(
+                                    RoundedRectangle(cornerRadius: GoStatsTheme.cardRadius, style: .continuous)
+                                        .fill(GoStatsTheme.textPrimary.opacity(isFormValid ? 1.0 : 0.4))
+                                )
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(!isFormValid)
 
-                    TextField("Notes (optional)", text: $notes, axis: .vertical)
-                        .lineLimit(2...4)
+                        Button { dismiss() } label: {
+                            Text("Cancel")
+                                .font(.system(size: 14))
+                                .foregroundStyle(Color(hex: "aaaaaa"))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 40)
                 }
             }
             .navigationTitle("Edit Player")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Cancel") { dismiss() }
                 }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Save") {
-                        let trimmedNumber = numberText.trimmingCharacters(in: .whitespacesAndNewlines)
-                        let number = Int(trimmedNumber) ?? 0
-                        let jersey = trimmedNumber.isEmpty ? "\(number)" : trimmedNumber
-                        let resolvedPositionName = positionName.isEmpty ? position.rawValue : positionName
-                        let updated = Player(
-                            id: playerID,
-                            name: name.trimmingCharacters(in: .whitespacesAndNewlines),
-                            number: number,
-                            jersey: jersey,
-                            position: position,
-                            secondaryPosition: secondaryPosition,
-                            positionName: resolvedPositionName,
-                            isGoalie: sport.supportsGoalie ? isGoalie : nil,
-                            notes: notes.trimmingCharacters(in: .whitespacesAndNewlines)
-                        )
-                        onSave(updated)
-                        dismiss()
-                    }
-                    .disabled(!isFormValid)
-                }
             }
         }
+    }
+
+    private func editField<Content: View>(label: String, icon: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.system(size: 12))
+                    .foregroundStyle(GoStatsTheme.textMuted)
+                    .frame(width: 16)
+                Text(label)
+                    .font(.system(size: 10, weight: .semibold))
+                    .tracking(0.5)
+                    .foregroundStyle(GoStatsTheme.textMuted)
+            }
+            content()
+        }
+    }
+
+    private var editCardBackground: some View {
+        RoundedRectangle(cornerRadius: GoStatsTheme.cardRadius, style: .continuous)
+            .fill(Color.white)
+            .shadow(color: GoStatsTheme.cardShadowColor,
+                    radius: GoStatsTheme.cardShadowRadius,
+                    x: 0, y: GoStatsTheme.cardShadowY)
+    }
+
+    private func savePlayer() {
+        let trimmedNumber = numberText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let number = Int(trimmedNumber) ?? 0
+        let jersey = trimmedNumber.isEmpty ? "\(number)" : trimmedNumber
+        let resolvedPositionName = positionName.isEmpty ? position.rawValue : positionName
+        let updated = Player(
+            id: playerID,
+            name: name.trimmingCharacters(in: .whitespacesAndNewlines),
+            number: number,
+            jersey: jersey,
+            position: position,
+            secondaryPosition: secondaryPosition,
+            positionName: resolvedPositionName,
+            isGoalie: sport.supportsGoalie ? isGoalie : nil,
+            notes: notes.trimmingCharacters(in: .whitespacesAndNewlines)
+        )
+        onSave(updated)
+        dismiss()
     }
 
     private var isNameValid: Bool {

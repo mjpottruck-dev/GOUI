@@ -15,10 +15,10 @@ struct MatchFieldView: View {
 
             ZStack {
                 // Field base (kept simple + readable)
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                RoundedRectangle(cornerRadius: GoStatsTheme.rCard, style: .continuous)
                     .fill(fieldFill)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        RoundedRectangle(cornerRadius: GoStatsTheme.rCard, style: .continuous)
                             .stroke(border, lineWidth: 1)
                     )
 
@@ -31,7 +31,7 @@ struct MatchFieldView: View {
                 // Bottom goal box (v2 requirement: goal box at bottom)
                 VStack {
                     Spacer()
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    RoundedRectangle(cornerRadius: GoStatsTheme.rCard, style: .continuous)
                         .stroke(border.opacity(0.85), lineWidth: 1)
                         .frame(width: size.width * 0.55, height: size.height * 0.22)
                         .padding(.bottom, 18)
@@ -105,7 +105,7 @@ struct MatchFieldView: View {
                     )
 
                 Text("\(player.number)")
-                    .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                    .font(.custom("DM Mono", size: 13))
                     .foregroundStyle(GoStatsTheme.text)
             }
             .frame(width: 42, height: 42)

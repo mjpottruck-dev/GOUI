@@ -1,61 +1,184 @@
 import SwiftUI
+import CoreLocation
 
 struct EndMatchSheet: View {
 
     @ObservedObject var store: MatchStore
-
     let teamStore: TeamStore
     let teamID: UUID
-
     let team: Team
     let formation: Formation
+    var onMatchSaved: (() -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
+    @StateObject private var locationManager = LocationHelper()
 
     @State private var opponent: String = ""
-    @State private var title: String = ""
-    @State private var notes: String = ""
-    @State private var shareSheetPayload: ShareSheetPayload? = nil
-    @State private var exportError: String? = nil
+    @State private var venue: String = ""
+    @State private var showOpponentError = false
+    @State private var savedRecord: MatchRecord? = nil
+    @State private var showExportSheet = false
+
+    private var canSave: Bool {
+        !opponent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section("Summary") {
-                    HStack {
-                        Text("Score")
-                        Spacer()
-                        Text("\(store.goalsFor)–\(store.goalsAgainst)")
-                            .monospacedDigit()
-                            .foregroundStyle(.secondary)
-                    }
-                    HStack {
-                        Text("Time")
-                        Spacer()
-                        Text(store.timeString)
-                            .monospacedDigit()
-                            .foregroundStyle(.secondary)
-                    }
-                }
+            ZStack {
+                Color(hex: "f5f5f5").ignoresSafeArea()
 
-                Section("Match Info") {
-                    TextField("Opponent", text: $opponent)
-                    TextField("Title (optional)", text: $title)
-                    TextField("Notes (optional)", text: $notes, axis: .vertical)
-                        .lineLimit(3...8)
-                }
+                ScrollView {
+                    VStack(spacing: GoStatsTheme.cardGap) {
 
-                Section {
-                    Button("Export → MaxPreps (.txt)") {
-                        exportMaxPreps()
+                        // Summary card
+                        VStack(spacing: 12) {
+                            GoStatsTheme.sectionHeader("SUMMARY")
+                                .frame(maxWidth: .infinity, alignment: .leading)
+
+                            HStack {
+                                Text("Score")
+                                    .font(.system(size: 15))
+                                    .foregroundStyle(GoStatsTheme.textPrimary)
+                                Spacer()
+                                Text("\(store.goalsFor) - \(store.goalsAgainst)")
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .monospacedDigit()
+                                    .foregroundStyle(GoStatsTheme.textMuted)
+                            }
+
+                            Rectangle().fill(GoStatsTheme.divider).frame(height: GoStatsTheme.dividerWidth)
+
+                            HStack {
+                                Text("Time")
+                                    .font(.system(size: 15))
+                                    .foregroundStyle(GoStatsTheme.textPrimary)
+                                Spacer()
+                                Text(store.timeString)
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .monospacedDigit()
+                                    .foregroundStyle(GoStatsTheme.textMuted)
+                            }
+                        }
+                        .padding(GoStatsTheme.cardPadding)
+                        .background(
+                            RoundedRectangle(cornerRadius: GoStatsTheme.cardRadius, style: .continuous)
+                                .fill(Color.white)
+                                .shadow(color: GoStatsTheme.cardShadowColor,
+                                        radius: GoStatsTheme.cardShadowRadius,
+                                        x: 0, y: GoStatsTheme.cardShadowY)
+                        )
+
+                        // Opponent card
+                        VStack(alignment: .leading, spacing: 12) {
+                            GoStatsTheme.sectionHeader("OPPONENT")
+
+                            TextField("Opponent name", text: $opponent)
+                                .font(.system(size: 15))
+                                .foregroundStyle(GoStatsTheme.textPrimary)
+                                .textInputAutocapitalization(.words)
+                                .autocorrectionDisabled()
+                                .onChange(of: opponent) { _, _ in
+                                    if showOpponentError && !opponent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                        showOpponentError = false
+                                    }
+                                }
+
+                            if showOpponentError {
+                                Text("Opponent name is required")
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(.red)
+                            }
+                        }
+                        .padding(GoStatsTheme.cardPadding)
+                        .background(
+                            RoundedRectangle(cornerRadius: GoStatsTheme.cardRadius, style: .continuous)
+                                .fill(Color.white)
+                                .shadow(color: GoStatsTheme.cardShadowColor,
+                                        radius: GoStatsTheme.cardShadowRadius,
+                                        x: 0, y: GoStatsTheme.cardShadowY)
+                        )
+
+                        // Location card
+                        VStack(alignment: .leading, spacing: 12) {
+                            GoStatsTheme.sectionHeader("LOCATION")
+
+                            HStack(spacing: 12) {
+                                Button {
+                                    locationManager.requestLocation { address in
+                                        if let address { venue = address }
+                                    }
+                                } label: {
+                                    HStack(spacing: 6) {
+                                        if locationManager.isLoading {
+                                            ProgressView().controlSize(.small)
+                                        } else {
+                                            Image(systemName: "location.fill")
+                                                .font(.system(size: 12))
+                                        }
+                                        Text("Current Location")
+                                            .font(.system(size: 13, weight: .medium))
+                                    }
+                                    .foregroundStyle(GoStatsTheme.textPrimary)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 8)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                            .fill(Color(hex: "f0f0f0"))
+                                    )
+                                }
+                                .buttonStyle(.plain)
+                                .disabled(locationManager.isLoading)
+
+                                Spacer()
+                            }
+
+                            Rectangle().fill(GoStatsTheme.divider).frame(height: GoStatsTheme.dividerWidth)
+
+                            TextField("Or type location", text: $venue)
+                                .font(.system(size: 15))
+                                .foregroundStyle(GoStatsTheme.textPrimary)
+                                .textInputAutocapitalization(.words)
+                        }
+                        .padding(GoStatsTheme.cardPadding)
+                        .background(
+                            RoundedRectangle(cornerRadius: GoStatsTheme.cardRadius, style: .continuous)
+                                .fill(Color.white)
+                                .shadow(color: GoStatsTheme.cardShadowColor,
+                                        radius: GoStatsTheme.cardShadowRadius,
+                                        x: 0, y: GoStatsTheme.cardShadowY)
+                        )
+
+                        // Save button
+                        Button { attemptSave() } label: {
+                            Text("Save Match")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(.white)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 14)
+                                .background(
+                                    RoundedRectangle(cornerRadius: GoStatsTheme.cardRadius, style: .continuous)
+                                        .fill(GoStatsTheme.textPrimary)
+                                )
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.top, 4)
+
+                        // Discard — small muted text link
+                        Button {
+                            store.resetForNewMatch(team: team, formation: formation, seasonID: teamStore.activeSeasonID)
+                            dismiss()
+                        } label: {
+                            Text("Discard Match")
+                                .font(.system(size: 12))
+                                .foregroundStyle(GoStatsTheme.textMuted)
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.top, 4)
                     }
-
-                    Button("Save Match") { saveMatch() }
-                        .disabled(opponent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-
-                    Button("Discard Match", role: .destructive) {
-                        discardMatch()
-                    }
+                    .padding(.horizontal, GoStatsTheme.cardMargin)
+                    .padding(.top, 16)
+                    .padding(.bottom, 40)
                 }
             }
             .navigationTitle("End Match")
@@ -66,83 +189,98 @@ struct EndMatchSheet: View {
                 }
             }
         }
-        .sheet(item: $shareSheetPayload) { payload in
-            ShareSheet(activityItems: payload.items)
-        }
-        .alert("Export Failed", isPresented: Binding(get: { exportError != nil }, set: { _ in exportError = nil })) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(exportError ?? "")
-        }
-    }
-
-    private func saveMatch() {
-        let record = store.buildMatchRecord(
-            opponent: opponent,
-            title: title,
-            notes: notes
-        )
-
-        teamStore.addMatchRecord(teamID: teamID, record: record)
-
-        store.resetForNewMatch(team: team, formation: formation, seasonID: teamStore.activeSeasonID)
-
-        dismiss()
-    }
-
-    private func discardMatch() {
-        store.resetForNewMatch(team: team, formation: formation, seasonID: teamStore.activeSeasonID)
-        dismiss()
-    }
-
-    private func exportMaxPreps() {
-        let record = store.buildMatchRecord(
-            opponent: opponent,
-            title: title,
-            notes: notes
-        )
-        let matchName = title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            ? opponent
-            : title
-        let safeName = MaxPrepsExport.sanitizedFilename(matchName.isEmpty ? "Match" : matchName)
-
-        let teamRows = MaxPrepsExport.teamRows(
-            players: store.players,
-            stats: record.playerStats,
-            seconds: record.playerSeconds
-        )
-        let teamText = MaxPrepsExport.text(fields: MaxPrepsExport.teamFields, rows: teamRows)
-
-        do {
-            var urls: [URL] = []
-            let teamURL = try MaxPrepsExport.writeTempTXT(
-                filename: "MaxPreps_\(safeName)_Team",
-                contents: teamText
-            )
-            urls.append(teamURL)
-
-            let keeperRows = MaxPrepsExport.keeperRows(
-                players: store.players,
-                stats: record.playerStats,
-                seconds: record.playerSeconds
-            )
-            if !keeperRows.isEmpty {
-                let keeperText = MaxPrepsExport.text(fields: MaxPrepsExport.keeperFields, rows: keeperRows)
-                let keeperURL = try MaxPrepsExport.writeTempTXT(
-                    filename: "MaxPreps_\(safeName)_Keeper",
-                    contents: keeperText
+        .sheet(isPresented: $showExportSheet) {
+            if let record = savedRecord {
+                PostMatchExportSheet(
+                    match: record,
+                    team: team,
+                    players: store.players,
+                    onDone: {
+                        dismiss()
+                        onMatchSaved?()
+                    }
                 )
-                urls.append(keeperURL)
             }
-
-            shareSheetPayload = ShareSheetPayload(items: urls)
-        } catch {
-            exportError = error.localizedDescription
         }
     }
 
-    private struct ShareSheetPayload: Identifiable {
-        let id = UUID()
-        let items: [URL]
+    private func attemptSave() {
+        guard canSave else {
+            showOpponentError = true
+            return
+        }
+        let record = store.buildMatchRecord(
+            opponent: opponent,
+            title: "",
+            notes: "",
+            venue: venue
+        )
+        teamStore.addMatchRecord(teamID: teamID, record: record)
+        savedRecord = record
+
+        // Analyze substitution patterns from this match
+        SubstitutionPatternStore.shared.analyzeMatch(record, teamPlayers: team.players)
+
+        store.resetForNewMatch(team: team, formation: formation, seasonID: teamStore.activeSeasonID)
+        showExportSheet = true
+    }
+}
+
+// MARK: - Location Helper
+
+private final class LocationHelper: NSObject, ObservableObject, CLLocationManagerDelegate {
+    @Published var isLoading = false
+    private let manager = CLLocationManager()
+    private var completion: ((String?) -> Void)?
+
+    override init() {
+        super.init()
+        manager.delegate = self
+        manager.desiredAccuracy = kCLLocationAccuracyHundredMeters
+    }
+
+    func requestLocation(completion: @escaping (String?) -> Void) {
+        self.completion = completion
+        isLoading = true
+
+        switch manager.authorizationStatus {
+        case .notDetermined:
+            manager.requestWhenInUseAuthorization()
+        case .authorizedWhenInUse, .authorizedAlways:
+            manager.requestLocation()
+        default:
+            isLoading = false
+            completion(nil)
+        }
+    }
+
+    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        if manager.authorizationStatus == .authorizedWhenInUse || manager.authorizationStatus == .authorizedAlways {
+            if isLoading { manager.requestLocation() }
+        }
+    }
+
+    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        guard let location = locations.first else {
+            isLoading = false
+            completion?(nil)
+            return
+        }
+        CLGeocoder().reverseGeocodeLocation(location) { [weak self] placemarks, _ in
+            DispatchQueue.main.async {
+                self?.isLoading = false
+                if let pm = placemarks?.first {
+                    let parts = [pm.name, pm.locality, pm.administrativeArea].compactMap { $0 }
+                    self?.completion?(parts.joined(separator: ", "))
+                } else {
+                    self?.completion?(nil)
+                }
+            }
+        }
+    }
+
+    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        isLoading = false
+        completion?(nil)
     }
 }

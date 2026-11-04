@@ -1,224 +1,625 @@
 import SwiftUI
-import Observation
 
 struct HomeView: View {
 
     @ObservedObject var store: MatchStore
     @Bindable var teamStore: TeamStore
     @Binding var selectedTeamID: UUID?
+    var onStartMatch: (UUID) -> Void
 
-    @State private var showingCreateTeam = false
-    @State private var newTeamName: String = ""
+    @State private var opponentName = ""
+    @State private var opponentVenue = ""
+
+    @StateObject private var sharingService = RosterSharingService()
+    @State private var rippleActive = false
+    @State private var showCreateTeam = false
+    @State private var seasonInsight: String? = nil
+    @State private var showSeasonInsightBanner = false
+    @State private var showSeasonReport = false
+
+    // MARK: - Resolved helpers
 
     private var resolvedTeamID: UUID? {
-        if let id = selectedTeamID { return id }
-        return teamStore.teams.first?.id
+        selectedTeamID ?? teamStore.teams.first?.id
     }
 
-    private var resolvedTeamName: String {
-        guard
-            let tid = resolvedTeamID,
-            let t = teamStore.teams.first(where: { $0.id == tid })
-        else { return "My Team" }
-        return t.name.isEmpty ? "My Team" : t.name
+    private var resolvedTeam: Team? {
+        guard let tid = resolvedTeamID else { return nil }
+        return teamStore.teams.first(where: { $0.id == tid })
     }
+
+    private var teamInitials: String {
+        guard let name = resolvedTeam?.name, !name.isEmpty else { return "--" }
+        return String(name.prefix(2)).uppercased()
+    }
+
+    private var startButtonTitle: String {
+        if store.isActive {
+            return store.isRunning ? "Game In Progress" : "Resume Game"
+        }
+        return "Start Match"
+    }
+
+    /// Whether the share overlay should be visible
+    private var showOverlay: Bool {
+        switch sharingService.state {
+        case .idle, .cancelled:
+            return false
+        case .searching, .peerFound, .sending, .sent, .failed,
+             .receivingInvite, .connecting, .received:
+            return true
+        }
+    }
+
+    // MARK: - W-D-L computed
+
+    private var wins: Int {
+        resolvedTeam?.matches.filter { $0.goalsFor > $0.goalsAgainst }.count ?? 0
+    }
+    private var draws: Int {
+        resolvedTeam?.matches.filter { $0.goalsFor == $0.goalsAgainst }.count ?? 0
+    }
+    private var losses: Int {
+        resolvedTeam?.matches.filter { $0.goalsFor < $0.goalsAgainst }.count ?? 0
+    }
+
+    // MARK: - Body
 
     var body: some View {
-        let _ = DebugRenderLogger.log("HomeView", enabled: DebugSettings.renderCountsEnabled)
-
         ZStack {
-            GoStatsTheme.bg.ignoresSafeArea()
-
             ScrollView {
-                VStack(spacing: 16) {
+                VStack(alignment: .leading, spacing: GoStatsTheme.cardGap) {
 
-                    // Header card (NO small + button)
-                    LiquidGlassContainer(material: .thinMaterial) {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text("GoStats")
-                                    .font(.system(size: 26, weight: .semibold))
-                                    .foregroundStyle(GoStatsTheme.text)
-
-                                Text(resolvedTeamName)
-                                    .font(.system(size: 16, weight: .medium))
-                                    .foregroundStyle(GoStatsTheme.text2)
-                            }
-
-                            Spacer()
+                    // -- 1. App logo icon (long-press to create team) --
+                    Image(systemName: "soccerball")
+                        .font(.system(size: 28, weight: .regular))
+                        .foregroundStyle(GoStatsTheme.textPrimary)
+                        .padding(.top, 14)
+                        .onLongPressGesture {
+                            showCreateTeam = true
                         }
-                        .padding(.vertical, 6)
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.top, 12)
 
-                    // Start Match -> send user to Match tab pre-match flow
-                    // (You said toolbar should only be visible AFTER you hit Start Match —
-                    // we’ll keep match stuff inside the Match tab flow.)
-                    NavigationLink {
-                        HomePreMatchView(
-                            store: store,
-                            teamStore: teamStore,
-                            selectedTeamID: $selectedTeamID,
-                            onStartMatch: { teamID in
-                                selectedTeamID = teamID
+                    // -- 2. Team pill selector --
+                    TeamPillSelector(
+                        teams: teamStore.teams,
+                        selectedTeamID: $selectedTeamID,
+                        onCreateTeam: { showCreateTeam = true }
+                    )
+                    .padding(.horizontal, -GoStatsTheme.cardMargin)
+
+                    // -- 3. Hero card: Season Record --
+                    VStack(spacing: 16) {
+                        HStack {
+                            sectionLabel("SEASON RECORD")
+                            Spacer()
+
+                            // Share roster button
+                            Button {
+                                guard let team = resolvedTeam else { return }
+                                sharingService.startSharing(team: team)
+                            } label: {
+                                Image(systemName: "dot.radiowaves.left.and.right")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundStyle(GoStatsTheme.textMuted)
                             }
-                        )
-                    } label: {
-                        primaryCard(
-                            title: "Start Match",
-                            subtitle: "Select a team, then open the match tracker",
-                            icon: "play.fill"
-                        )
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.horizontal, 16)
+                            .disabled(resolvedTeam == nil)
+                        }
 
-                    // Archive
-                    if let tid = resolvedTeamID {
-                        NavigationLink {
-                            TeamArchiveView(teamStore: teamStore, teamID: tid)
+                        HStack(spacing: 0) {
+                            // Wins
+                            VStack(spacing: 4) {
+                                Text("\(wins)")
+                                    .font(.system(size: 48, weight: .bold))
+                                    .foregroundStyle(GoStatsTheme.textPrimary)
+                                Text("Wins")
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundStyle(GoStatsTheme.textMuted)
+                            }
+                            .frame(maxWidth: .infinity)
+
+                            Rectangle()
+                                .fill(GoStatsTheme.divider)
+                                .frame(width: GoStatsTheme.dividerWidth, height: 48)
+
+                            // Draws
+                            VStack(spacing: 4) {
+                                Text("\(draws)")
+                                    .font(.system(size: 48, weight: .bold))
+                                    .foregroundStyle(GoStatsTheme.textPrimary)
+                                Text("Draws")
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundStyle(GoStatsTheme.textMuted)
+                            }
+                            .frame(maxWidth: .infinity)
+
+                            Rectangle()
+                                .fill(GoStatsTheme.divider)
+                                .frame(width: GoStatsTheme.dividerWidth, height: 48)
+
+                            // Losses
+                            VStack(spacing: 4) {
+                                Text("\(losses)")
+                                    .font(.system(size: 48, weight: .bold))
+                                    .foregroundStyle(GoStatsTheme.textPrimary)
+                                Text("Losses")
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundStyle(GoStatsTheme.textMuted)
+                            }
+                            .frame(maxWidth: .infinity)
+                        }
+                    }
+                    .modifier(CardStyle())
+
+                    // -- Season Insight Banner --
+                    if showSeasonInsightBanner, let insight = seasonInsight, let team = resolvedTeam {
+                        Button {
+                            showSeasonReport = true
                         } label: {
-                            primaryCard(
-                                title: "Archive",
-                                subtitle: "View saved matches",
-                                icon: "archivebox.fill"
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "sparkles")
+                                        .font(.system(size: 12))
+                                        .foregroundStyle(GoStatsTheme.textMuted)
+                                    Text("SEASON INSIGHT")
+                                        .font(.system(size: 10, weight: .semibold))
+                                        .tracking(1)
+                                        .foregroundStyle(GoStatsTheme.textMuted)
+                                    Spacer()
+                                    Button {
+                                        withAnimation { showSeasonInsightBanner = false }
+                                    } label: {
+                                        Text("Dismiss")
+                                            .font(.system(size: 12))
+                                            .foregroundStyle(Color(hex: "aaaaaa"))
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+
+                                Text(insight)
+                                    .font(.system(size: 14))
+                                    .foregroundStyle(GoStatsTheme.textPrimary)
+                                    .multilineTextAlignment(.leading)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            .padding(GoStatsTheme.cardPadding)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(
+                                RoundedRectangle(cornerRadius: GoStatsTheme.cardRadius, style: .continuous)
+                                    .fill(Color.white)
+                                    .shadow(color: GoStatsTheme.cardShadowColor,
+                                            radius: GoStatsTheme.cardShadowRadius,
+                                            x: 0, y: GoStatsTheme.cardShadowY)
                             )
                         }
                         .buttonStyle(.plain)
-                        .padding(.horizontal, 16)
-                    } else {
-                        primaryCard(
-                            title: "Archive",
-                            subtitle: "Create a team first",
-                            icon: "archivebox.fill"
-                        )
-                        .padding(.horizontal, 16)
-                        .opacity(0.6)
+                        .navigationDestination(isPresented: $showSeasonReport) {
+                            SeasonReportView(team: team, insightText: insight)
+                        }
                     }
 
-                    // ✅ ONLY ONE Create New Team button (big one)
+                    // -- 4. Start Match (hero button) --
                     Button {
-                        newTeamName = ""
-                        showingCreateTeam = true
+                        guard let tid = resolvedTeamID else { return }
+                        selectedTeamID = tid
+                        onStartMatch(tid)
                     } label: {
-                        Text("Create New Team")
-                            .font(.system(size: 18, weight: .semibold))
+                        Text(startButtonTitle)
+                            .font(.system(size: 16, weight: .semibold))
                             .foregroundStyle(.white)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 16)
                             .background(
-                                RoundedRectangle(cornerRadius: 26, style: .continuous)
-                                    .fill(Color.teal)
+                                RoundedRectangle(cornerRadius: GoStatsTheme.cardRadius, style: .continuous)
+                                    .fill(GoStatsTheme.textPrimary)
                             )
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.top, 4)
+                    .buttonStyle(.plain)
+                    .disabled(teamStore.teams.isEmpty)
 
-                    Spacer(minLength: 30)
+                    // -- 5. Navigation rows --
+                    VStack(spacing: 10) {
+                        NavigationLink {
+                            if let tid = resolvedTeamID {
+                                TeamRosterView(teamStore: teamStore, teamID: tid, incomingRosterURL: .constant(nil))
+                            } else {
+                                Text("Select a team first").foregroundStyle(.secondary)
+                            }
+                        } label: {
+                            navRow(title: "View Roster", icon: "person.3")
+                        }
+                        .buttonStyle(.plain)
+
+                        NavigationLink {
+                            if let tid = resolvedTeamID {
+                                StatsView(teamStore: teamStore, teamID: tid)
+                            } else {
+                                Text("Select a team first").foregroundStyle(.secondary)
+                            }
+                        } label: {
+                            navRow(title: "Season Stats", icon: "chart.bar")
+                        }
+                        .buttonStyle(.plain)
+
+                        NavigationLink {
+                            if let team = resolvedTeam {
+                                TeamStatsView(team: team)
+                            } else {
+                                Text("Select a team first").foregroundStyle(.secondary)
+                            }
+                        } label: {
+                            navRow(title: "Player Stats", icon: "person.text.rectangle")
+                        }
+                        .buttonStyle(.plain)
+
+                        NavigationLink {
+                            if let tid = resolvedTeamID {
+                                TeamArchiveView(teamStore: teamStore, teamID: tid)
+                            } else {
+                                Text("Select a team first").foregroundStyle(.secondary)
+                            }
+                        } label: {
+                            navRow(title: "Match Archive", icon: "clock.arrow.circlepath")
+                        }
+                        .buttonStyle(.plain)
+
+                    }
                 }
-                .padding(.bottom, 120)
+                .padding(.horizontal, GoStatsTheme.cardMargin)
+                .padding(.bottom, 40)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(GoStatsTheme.bg)
+
+            // -- Share Overlay --
+            if showOverlay {
+                shareOverlay
+                    .transition(.opacity)
             }
         }
         .navigationTitle("")
         .navigationBarHidden(true)
+        .sheet(isPresented: $showCreateTeam) {
+            CreateTeamView(teamStore: teamStore) { newTeamID in
+                selectedTeamID = newTeamID
+            }
+        }
         .onAppear {
             if selectedTeamID == nil {
                 selectedTeamID = teamStore.teams.first?.id
             }
+            sharingService.startListening()
+            loadSeasonInsight()
         }
-        .sheet(isPresented: $showingCreateTeam) {
-            createTeamSheet
+        .onDisappear {
+            sharingService.stopListening()
+        }
+        .onChange(of: selectedTeamID) { _, _ in
+            showSeasonInsightBanner = false
+            seasonInsight = nil
+            loadSeasonInsight()
+        }
+        // When a roster is received, create a new team with the full roster
+        .onChange(of: sharingService.receivedRoster?.teamName) { _, newName in
+            print("[RosterShare-UI] onChange(receivedRoster?.teamName) fired! newName=\(newName ?? "nil")")
+            guard let roster = sharingService.receivedRoster else {
+                print("[RosterShare-UI]   receivedRoster is nil -- skipping")
+                return
+            }
+            print("[RosterShare-UI]   Creating team from roster: \(roster.teamName) with \(roster.players.count) players")
+            let players = roster.players.map { shared in
+                Player(
+                    name: shared.name,
+                    number: shared.number,
+                    position: Position(rawValue: shared.position) ?? .cm
+                )
+            }
+            let goalkeeperDepth = Team.goalkeeperDepthIDs(from: players)
+            let newTeam = Team(
+                name: roster.teamName,
+                players: players,
+                startingOnFieldIDs: [],
+                primaryGoalkeeperID: goalkeeperDepth.primary,
+                secondaryGoalkeeperID: goalkeeperDepth.secondary,
+                thirdGoalkeeperID: goalkeeperDepth.third
+            )
+            teamStore.addTeam(newTeam)
+            selectedTeamID = newTeam.id
+            print("[RosterShare-UI]   Team '\(newTeam.name)' added! ID=\(newTeam.id)")
+            // Send ACK to sender AFTER team is saved
+            sharingService.sendAck()
+            sharingService.receivedRoster = nil
+        }
+        // Drive ripple on/off based on real state
+        .onChange(of: sharingService.state) { _, newState in
+            print("[RosterShare-UI] onChange(state) fired! newState=\(newState)")
+            switch newState {
+            case .searching, .connecting:
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                    rippleActive = true
+                }
+            case .peerFound, .sending, .sent, .failed, .cancelled, .idle,
+                 .receivingInvite, .received:
+                rippleActive = false
+            }
         }
     }
 
-    private var createTeamSheet: some View {
-        NavigationStack {
-            ZStack {
-                GoStatsTheme.bg.ignoresSafeArea()
+    // MARK: - Share Overlay
 
-                VStack(spacing: 14) {
-                    Text("Create Team")
-                        .font(.system(size: 22, weight: .semibold))
-                        .foregroundStyle(GoStatsTheme.text)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+    private var shareOverlay: some View {
+        ZStack {
+            Color.black.opacity(0.7)
+                .ignoresSafeArea()
 
-                    LiquidGlassContainer(material: .thinMaterial) {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("TEAM NAME")
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(GoStatsTheme.text2)
+            VStack(spacing: 40) {
+                Spacer()
 
-                            TextField("e.g. Varsity", text: $newTeamName)
-                                .textInputAutocapitalization(.words)
-                                .disableAutocorrection(true)
-                                .foregroundStyle(GoStatsTheme.text)
-                                .padding(.vertical, 6)
-                        }
-                    }
+                switch sharingService.state {
 
-                    Spacer()
+                // -- Sent Success (sender) --
+                case .sent:
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 80, weight: .medium))
+                        .foregroundStyle(.green)
+                        .transition(.scale.combined(with: .opacity))
 
-                    Button {
-                        let name = newTeamName.trimmingCharacters(in: .whitespacesAndNewlines)
-                        guard !name.isEmpty else { return }
-
-                        // Create + select the team
-                        let team = Team(name: name)
-                        teamStore.addTeam(team)
-                        selectedTeamID = team.id
-
-                        showingCreateTeam = false
-                    } label: {
-                        Text("Create")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 16)
-                            .background(
-                                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                                    .fill(Color.teal)
-                            )
-                    }
-                    .padding(.bottom, 6)
-                }
-                .padding(16)
-            }
-            .navigationTitle("")
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Cancel") { showingCreateTeam = false }
-                        .foregroundStyle(.red)
-                }
-            }
-        }
-        .presentationDetents([.medium])
-    }
-
-    private func primaryCard(title: String, subtitle: String, icon: String) -> some View {
-        LiquidGlassContainer(material: .thinMaterial) {
-            HStack(spacing: 12) {
-                Image(systemName: icon)
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(Color.teal)
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(title)
+                    Text("Roster Shared Successfully!")
                         .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(GoStatsTheme.text)
+                        .foregroundStyle(.white)
+                        .transition(.opacity)
 
-                    Text(subtitle)
-                        .font(.system(size: 13))
-                        .foregroundStyle(GoStatsTheme.text2)
+                // -- Received Success (receiver) --
+                case .received:
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 80, weight: .medium))
+                        .foregroundStyle(.green)
+                        .transition(.scale.combined(with: .opacity))
+
+                    Text("Roster Received!")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .transition(.opacity)
+
+                // -- Incoming Invite (receiver) --
+                case .receivingInvite(let peerName):
+                    incomingInviteCard(peerName: peerName)
+                        .transition(.scale.combined(with: .opacity))
+
+                // -- Failed --
+                case .failed(let message):
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 80, weight: .medium))
+                        .foregroundStyle(.red)
+                        .transition(.scale.combined(with: .opacity))
+
+                    Text(message)
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .transition(.opacity)
+
+                // -- Searching / PeerFound / Sending --
+                default:
+                    ZStack {
+                        ForEach(0..<3, id: \.self) { i in
+                            Circle()
+                                .stroke(GoStatsTheme.teal.opacity(0.6), lineWidth: 2)
+                                .frame(width: 80, height: 80)
+                                .scaleEffect(rippleActive ? 2.5 : 0.8)
+                                .opacity(rippleActive ? 0 : 0.7)
+                                .animation(
+                                    .easeOut(duration: 2.0)
+                                        .repeatForever(autoreverses: false)
+                                        .delay(Double(i) * 0.6),
+                                    value: rippleActive
+                                )
+                        }
+
+                        Circle()
+                            .fill(GoStatsTheme.teal)
+                            .frame(width: 60, height: 60)
+
+                        Image(systemName: "dot.radiowaves.left.and.right")
+                            .font(.system(size: 24, weight: .semibold))
+                            .foregroundStyle(.white)
+                    }
+
+                    Text(overlayStatusText)
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(.white)
+                        .animation(.easeInOut(duration: 0.2), value: overlayStatusText)
                 }
 
                 Spacer()
 
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(GoStatsTheme.text2)
+                // Cancel button (hidden on terminal states)
+                if case .searching = sharingService.state {
+                    cancelButton
+                } else if case .peerFound = sharingService.state {
+                    cancelButton
+                } else if case .sending = sharingService.state {
+                    cancelButton
+                } else if case .connecting = sharingService.state {
+                    cancelButton
+                }
+
+                Spacer().frame(height: 30)
             }
-            .padding(.vertical, 8)
         }
+    }
+
+    private var overlayStatusText: String {
+        switch sharingService.state {
+        case .searching:
+            return "Searching for nearby devices..."
+        case .peerFound(let name):
+            return "Found \(name)... sending"
+        case .sending:
+            return "Sending roster..."
+        case .connecting:
+            return "Receiving roster..."
+        default:
+            return ""
+        }
+    }
+
+    private var cancelButton: some View {
+        Button {
+            sharingService.cancelSharing()
+        } label: {
+            Text("Cancel")
+                .font(.system(size: 17, weight: .medium))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 36)
+                .padding(.vertical, 12)
+        }
+    }
+
+    // MARK: - Incoming Invite Card
+
+    private func incomingInviteCard(peerName: String) -> some View {
+        GlassCard(level: .focus) {
+            VStack(spacing: 16) {
+                Image(systemName: "person.wave.2.fill")
+                    .font(.system(size: 36, weight: .semibold))
+                    .foregroundStyle(GoStatsTheme.teal)
+
+                Text("\(peerName) wants to share a roster")
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundStyle(GoStatsTheme.text)
+                    .multilineTextAlignment(.center)
+
+                Text("Their full team roster will be saved as a new team on your device.")
+                    .font(.system(size: 14))
+                    .foregroundStyle(GoStatsTheme.text2)
+                    .multilineTextAlignment(.center)
+
+                HStack(spacing: 12) {
+                    Button {
+                        print("[RosterShare-UI] Decline button tapped")
+                        sharingService.declineInvitation()
+                    } label: {
+                        Text("Decline")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(GlassPillButtonStyle(fill: Color(.systemGray3)))
+
+                    Button {
+                        print("[RosterShare-UI] Accept button tapped")
+                        print("[RosterShare-UI]   sharingService.receivedRoster is \(sharingService.receivedRoster == nil ? "nil" : "set")")
+                        print("[RosterShare-UI]   sharingService.state = \(sharingService.state)")
+                        sharingService.acceptInvitation()
+                    } label: {
+                        Text("Accept")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(GlassPillButtonStyle(fill: GoStatsTheme.teal))
+                }
+            }
+        }
+        .frame(maxWidth: 320)
+    }
+
+    // MARK: - Share Roster PDF
+
+    private func shareRosterPDF() {
+        guard let team = resolvedTeam else { return }
+        let starterIDs = Set(team.startingOnFieldIDs)
+        let url = RosterPDFGenerator.generatePDF(team: team, starterIDs: starterIDs)
+        // Present via share sheet using a temporary UIActivityViewController
+        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+           let root = windowScene.windows.first?.rootViewController {
+            let vc = UIActivityViewController(activityItems: [url], applicationActivities: nil)
+            root.present(vc, animated: true)
+        }
+    }
+
+    // MARK: - Section Label
+
+    // MARK: - Season Insight
+
+    private func loadSeasonInsight() {
+        guard let team = resolvedTeam else { return }
+        let cacheKey = "season_insight_\(team.id.uuidString)"
+        let countKey = "season_insight_match_count_\(team.id.uuidString)"
+
+        let cachedCount = UserDefaults.standard.integer(forKey: countKey)
+        let currentCount = team.matches.count
+
+        // Check if cached insight exists and is still valid
+        if let cached = MatchAIService.cachedText(forKey: cacheKey), cachedCount == currentCount {
+            seasonInsight = cached
+            showSeasonInsightBanner = true
+            return
+        }
+
+        // Check if we crossed a 3-match boundary
+        guard currentCount >= 3, currentCount % 3 == 0, currentCount != cachedCount else {
+            return
+        }
+
+        // Generate new insight
+        let context = MatchAIService.buildSeasonContext(team: team, lastNMatches: 3)
+        let systemPrompt = "You are a youth soccer season analyst. Given the last 3 matches of data for this team, provide a brief season update highlighting: overall form, top performers, and one area to focus on. Keep it encouraging and specific. 2-3 sentences. Return only the text."
+
+        Task {
+            do {
+                let text = try await MatchAIService.generate(systemPrompt: systemPrompt, userMessage: context)
+                await MainActor.run {
+                    seasonInsight = text
+                    showSeasonInsightBanner = true
+                    MatchAIService.cacheText(text, forKey: cacheKey)
+                    UserDefaults.standard.set(currentCount, forKey: countKey)
+                }
+            } catch {
+                // Silently fail — don't show banner
+            }
+        }
+    }
+
+    private func sectionLabel(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 10, weight: .semibold))
+            .tracking(1)
+            .textCase(.uppercase)
+            .foregroundStyle(GoStatsTheme.sectionHeaderColor)
+    }
+
+    // MARK: - Navigation Row
+
+    private func navRow(title: String, icon: String) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(GoStatsTheme.textPrimary)
+                .frame(width: 28)
+
+            Text(title)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(GoStatsTheme.textPrimary)
+
+            Spacer()
+
+            Image(systemName: "chevron.right")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(GoStatsTheme.textMuted)
+        }
+        .modifier(CardStyle())
+    }
+}
+
+// MARK: - Shared card modifier
+
+private struct CardStyle: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .padding(GoStatsTheme.cardPadding)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: GoStatsTheme.cardRadius, style: .continuous)
+                    .fill(Color.white)
+                    .shadow(color: GoStatsTheme.cardShadowColor,
+                            radius: GoStatsTheme.cardShadowRadius,
+                            x: 0, y: GoStatsTheme.cardShadowY)
+            )
     }
 }

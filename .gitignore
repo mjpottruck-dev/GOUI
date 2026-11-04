@@ -8,3 +8,10 @@ xcuserdata/
 # Build products
 DerivedData/
 build/
+
+# local junk
+Archive.zip
+Stats.swift
+.claude/
+.env
+*.env

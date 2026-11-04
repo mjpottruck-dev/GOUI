@@ -11,6 +11,7 @@ struct GoStatsRootView: View {
     @State private var goToTabs = false
     @State private var showSplash = true
     @State private var incomingRosterURL: URL? = nil
+    @StateObject private var voiceService = VoiceEventService()
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
@@ -31,6 +32,8 @@ struct GoStatsRootView: View {
                                 formation: team.primaryFormation,
                                 seasonID: teamStore.activeSeasonID
                             )
+                            // Set team name for Live Activity
+                            sessionStore.liveActivityTeamName = team.name
                         }
                         sessionStore.refreshElapsedFromClock()
                         goToTabs = true
@@ -42,7 +45,8 @@ struct GoStatsRootView: View {
                             store: sessionStore,
                             teamStore: teamStore,
                             teamID: tid,
-                            incomingRosterURL: $incomingRosterURL
+                            incomingRosterURL: $incomingRosterURL,
+                            onMatchSaved: { goToTabs = false }
                         )
                     } else {
                         Text("No team selected")
@@ -51,7 +55,7 @@ struct GoStatsRootView: View {
             }
             .background(GoStatsTheme.bg)
         }
-        .tint(GoStatsTheme.primary)
+        .tint(GoStatsTheme.textPrimary)
         .environmentObject(sessionStore)
         .overlay {
             if showSplash {
@@ -67,6 +71,12 @@ struct GoStatsRootView: View {
             await runSplashSequenceIfNeeded()
         }
         .onOpenURL { url in
+            // Handle goalstats://voice deep link from Live Activity mic button
+            if url.scheme == "goalstats" && url.host == "voice" {
+                handleVoiceDeepLink()
+                return
+            }
+
             let contentType = try? url.resourceValues(forKeys: [.contentTypeKey]).contentType
             let matchesType = (contentType?.conforms(to: .goUIRoster) == true)
                 || (contentType?.conforms(to: .json) == true)
@@ -81,6 +91,42 @@ struct GoStatsRootView: View {
         .onChange(of: scenePhase) { _, newValue in
             if newValue == .active {
                 sessionStore.refreshElapsedFromClock()
+            }
+        }
+    }
+
+    private func handleVoiceDeepLink() {
+        guard sessionStore.isActive, !sessionStore.matchEnded else { return }
+
+        voiceService.startListening(players: sessionStore.players) { [self] command in
+            switch command {
+            case .goal(let scorer, let assist):
+                sessionStore.recordGoal(scorer: scorer, assist: assist)
+                let name = sessionStore.displayName(for: scorer)
+                sessionStore.updateLiveActivity(lastEvent: "\u{2713} Goal \u{2014} \(name)")
+            case .save(let keeper):
+                sessionStore.recordKeeperSave()
+                let name = sessionStore.displayName(for: keeper)
+                sessionStore.updateLiveActivity(lastEvent: "\u{2713} Save \u{2014} \(name)")
+            case .conceded(let keeper):
+                sessionStore.recordKeeperConceded()
+                let name = sessionStore.displayName(for: keeper)
+                sessionStore.updateLiveActivity(lastEvent: "\u{2713} Conceded \u{2014} \(name)")
+            case .card(let player):
+                sessionStore.recordCard(player: player, card: .yellow)
+                let name = sessionStore.displayName(for: player)
+                sessionStore.updateLiveActivity(lastEvent: "\u{2713} Card \u{2014} \(name)")
+            case .substitution(let playerOn, let playerOff):
+                // Perform sub
+                if let index = sessionStore.onFieldLineupIDs.firstIndex(of: playerOff.id) {
+                    sessionStore.onFieldLineupIDs[index] = playerOn.id
+                }
+                sessionStore.onFieldIDs.remove(playerOff.id)
+                sessionStore.onFieldIDs.insert(playerOn.id)
+                sessionStore.markPlayerSecondsBaseline()
+                let onName = sessionStore.displayName(for: playerOn)
+                let offName = sessionStore.displayName(for: playerOff)
+                sessionStore.updateLiveActivity(lastEvent: "\u{2713} Sub \u{2014} \(onName) for \(offName)")
             }
         }
     }

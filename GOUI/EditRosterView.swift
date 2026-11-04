@@ -34,82 +34,156 @@ struct EditRosterView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section("Team") {
-                    TextField("Team name", text: $teamName)
+            ZStack {
+                Color(hex: "f5f5f5").ignoresSafeArea()
 
-                    Stepper(value: $fieldSize, in: 5...11) {
-                        Text("Field Size: \(fieldSize)")
-                    }
+                ScrollView {
+                    VStack(spacing: GoStatsTheme.cardGap) {
 
-                    Picker("Primary Formation", selection: $primaryFormation) {
-                        ForEach(Formation.allCases) { formation in
-                            Text(formation.rawValue).tag(formation)
-                        }
-                    }
-                }
+                        // Team Info card
+                        VStack(alignment: .leading, spacing: 12) {
+                            GoStatsTheme.sectionHeader("TEAM")
 
-                Section("Starting On Field") {
-                    Text("Tap players to toggle them on/off the field.")
-                        .font(.footnote)
-                        .foregroundColor(.secondary)
+                            TextField("Team name", text: $teamName)
+                                .font(.system(size: 15))
+                                .foregroundStyle(GoStatsTheme.textPrimary)
 
-                    ForEach(players) { p in
-                        Button {
-                            toggleStarter(p.id)
-                        } label: {
-                            HStack {
-                                Text("#\(p.number) \(p.name)")
-                                Spacer()
-                                Text(p.position.rawValue)
-                                    .foregroundColor(.secondary)
+                            Rectangle().fill(GoStatsTheme.divider).frame(height: GoStatsTheme.dividerWidth)
 
-                                if startingOnFieldIDs.contains(p.id) {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .foregroundColor(.green)
-                                } else {
-                                    Image(systemName: "circle")
-                                        .foregroundColor(.secondary)
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Field Size")
+                                    .font(.system(size: 13))
+                                    .foregroundStyle(GoStatsTheme.textMuted)
+                                Picker("Field Size", selection: $fieldSize) {
+                                    Text("7v7").tag(7)
+                                    Text("9v9").tag(9)
+                                    Text("11v11").tag(11)
+                                }
+                                .pickerStyle(.segmented)
+                            }
+
+                            Rectangle().fill(GoStatsTheme.divider).frame(height: GoStatsTheme.dividerWidth)
+
+                            Picker("Primary Formation", selection: $primaryFormation) {
+                                ForEach(Formation.allCases.filter { $0.playerCount == fieldSize }) { formation in
+                                    Text(formation.rawValue).tag(formation)
                                 }
                             }
                         }
+                        .padding(GoStatsTheme.cardPadding)
+                        .background(
+                            RoundedRectangle(cornerRadius: GoStatsTheme.cardRadius, style: .continuous)
+                                .fill(Color.white)
+                                .shadow(color: GoStatsTheme.cardShadowColor, radius: GoStatsTheme.cardShadowRadius, x: 0, y: GoStatsTheme.cardShadowY)
+                        )
+
+                        // Starting On Field card
+                        VStack(alignment: .leading, spacing: 12) {
+                            GoStatsTheme.sectionHeader("STARTING ON FIELD")
+
+                            Text("Tap players to toggle on/off the field.")
+                                .font(.system(size: 13))
+                                .foregroundStyle(GoStatsTheme.textMuted)
+
+                            ForEach(Array(players.enumerated()), id: \.element.id) { index, p in
+                                if index > 0 {
+                                    Rectangle().fill(GoStatsTheme.divider).frame(height: GoStatsTheme.dividerWidth)
+                                }
+                                Button { toggleStarter(p.id) } label: {
+                                    HStack(spacing: 12) {
+                                        ZStack {
+                                            Circle()
+                                                .fill(GoStatsTheme.textPrimary)
+                                                .frame(width: 32, height: 32)
+                                            Text("\(p.number)")
+                                                .font(.system(size: 13, weight: .bold))
+                                                .foregroundStyle(.white)
+                                        }
+                                        Text(p.name)
+                                            .font(.system(size: 15, weight: .medium))
+                                            .foregroundStyle(GoStatsTheme.textPrimary)
+                                        Spacer()
+                                        Text(p.position.rawValue)
+                                            .font(.system(size: 13))
+                                            .foregroundStyle(GoStatsTheme.textMuted)
+                                        Image(systemName: startingOnFieldIDs.contains(p.id) ? "checkmark.circle.fill" : "circle")
+                                            .font(.system(size: 20))
+                                            .foregroundStyle(startingOnFieldIDs.contains(p.id) ? GoStatsTheme.positive : GoStatsTheme.textMuted)
+                                    }
+                                }
+                                .buttonStyle(.plain)
+                            }
+
+                            Rectangle().fill(GoStatsTheme.divider).frame(height: GoStatsTheme.dividerWidth)
+
+                            Text("Selected: \(startingOnFieldIDs.count) / \(fieldSize)")
+                                .font(.system(size: 13))
+                                .foregroundStyle(starterCountColor)
+                        }
+                        .padding(GoStatsTheme.cardPadding)
+                        .background(
+                            RoundedRectangle(cornerRadius: GoStatsTheme.cardRadius, style: .continuous)
+                                .fill(Color.white)
+                                .shadow(color: GoStatsTheme.cardShadowColor, radius: GoStatsTheme.cardShadowRadius, x: 0, y: GoStatsTheme.cardShadowY)
+                        )
+
+                        // Goalkeepers card
+                        VStack(alignment: .leading, spacing: 12) {
+                            GoStatsTheme.sectionHeader("GOALKEEPERS")
+
+                            if goalkeeperOptions.isEmpty {
+                                Text("Add goalkeepers to assign depth.")
+                                    .font(.system(size: 13))
+                                    .foregroundStyle(GoStatsTheme.textMuted)
+                            } else {
+                                Picker("Primary", selection: $primaryGoalkeeperID) {
+                                    Text("None").tag(nil as UUID?)
+                                    ForEach(goalkeeperOptions) { player in
+                                        Text(goalkeeperLabel(for: player)).tag(Optional(player.id))
+                                    }
+                                }
+
+                                Rectangle().fill(GoStatsTheme.divider).frame(height: GoStatsTheme.dividerWidth)
+
+                                Picker("Secondary", selection: $secondaryGoalkeeperID) {
+                                    Text("None").tag(nil as UUID?)
+                                    ForEach(goalkeeperOptions) { player in
+                                        Text(goalkeeperLabel(for: player)).tag(Optional(player.id))
+                                    }
+                                }
+
+                                Rectangle().fill(GoStatsTheme.divider).frame(height: GoStatsTheme.dividerWidth)
+
+                                Picker("Third", selection: $thirdGoalkeeperID) {
+                                    Text("None").tag(nil as UUID?)
+                                    ForEach(goalkeeperOptions) { player in
+                                        Text(goalkeeperLabel(for: player)).tag(Optional(player.id))
+                                    }
+                                }
+                            }
+                        }
+                        .padding(GoStatsTheme.cardPadding)
+                        .background(
+                            RoundedRectangle(cornerRadius: GoStatsTheme.cardRadius, style: .continuous)
+                                .fill(Color.white)
+                                .shadow(color: GoStatsTheme.cardShadowColor, radius: GoStatsTheme.cardShadowRadius, x: 0, y: GoStatsTheme.cardShadowY)
+                        )
                     }
-
-                    Text("Selected: \(startingOnFieldIDs.count) / \(fieldSize)")
-                        .font(.footnote)
-                        .foregroundColor(starterCountColor)
-                }
-
-                Section("Goalkeepers") {
-                    if goalkeeperOptions.isEmpty {
-                        Text("Add goalkeepers to assign a primary, secondary, and third option.")
-                            .font(.footnote)
-                            .foregroundColor(.secondary)
-                    } else {
-                        Picker("Primary Goalkeeper", selection: $primaryGoalkeeperID) {
-                            Text("None").tag(nil as UUID?)
-                            ForEach(goalkeeperOptions) { player in
-                                Text(goalkeeperLabel(for: player)).tag(Optional(player.id))
-                            }
-                        }
-
-                        Picker("Secondary Goalkeeper", selection: $secondaryGoalkeeperID) {
-                            Text("None").tag(nil as UUID?)
-                            ForEach(goalkeeperOptions) { player in
-                                Text(goalkeeperLabel(for: player)).tag(Optional(player.id))
-                            }
-                        }
-
-                        Picker("Third Goalkeeper", selection: $thirdGoalkeeperID) {
-                            Text("None").tag(nil as UUID?)
-                            ForEach(goalkeeperOptions) { player in
-                                Text(goalkeeperLabel(for: player)).tag(Optional(player.id))
-                            }
-                        }
-                    }
+                    .padding(.horizontal, GoStatsTheme.cardMargin)
+                    .padding(.top, 16)
+                    .padding(.bottom, 40)
                 }
             }
             .navigationTitle("Edit Roster")
+            .navigationBarTitleDisplayMode(.inline)
+            .onChange(of: fieldSize) { _, newSize in
+                if primaryFormation.playerCount != newSize {
+                    primaryFormation = Formation.defaultFormation(for: newSize)
+                }
+                if startingOnFieldIDs.count != newSize {
+                    startingOnFieldIDs = Set(players.prefix(newSize).map(\.id))
+                }
+            }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Cancel") { dismiss() }
@@ -140,6 +214,7 @@ struct EditRosterView: View {
                         onSave(team)
                         dismiss()
                     }
+                    .font(.system(size: 16, weight: .semibold))
                     .disabled(teamName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
@@ -147,7 +222,7 @@ struct EditRosterView: View {
     }
 
     private var starterCountColor: Color {
-        startingOnFieldIDs.count == fieldSize ? .secondary : .red
+        startingOnFieldIDs.count == fieldSize ? GoStatsTheme.textMuted : .red
     }
 
     private func toggleStarter(_ id: UUID) {

@@ -31,13 +31,13 @@ struct StatsOverviewView: View {
 
                 HStack {
                     Text("OVERVIEW")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.custom("DM Sans", size: 10).weight(.medium)).tracking(1)
                         .foregroundStyle(GoStatsTheme.text2)
 
                     Spacer()
 
                     Text("\(team?.matches.count ?? 0) matches")
-                        .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                        .font(.custom("DM Mono", size: 12))
                         .foregroundStyle(GoStatsTheme.text2)
                 }
 
@@ -57,11 +57,11 @@ struct StatsOverviewView: View {
     }
 
     private var leadersCard: some View {
-        LiquidGlassContainer(cornerRadius: 22) {
+        LiquidGlassContainer(cornerRadius: GoStatsTheme.rCard) {
             VStack(alignment: .leading, spacing: 12) {
 
                 Text("LEADERS")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.custom("DM Sans", size: 10).weight(.medium)).tracking(1)
                     .foregroundStyle(GoStatsTheme.text2)
 
                 if !leaders.hasAnyData {
@@ -79,19 +79,19 @@ struct StatsOverviewView: View {
     }
 
     private var recentMatchesCard: some View {
-        LiquidGlassContainer(cornerRadius: 22) {
+        LiquidGlassContainer(cornerRadius: GoStatsTheme.rCard) {
             VStack(alignment: .leading, spacing: 12) {
 
                 HStack {
                     Text("RECENT")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.custom("DM Sans", size: 10).weight(.medium)).tracking(1)
                         .foregroundStyle(GoStatsTheme.text2)
 
                     Spacer()
 
                     if let count = team?.matches.count, count > 0 {
                         Text("Last \(min(count, 5))")
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(.custom("DM Sans", size: 10).weight(.medium)).tracking(1)
                             .foregroundStyle(GoStatsTheme.text2)
                     }
                 }
@@ -120,14 +120,14 @@ struct StatsOverviewView: View {
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(GoStatsTheme.text2)
             Text(value)
-                .font(.system(size: 18, weight: .semibold, design: .monospaced))
+                .font(.custom("DM Mono", size: 18))
                 .foregroundStyle(GoStatsTheme.text)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
+            RoundedRectangle(cornerRadius: GoStatsTheme.rCard, style: .continuous)
                 .fill(Color(uiColor: .secondarySystemGroupedBackground).opacity(0.55))
         )
     }
@@ -136,11 +136,13 @@ struct StatsOverviewView: View {
         HStack(spacing: 10) {
             Image(systemName: icon)
                 .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(GoStatsTheme.text2)
+                .foregroundStyle(GoStatsTheme.emptyStateColor)
             Text(text)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(GoStatsTheme.text2)
+                .font(.custom("DM Sans", size: 13))
+                .foregroundStyle(GoStatsTheme.emptyStateColor)
         }
+        .frame(maxWidth: .infinity)
+        .multilineTextAlignment(.center)
         .padding(.vertical, 6)
     }
 
@@ -173,12 +175,12 @@ struct StatsOverviewView: View {
                             Spacer()
 
                             Text("\(item.value)")
-                                .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                                .font(.custom("DM Mono", size: 13))
                                 .foregroundStyle(GoStatsTheme.text2)
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 6)
                                 .background(
-                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    RoundedRectangle(cornerRadius: GoStatsTheme.rCard, style: .continuous)
                                         .fill(Color(uiColor: .secondarySystemGroupedBackground).opacity(0.55))
                                 )
                         }
@@ -189,7 +191,7 @@ struct StatsOverviewView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 12)
         .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: GoStatsTheme.rCard, style: .continuous)
                 .fill(Color(uiColor: .secondarySystemGroupedBackground).opacity(0.50))
         )
     }
@@ -209,12 +211,12 @@ struct StatsOverviewView: View {
             Spacer()
 
             Text("\(match.goalsFor)–\(match.goalsAgainst)")
-                .font(.system(size: 16, weight: .semibold, design: .monospaced))
+                .font(.custom("DM Mono", size: 16))
                 .foregroundStyle(GoStatsTheme.text)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 8)
                 .background(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    RoundedRectangle(cornerRadius: GoStatsTheme.rCard, style: .continuous)
                         .fill(Color(uiColor: .secondarySystemGroupedBackground).opacity(0.55))
                 )
 
@@ -225,7 +227,7 @@ struct StatsOverviewView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 12)
         .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: GoStatsTheme.rCard, style: .continuous)
                 .fill(Color(uiColor: .secondarySystemGroupedBackground).opacity(0.50))
         )
     }

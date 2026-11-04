@@ -36,6 +36,43 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<true/>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>GoalStats can use your location to auto-fill the match venue.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>GoalStats uses the microphone for voice-activated event logging during matches.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>GoalStats uses speech recognition to log match events hands-free.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>GoalStats uses your local network to share rosters with nearby devices.</string>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>GoalStats uses Bluetooth to find and connect to nearby devices for roster sharing.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_gostats-roster._tcp</string>
+		<string>_gostats-roster._udp</string>
+		<string>_goui-roster._tcp</string>
+		<string>_goui-roster._udp</string>
+	</array>
+	<key>UIAppFonts</key>
+	<array>
+		<string>DMSans-Variable.ttf</string>
+		<string>DMMono-Regular.ttf</string>
+	</array>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.maxpottruck.GOUI</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>goalstats</string>
+			</array>
+		</dict>
+	</array>
+	<key>UILaunchScreen</key>
+	<dict/>
 	<key>UTExportedTypeDeclarations</key>
 	<array>
 		<dict>

@@ -3,6 +3,7 @@ import SwiftUI
 struct MatchDetailView: View {
     let match: MatchRecord
     let team: Team
+    @StateObject private var trendsService = PlayerTrendsService()
     @State private var selectedPlayerDetail: PlayerDetail? = nil
     @State private var shareSheetPayload: ShareSheetPayload? = nil
     @State private var exportError: String? = nil
@@ -30,7 +31,7 @@ struct MatchDetailView: View {
                                 Spacer()
 
                                 Text("\(match.goalsFor)–\(match.goalsAgainst)")
-                                    .font(.system(size: 22, weight: .semibold, design: .monospaced))
+                                    .font(.custom("DM Mono", size: 22))
                                     .foregroundStyle(GoStatsTheme.text)
                             }
 
@@ -57,10 +58,10 @@ struct MatchDetailView: View {
                     .padding(.horizontal, 16)
                     .padding(.top, 16)
 
-                    LiquidGlassContainer(cornerRadius: 22) {
+                    LiquidGlassContainer(cornerRadius: GoStatsTheme.rCard) {
                         VStack(alignment: .leading, spacing: 12) {
                             Text("PLAYER STATS")
-                                .font(.system(size: 12, weight: .semibold))
+                                .font(.custom("DM Sans", size: 10).weight(.medium)).tracking(1)
                                 .foregroundStyle(GoStatsTheme.primary)
 
                             VStack(spacing: 10) {
@@ -76,7 +77,7 @@ struct MatchDetailView: View {
                     }
                     .padding(.horizontal, 16)
 
-                    LiquidGlassContainer(cornerRadius: 22) {
+                    LiquidGlassContainer(cornerRadius: GoStatsTheme.rCard) {
                         Button(action: exportMaxPreps) {
                             HStack(spacing: 10) {
                                 Image(systemName: "square.and.arrow.up")
@@ -105,10 +106,10 @@ struct MatchDetailView: View {
 
                     ScrollView {
                         VStack(spacing: 12) {
-                            LiquidGlassContainer(cornerRadius: 22) {
+                            LiquidGlassContainer(cornerRadius: GoStatsTheme.rCard) {
                                 VStack(alignment: .leading, spacing: 8) {
                                     Text("PLAYER")
-                                        .font(.system(size: 12, weight: .semibold))
+                                        .font(.custom("DM Sans", size: 10).weight(.medium)).tracking(1)
                                         .foregroundStyle(GoStatsTheme.primary)
 
                                     Text("#\(detail.player.number) \(detail.player.name)")
@@ -121,10 +122,10 @@ struct MatchDetailView: View {
                                 }
                             }
 
-                            LiquidGlassContainer(cornerRadius: 22) {
+                            LiquidGlassContainer(cornerRadius: GoStatsTheme.rCard) {
                                 VStack(alignment: .leading, spacing: 10) {
                                     Text("MATCH STATS")
-                                        .font(.system(size: 12, weight: .semibold))
+                                        .font(.custom("DM Sans", size: 10).weight(.medium)).tracking(1)
                                         .foregroundStyle(GoStatsTheme.primary)
 
                                     VStack(spacing: 8) {
@@ -141,6 +142,42 @@ struct MatchDetailView: View {
                                         statsRow("PK Conceded", detail.line.pkConceded)
                                     }
                                 }
+                            }
+
+                            // Performance Trends
+                            LiquidGlassContainer(cornerRadius: GoStatsTheme.rCard) {
+                                VStack(alignment: .leading, spacing: 10) {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "sparkles")
+                                            .font(.system(size: 10))
+                                            .foregroundStyle(GoStatsTheme.textMuted)
+                                        GoStatsTheme.sectionHeader("PERFORMANCE TRENDS")
+                                    }
+
+                                    let matchCount = team.matches.filter { $0.playerStats[detail.player.id] != nil }.count
+
+                                    if matchCount < 2 {
+                                        Text("Play more matches to unlock performance insights.")
+                                            .font(.system(size: 13))
+                                            .foregroundStyle(GoStatsTheme.textMuted)
+                                    } else if trendsService.isLoading {
+                                        HStack(spacing: 8) {
+                                            ProgressView()
+                                                .controlSize(.small)
+                                            Text("Analyzing performance...")
+                                                .font(.system(size: 13))
+                                                .foregroundStyle(GoStatsTheme.textMuted)
+                                        }
+                                    } else if let insight = trendsService.insight {
+                                        Text(insight)
+                                            .font(.system(size: 14))
+                                            .foregroundStyle(GoStatsTheme.textPrimary)
+                                            .lineSpacing(3)
+                                    }
+                                }
+                            }
+                            .task {
+                                await trendsService.fetchInsight(for: detail.player, team: team)
                             }
                         }
                         .padding(.horizontal, 16)
@@ -195,7 +232,7 @@ struct MatchDetailView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 12)
         .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: GoStatsTheme.rCard, style: .continuous)
                 .fill(Color(uiColor: .secondarySystemGroupedBackground).opacity(0.50))
         )
     }
@@ -206,13 +243,13 @@ struct MatchDetailView: View {
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundStyle(GoStatsTheme.text2)
             Text(value)
-                .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                .font(.custom("DM Mono", size: 14))
                 .foregroundStyle(GoStatsTheme.text)
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
         .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
+            RoundedRectangle(cornerRadius: GoStatsTheme.rCard, style: .continuous)
                 .fill(Color(uiColor: .secondarySystemGroupedBackground).opacity(0.55))
         )
     }
@@ -224,7 +261,7 @@ struct MatchDetailView: View {
                 .foregroundStyle(GoStatsTheme.primary)
                 .frame(width: 34, height: 34)
                 .background(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    RoundedRectangle(cornerRadius: GoStatsTheme.rCard, style: .continuous)
                         .fill(Color(uiColor: .secondarySystemGroupedBackground).opacity(0.55))
                 )
         }
@@ -238,13 +275,13 @@ struct MatchDetailView: View {
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(GoStatsTheme.text2)
             Text(value)
-                .font(.system(size: 15, weight: .semibold, design: .monospaced))
+                .font(.custom("DM Mono", size: 15))
                 .foregroundStyle(GoStatsTheme.text)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
         .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
+            RoundedRectangle(cornerRadius: GoStatsTheme.rCard, style: .continuous)
                 .fill(Color(uiColor: .secondarySystemGroupedBackground).opacity(0.55))
         )
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -263,7 +300,7 @@ struct MatchDetailView: View {
                 .foregroundStyle(GoStatsTheme.text)
             Spacer()
             Text("\(value)")
-                .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                .font(.custom("DM Mono", size: 14))
                 .foregroundStyle(GoStatsTheme.text2)
         }
     }

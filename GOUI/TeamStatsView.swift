@@ -329,6 +329,7 @@ struct TeamStatsView: View {
                                     }
                                 }
                             }
+                            .frame(maxWidth: .infinity, alignment: .leading)
                         }
                     }
                 }

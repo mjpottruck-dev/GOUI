@@ -15,7 +15,7 @@ struct EventFlowSheet: View {
                 GoStatsTheme.bg.ignoresSafeArea()
 
                 VStack(spacing: 16) {
-                    LiquidGlassContainer(cornerRadius: 22) {
+                    LiquidGlassContainer(cornerRadius: GoStatsTheme.rCard) {
                         VStack(alignment: .leading, spacing: 10) {
                             Text("EVENT")
                                 .font(.system(size: 12, weight: .semibold))
