@@ -209,7 +209,8 @@ final class TeamStore {
                 return
             }
 
-            print("❌ TeamStore load failed: could not decode teams.json (current or legacy). Resetting.")
+            print("❌ TeamStore load failed: could not decode teams.json (current or legacy). Backing up, then resetting.")
+            backupUnreadableDataFile(url)
             teams = []
             seasons = []
             activeSeasonID = nil
@@ -218,11 +219,31 @@ final class TeamStore {
 
         } catch {
             print("❌ TeamStore load failed:", error)
+            backupUnreadableDataFile(fileURL)
             teams = []
             seasons = []
             activeSeasonID = nil
             deletedTeamIDs = []
             deletedPlayerIDs = []
+        }
+    }
+
+    /// Copies an unreadable teams.json aside before the app starts fresh, so a bad
+    /// update or a model change can never permanently erase a coach's teams and match
+    /// history. The copy (teams.unreadable-<date>.json) stays in the app's Documents
+    /// folder and can be recovered by a later build.
+    private func backupUnreadableDataFile(_ url: URL) {
+        let fm = FileManager.default
+        guard fm.fileExists(atPath: url.path) else { return }
+        let stamp = ISO8601DateFormatter().string(from: Date())
+            .replacingOccurrences(of: ":", with: "-")
+        let backup = url.deletingLastPathComponent()
+            .appendingPathComponent("teams.unreadable-\(stamp).json")
+        do {
+            try fm.copyItem(at: url, to: backup)
+            print("⚠️ Saved unreadable data to", backup.lastPathComponent)
+        } catch {
+            print("❌ Could not back up unreadable teams.json:", error)
         }
     }
 

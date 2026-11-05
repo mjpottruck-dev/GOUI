@@ -68,6 +68,7 @@ struct GoStatsRootView: View {
             }
         }
         .task {
+            restoreInProgressMatchIfNeeded()
             await runSplashSequenceIfNeeded()
         }
         .onOpenURL { url in
@@ -91,8 +92,28 @@ struct GoStatsRootView: View {
         .onChange(of: scenePhase) { _, newValue in
             if newValue == .active {
                 sessionStore.refreshElapsedFromClock()
+            } else if newValue == .background {
+                // Last chance to save before iOS may kill the app.
+                sessionStore.refreshElapsedFromClock()
+                sessionStore.persist()
             }
         }
+    }
+
+    /// If the app was killed mid-match, put the coach straight back into that match.
+    @MainActor
+    private func restoreInProgressMatchIfNeeded() {
+        guard !sessionStore.isActive,
+              let state = MatchStatePersistence.restore() else { return }
+        guard state.isActive,
+              let teamID = state.currentTeamID,
+              teamStore.teams.contains(where: { $0.id == teamID }) else {
+            MatchStatePersistence.clear()
+            return
+        }
+        sessionStore.restoreState(state)
+        selectedTeamID = teamID
+        goToTabs = true
     }
 
     private func handleVoiceDeepLink() {
@@ -140,7 +161,7 @@ struct GoStatsRootView: View {
         }
         #endif
 
-        try? await Task.sleep(nanoseconds: 3_000_000_000)
+        try? await Task.sleep(nanoseconds: 800_000_000)
         withAnimation(.easeOut(duration: 0.25)) {
             showSplash = false
         }

@@ -153,7 +153,6 @@ struct MatchView: View {
         } message: {
             Text("This clears timer, score, events, and live player stats.")
         }
-        .onAppear { store.loadSampleIfEmpty() }
         .onChange(of: scenePhase) { _, newValue in
             if newValue == .active { store.refreshElapsedFromClock() }
         }
