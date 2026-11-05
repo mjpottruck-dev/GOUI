@@ -33,6 +33,8 @@ extension MatchStore {
             line.pkFaced = p.pkFaced
             line.pkSaved = p.pkSaved
             line.pkConceded = p.pkConceded
+            line.pkGoals = p.pkGoals
+            line.pkAttempts = p.pkAttempts
             stats[p.id] = line
         }
         rec.playerStats = stats

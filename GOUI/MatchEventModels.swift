@@ -54,3 +54,18 @@ struct MatchEvent: Identifiable, Codable, Hashable {
     }
 }
 
+
+// Tolerant decoding (see Models.swift): a missing or unknown field never makes
+// a saved match fail to load.
+extension MatchEvent {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            kind: c.value(.kind, or: .substitution),
+            seconds: c.value(.seconds, or: 0),
+            title: c.value(.title, or: ""),
+            detail: c.value(.detail, or: nil)
+        )
+        id = c.value(.id, or: UUID())
+    }
+}

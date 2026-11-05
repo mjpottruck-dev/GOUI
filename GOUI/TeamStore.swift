@@ -411,7 +411,9 @@ final class TeamStore {
         syncStatus.isSyncing = true
         syncStatus.lastError = nil
 
-        let matchesByTeam = Dictionary(uniqueKeysWithValues: teams.map { ($0.id, $0.matches) })
+        let snapshot = teams
+        let snapshotDeleted = Set(deletedTeamIDs)
+        let matchesByTeam = Dictionary(teams.map { ($0.id, $0.matches) }, uniquingKeysWith: { a, _ in a })
         let payload = SyncPayload(
             teams: teams,
             deletedTeamIDs: deletedTeamIDs,
@@ -420,11 +422,38 @@ final class TeamStore {
 
         do {
             let result = try await syncManager.sync(payload: payload, localMatches: matchesByTeam)
+
+            // The coach may have saved a match or edited a team while the sync was
+            // running. Keep those newer local versions instead of overwriting them.
+            let before = Dictionary(snapshot.map { ($0.id, $0.updatedAt) }, uniquingKeysWith: { a, _ in a })
+            let current = teams
+            let currentByID = Dictionary(current.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+            let deletedNow = Set(deletedTeamIDs)
+            var changedDuringSync = false
+            var merged: [Team] = result.teams.compactMap { synced in
+                if deletedNow.contains(synced.id) { return nil }
+                if let local = currentByID[synced.id],
+                   local.updatedAt > (before[synced.id] ?? .distantPast) {
+                    changedDuringSync = true
+                    return local
+                }
+                return synced
+            }
+            let mergedIDs = Set(merged.map(\.id))
+            for team in current where before[team.id] == nil && !mergedIDs.contains(team.id) {
+                merged.append(team) // created during the sync
+                changedDuringSync = true
+            }
+
             isApplyingSync = true
-            teams = result.teams
-            deletedTeamIDs = result.deletedTeamIDs
+            teams = merged
+            // Keep deletions made during the sync; the next sync sends them.
+            deletedTeamIDs = deletedTeamIDs.filter { !snapshotDeleted.contains($0) }
             deletedPlayerIDs = result.deletedPlayerIDs
             isApplyingSync = false
+            if changedDuringSync || !deletedTeamIDs.isEmpty {
+                scheduleSync()
+            }
             syncStatus.lastSyncDate = result.lastSyncDate
         } catch {
             syncStatus.lastError = error.localizedDescription

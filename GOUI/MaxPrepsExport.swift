@@ -33,7 +33,8 @@ enum MaxPrepsExport {
         stats: [UUID: PlayerStatLine],
         seconds: [UUID: Int]
     ) -> [[String]] {
-        let roster = sortedPlayers(players.filter { $0.position != .gk })
+        // Every player who appeared, keepers included (a keeper can score or play the field).
+        let roster = sortedPlayers(players)
         return roster.map { player in
             let line = stats[player.id] ?? PlayerStatLine()
             let minutes = (seconds[player.id] ?? 0) / 60
@@ -44,8 +45,8 @@ enum MaxPrepsExport {
                 "\(line.shots)",
                 "\(line.shotsOnTarget)",
                 "\(minutes)",
-                "0",
-                "0"
+                "\(line.pkGoals)",
+                "\(line.pkAttempts)"
             ]
         }
     }

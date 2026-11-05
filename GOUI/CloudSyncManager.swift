@@ -20,6 +20,20 @@ struct SyncResult {
     var lastSyncDate: Date
 }
 
+/// Syncs each team, as one whole document, to the user's private iCloud database.
+///
+/// Each team (players, lineup, formation, goalkeepers, settings and every saved
+/// match) is stored as one `TeamDoc` record holding the team's JSON as a CKAsset.
+/// The earlier version synced only team names and player basics as separate records,
+/// so a new phone or reinstall lost all match history, and a newer cloud copy reset
+/// formation, field size, lineup and goalkeeper order.
+///
+/// Conflicts: per team, the copy with the newer `updatedAt` wins (last writer wins).
+///
+/// CloudKit Dashboard setup (one time): the `TeamDoc` record type is created
+/// automatically in the Development environment on first save. To query it, add a
+/// QUERYABLE index on `recordName` for `TeamDoc`, then deploy the schema to Production
+/// before release.
 final class CloudSyncManager {
     enum CloudSyncError: LocalizedError {
         case unavailable(String)
@@ -32,6 +46,9 @@ final class CloudSyncManager {
         }
     }
 
+    private static let recordType = "TeamDoc"
+    private static let recordPrefix = "teamdoc-"
+
     private let container: CKContainer
     private let database: CKDatabase
 
@@ -40,38 +57,61 @@ final class CloudSyncManager {
         self.database = container.privateCloudDatabase
     }
 
+    /// `localMatches` is kept for the existing call site; matches now travel inside each team.
     func sync(payload: SyncPayload, localMatches: [UUID: [MatchRecord]]) async throws -> SyncResult {
         try await ensureCloudKitAvailable()
 
-        let recordsToSave = makeRecords(from: payload.teams)
-        let recordIDsToDelete = payload.deletedTeamIDs.map { CKRecord.ID(recordName: $0.uuidString) }
-            + payload.deletedPlayerIDs.map { CKRecord.ID(recordName: $0.uuidString) }
+        let deleted = Set(payload.deletedTeamIDs)
 
-        if !recordsToSave.isEmpty || !recordIDsToDelete.isEmpty {
-            try await modifyRecords(recordsToSave: recordsToSave, recordIDsToDelete: recordIDsToDelete)
+        // 1. Read what the cloud has.
+        let remoteTeams = try await fetchRemoteTeams()
+        let remoteByID = Dictionary(remoteTeams.map { ($0.id, $0) }, uniquingKeysWith: { a, b in
+            a.updatedAt >= b.updatedAt ? a : b
+        })
+        let localByID = Dictionary(payload.teams.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+
+        // 2. Merge: newer copy of each team wins; deleted teams are dropped.
+        var merged: [Team] = []
+        var toUpload: [Team] = []
+        for id in Set(localByID.keys).union(remoteByID.keys) where !deleted.contains(id) {
+            switch (localByID[id], remoteByID[id]) {
+            case let (local?, remote?):
+                if remote.updatedAt > local.updatedAt {
+                    merged.append(remote)
+                } else {
+                    merged.append(local)
+                    if local.updatedAt > remote.updatedAt { toUpload.append(local) }
+                }
+            case let (local?, nil):
+                merged.append(local)
+                toUpload.append(local)
+            case let (nil, remote?):
+                merged.append(remote)
+            case (nil, nil):
+                break
+            }
         }
 
-        let fetchedTeams = try await fetchRecords(ofType: "Team")
-        let fetchedPlayers = try await fetchRecords(ofType: "Player")
-
-        let mergedTeams = mergeTeams(
-            localTeams: payload.teams,
-            remoteTeams: fetchedTeams,
-            remotePlayers: fetchedPlayers,
-            localMatches: localMatches
-        )
+        // 3. Push local changes and deletions.
+        let records = try toUpload.map(makeRecord)
+        let deleteIDs = payload.deletedTeamIDs.map(Self.recordID)
+        if !records.isEmpty || !deleteIDs.isEmpty {
+            try await save(records: records, deleting: deleteIDs)
+        }
+        cleanUpTempFiles(for: toUpload)
 
         return SyncResult(
-            teams: mergedTeams,
+            teams: merged.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending },
             deletedTeamIDs: [],
             deletedPlayerIDs: [],
             lastSyncDate: Date()
         )
     }
 
+    // MARK: - CloudKit
+
     private func ensureCloudKitAvailable() async throws {
         let status = try await container.accountStatus()
-
         switch status {
         case .available:
             return
@@ -88,186 +128,83 @@ final class CloudSyncManager {
         }
     }
 
-    private func modifyRecords(recordsToSave: [CKRecord], recordIDsToDelete: [CKRecord.ID]) async throws {
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            let operation = CKModifyRecordsOperation(recordsToSave: recordsToSave, recordIDsToDelete: recordIDsToDelete)
-            operation.savePolicy = .allKeys
-            operation.modifyRecordsResultBlock = { result in
-                switch result {
-                case .success:
-                    continuation.resume()
-                case .failure(let error):
-                    continuation.resume(throwing: error)
-                }
+    /// Fetches every TeamDoc, following query cursors so large libraries aren't truncated.
+    private func fetchRemoteTeams() async throws -> [Team] {
+        let query = CKQuery(recordType: Self.recordType, predicate: NSPredicate(value: true))
+        var teams: [Team] = []
+
+        let first = try await database.records(matching: query)
+        teams += decodeTeams(from: first.matchResults)
+        var cursor = first.queryCursor
+        while let next = cursor {
+            let page = try await database.records(continuingMatchFrom: next)
+            teams += decodeTeams(from: page.matchResults)
+            cursor = page.queryCursor
+        }
+        return teams
+    }
+
+    private func decodeTeams(from results: [(CKRecord.ID, Result<CKRecord, Error>)]) -> [Team] {
+        results.compactMap { _, result in
+            guard case .success(let record) = result,
+                  let asset = record["payload"] as? CKAsset,
+                  let url = asset.fileURL,
+                  let data = try? Data(contentsOf: url) else { return nil }
+            do {
+                return try JSONDecoder().decode(Team.self, from: data)
+            } catch {
+                print("⚠️ Skipping unreadable cloud team \(record.recordID.recordName):", error)
+                return nil
             }
-            database.add(operation)
         }
     }
 
-    private func fetchRecords(ofType type: String) async throws -> [CKRecord] {
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<[CKRecord], Error>) in
-            var records: [CKRecord] = []
-            var recordError: Error?
-            let query = CKQuery(recordType: type, predicate: NSPredicate(value: true))
-            let operation = CKQueryOperation(query: query)
-            operation.recordMatchedBlock = { _, result in
-                switch result {
-                case .success(let record):
-                    records.append(record)
-                case .failure(let error):
-                    recordError = error
-                }
+    private func save(records: [CKRecord], deleting ids: [CKRecord.ID]) async throws {
+        let (saveResults, deleteResults) = try await database.modifyRecords(
+            saving: records,
+            deleting: ids,
+            savePolicy: .allKeys,
+            atomically: false
+        )
+        for (_, result) in saveResults {
+            if case .failure(let error) = result { throw error }
+        }
+        for (_, result) in deleteResults {
+            if case .failure(let error) = result {
+                // Already gone is fine.
+                if let ck = error as? CKError, ck.code == .unknownItem { continue }
+                throw error
             }
-            operation.queryResultBlock = { result in
-                if let recordError {
-                    continuation.resume(throwing: recordError)
-                    return
-                }
-                switch result {
-                case .success:
-                    continuation.resume(returning: records)
-                case .failure(let error):
-                    continuation.resume(throwing: error)
-                }
-            }
-            database.add(operation)
         }
     }
 
-    private func makeRecords(from teams: [Team]) -> [CKRecord] {
-        var records: [CKRecord] = []
+    // MARK: - Records
+
+    private static func recordID(_ teamID: UUID) -> CKRecord.ID {
+        // Prefixed so it can't collide with records from the old "Team" schema,
+        // which used the bare team UUID as the record name.
+        CKRecord.ID(recordName: recordPrefix + teamID.uuidString)
+    }
+
+    private func tempURL(for team: Team) -> URL {
+        FileManager.default.temporaryDirectory
+            .appendingPathComponent("teamdoc-\(team.id.uuidString).json")
+    }
+
+    private func makeRecord(_ team: Team) throws -> CKRecord {
+        let url = tempURL(for: team)
+        try JSONEncoder().encode(team).write(to: url, options: [.atomic])
+
+        let record = CKRecord(recordType: Self.recordType, recordID: Self.recordID(team.id))
+        record["name"] = team.name as CKRecordValue
+        record["updatedAt"] = team.updatedAt as CKRecordValue
+        record["payload"] = CKAsset(fileURL: url)
+        return record
+    }
+
+    private func cleanUpTempFiles(for teams: [Team]) {
         for team in teams {
-            let recordID = CKRecord.ID(recordName: team.id.uuidString)
-            let teamRecord = CKRecord(recordType: "Team", recordID: recordID)
-            teamRecord["name"] = team.name as CKRecordValue
-            teamRecord["createdAt"] = team.createdAt as CKRecordValue
-            teamRecord["updatedAt"] = team.updatedAt as CKRecordValue
-            records.append(teamRecord)
-
-            for player in team.players {
-                let playerID = CKRecord.ID(recordName: player.id.uuidString)
-                let playerRecord = CKRecord(recordType: "Player", recordID: playerID)
-                playerRecord["teamID"] = team.id.uuidString as CKRecordValue
-                playerRecord["name"] = player.name as CKRecordValue
-                playerRecord["number"] = player.number as CKRecordValue
-                playerRecord["position"] = (player.positionName ?? player.position.rawValue) as CKRecordValue
-                playerRecord["isGoalie"] = (player.isGoalie ?? player.derivedIsGoalie) as CKRecordValue
-                playerRecord["notes"] = (player.notes ?? "") as CKRecordValue
-                playerRecord["createdAt"] = player.createdAt as CKRecordValue
-                playerRecord["updatedAt"] = player.updatedAt as CKRecordValue
-                records.append(playerRecord)
-            }
+            try? FileManager.default.removeItem(at: tempURL(for: team))
         }
-        return records
-    }
-
-    private func mergeTeams(
-        localTeams: [Team],
-        remoteTeams: [CKRecord],
-        remotePlayers: [CKRecord],
-        localMatches: [UUID: [MatchRecord]]
-    ) -> [Team] {
-        let localByID = Dictionary(uniqueKeysWithValues: localTeams.map { ($0.id, $0) })
-        let remoteTeamsByID: [UUID: CKRecord] = Dictionary(
-            uniqueKeysWithValues: remoteTeams.compactMap { record -> (UUID, CKRecord)? in
-                guard let id = UUID(uuidString: record.recordID.recordName) else { return nil }
-                return (id, record)
-            }
-        )
-
-        var playersByTeam: [UUID: [Player]] = [:]
-        for record in remotePlayers {
-            guard let teamIDString = record["teamID"] as? String,
-                  let teamID = UUID(uuidString: teamIDString),
-                  let player = decodePlayer(from: record)
-            else { continue }
-            playersByTeam[teamID, default: []].append(player)
-        }
-
-        var merged: [Team] = []
-        let allIDs = Set(localByID.keys).union(remoteTeamsByID.keys)
-
-        for id in allIDs {
-            let local = localByID[id]
-            let remote = remoteTeamsByID[id]
-
-            if let remote, let remoteTeam = decodeTeam(from: remote, players: playersByTeam[id] ?? []) {
-                if let local {
-                    if shouldPreferRemote(local: local, remote: remoteTeam) {
-                        if local.updatedAt != remoteTeam.updatedAt {
-                            print("⚠️ Cloud conflict (team \(id)): remote wins.")
-                        }
-                        var mergedTeam = remoteTeam
-                        mergedTeam.matches = local.matches
-                        merged.append(mergedTeam)
-                    } else {
-                        if local.updatedAt != remoteTeam.updatedAt {
-                            print("⚠️ Cloud conflict (team \(id)): local wins.")
-                        }
-                        merged.append(local)
-                    }
-                } else {
-                    var mergedTeam = remoteTeam
-                    if let matches = localMatches[id] {
-                        mergedTeam.matches = matches
-                    }
-                    merged.append(mergedTeam)
-                }
-            } else if let local {
-                merged.append(local)
-            }
-        }
-
-        return merged.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
-    }
-
-    private func shouldPreferRemote(local: Team, remote: Team) -> Bool {
-        if remote.updatedAt == local.updatedAt {
-            return false
-        }
-        return remote.updatedAt > local.updatedAt
-    }
-
-    private func decodeTeam(from record: CKRecord, players: [Player]) -> Team? {
-        guard let id = UUID(uuidString: record.recordID.recordName),
-              let name = record["name"] as? String,
-              let createdAt = record["createdAt"] as? Date,
-              let updatedAt = record["updatedAt"] as? Date
-        else { return nil }
-        var team = Team(
-            id: id,
-            name: name,
-            players: players,
-            createdAt: createdAt,
-            updatedAt: updatedAt
-        )
-        team.matches = []
-        return team
-    }
-
-    private func decodePlayer(from record: CKRecord) -> Player? {
-        guard let id = UUID(uuidString: record.recordID.recordName),
-              let name = record["name"] as? String,
-              let number = record["number"] as? Int,
-              let createdAt = record["createdAt"] as? Date,
-              let updatedAt = record["updatedAt"] as? Date
-        else { return nil }
-        let positionName = record["position"] as? String
-        let isGoalie = record["isGoalie"] as? Bool
-        let notes = record["notes"] as? String
-        let resolvedPosition = Position(rawValue: positionName ?? "") ?? .cm
-        return Player(
-            id: id,
-            name: name,
-            number: number,
-            jersey: "\(number)",
-            position: resolvedPosition,
-            secondaryPosition: nil,
-            positionName: positionName,
-            isGoalie: isGoalie,
-            notes: notes,
-            createdAt: createdAt,
-            updatedAt: updatedAt
-        )
     }
 }

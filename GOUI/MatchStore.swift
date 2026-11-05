@@ -220,6 +220,8 @@ final class MatchSessionStore: ObservableObject {
                 resetPlayer.pkFaced = 0
                 resetPlayer.pkSaved = 0
                 resetPlayer.pkConceded = 0
+                resetPlayer.pkGoals = 0
+                resetPlayer.pkAttempts = 0
                 return resetPlayer
             }
             let depth = Team.goalkeeperDepthIDs(
@@ -408,6 +410,7 @@ final class MatchSessionStore: ObservableObject {
         updatePlayerStats(id: shooter.id) { p in
             p.shots += 1
             if onTarget { p.shotsOnTarget += 1 }
+            if isPenalty { p.pkAttempts += 1 }
         }
         let label = isPenalty ? "PK Attempt" : "Shot"
         addEvent(
@@ -424,6 +427,8 @@ final class MatchSessionStore: ObservableObject {
             p.goals += 1
             p.shots += 1
             p.shotsOnTarget += 1
+            p.pkGoals += 1
+            p.pkAttempts += 1
         }
         addEvent(
             kind: .pkMade,
