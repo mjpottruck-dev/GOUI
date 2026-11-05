@@ -146,7 +146,8 @@ struct SettingsView: View {
                             )
                         }
 
-                        // Debug
+                        // Debug — not shown in App Store builds
+                        #if DEBUG
                         VStack(alignment: .leading, spacing: 8) {
                             GoStatsTheme.sectionHeader("DEBUG")
 
@@ -175,6 +176,7 @@ struct SettingsView: View {
                                     .shadow(color: GoStatsTheme.cardShadowColor, radius: GoStatsTheme.cardShadowRadius, x: 0, y: GoStatsTheme.cardShadowY)
                             )
                         }
+                        #endif
                     }
                     .padding(.horizontal, GoStatsTheme.cardMargin)
                     .padding(.top, 16)

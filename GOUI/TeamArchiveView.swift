@@ -29,7 +29,7 @@ struct TeamArchiveView: View {
                         } else {
                             ForEach(team.matches) { match in
                                 NavigationLink {
-                                    MatchGameDetailView(match: match, team: team)
+                                    MatchGameDetailView(match: match, team: team, teamStore: teamStore)
                                 } label: {
                                     VStack(spacing: 12) {
                                         Text("\(team.name) vs \(match.opponent.isEmpty ? "Opponent" : match.opponent)")

@@ -142,7 +142,7 @@ struct HomeArchiveView: View {
                     List {
                         ForEach(team.matches) { m in
                             NavigationLink {
-                                MatchGameDetailView(match: m, team: team)
+                                MatchGameDetailView(match: m, team: team, teamStore: teamStore)
                             } label: {
                                 matchRow(match: m)
                                     .contentShape(Rectangle())

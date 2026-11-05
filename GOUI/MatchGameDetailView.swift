@@ -3,8 +3,25 @@ import SwiftUI
 /// Game detail screen shown when tapping a match in the archive.
 /// Shows: score header, timeline, aggregated stats (goals, assists, shots, saves, cards, subs).
 struct MatchGameDetailView: View {
-    let match: MatchRecord
+    private let initialMatch: MatchRecord
     let team: Team
+    /// When provided, the screen shows an Edit button and reflects saved edits.
+    var teamStore: TeamStore? = nil
+
+    @Environment(\.dismiss) private var dismissDetail
+    @State private var showEdit = false
+
+    init(match: MatchRecord, team: Team, teamStore: TeamStore? = nil) {
+        self.initialMatch = match
+        self.team = team
+        self.teamStore = teamStore
+    }
+
+    /// The latest saved version of this match (so edits show immediately).
+    private var match: MatchRecord {
+        teamStore?.teams.first(where: { $0.id == team.id })?
+            .matches.first(where: { $0.id == initialMatch.id }) ?? initialMatch
+    }
 
     @State private var insightText: String? = nil
     @State private var insightLoading = false
@@ -33,6 +50,24 @@ struct MatchGameDetailView: View {
         }
         .navigationTitle("Game Detail")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if teamStore != nil {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Edit") { showEdit = true }
+                }
+            }
+        }
+        .sheet(isPresented: $showEdit) {
+            if let teamStore {
+                EditMatchSheet(teamStore: teamStore, teamID: team.id, match: match) {
+                    dismissDetail()
+                }
+            }
+        }
+        .onChange(of: match) { _, _ in
+            // After an edit, show the fresh recap state instead of the old cached one.
+            insightText = MatchAIService.cachedText(forKey: insightCacheKey)
+        }
         .onAppear {
             if let cached = MatchAIService.cachedText(forKey: insightCacheKey) {
                 insightText = cached
