@@ -349,6 +349,11 @@ struct Team: Identifiable, Codable, Hashable {
     /// True for the sample team created on first launch; not uploaded to iCloud
     /// until it has real matches.
     var isDemo: Bool = false
+
+    /// Match format: 2 = halves, 4 = quarters.
+    var periodCount: Int = 2
+    /// Length of each period in minutes; 0 = no set length (clock just counts up).
+    var periodMinutes: Int = 0
 }
 
 extension Team {
@@ -576,5 +581,7 @@ extension Team {
         deletedMatchIDs = c.value(.deletedMatchIDs, or: [])
         deletedPlayerIDs = c.value(.deletedPlayerIDs, or: [])
         isDemo = c.value(.isDemo, or: false)
+        periodCount = c.value(.periodCount, or: 2)
+        periodMinutes = c.value(.periodMinutes, or: 0)
     }
 }

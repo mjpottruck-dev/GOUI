@@ -33,6 +33,10 @@ enum MatchStatePersistence {
         var wasRunning: Bool? = nil
         var savedAt: Date? = nil
         var matchEnded: Bool? = nil
+        var currentPeriod: Int? = nil
+        var periodCount: Int? = nil
+        var periodMinutes: Int? = nil
+        var periodStartSeconds: Int? = nil
     }
 
     static func save(from store: MatchSessionStore, teamName: String, opponent: String) {
@@ -55,7 +59,11 @@ enum MatchStatePersistence {
             goalkeeperDepthIDs: store.goalkeeperDepthIDs,
             wasRunning: store.isRunning,
             savedAt: Date(),
-            matchEnded: store.matchEnded
+            matchEnded: store.matchEnded,
+            currentPeriod: store.currentPeriod,
+            periodCount: store.periodCount,
+            periodMinutes: store.periodMinutes,
+            periodStartSeconds: store.periodStartSeconds
         )
         if let data = try? JSONEncoder().encode(state) {
             UserDefaults.standard.set(data, forKey: key)

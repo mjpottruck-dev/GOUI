@@ -15,8 +15,47 @@ final class MatchSessionStore: ObservableObject {
     // MARK: - Timer
     @Published var isRunning: Bool = false
     @Published private(set) var elapsedSeconds: Int = 0
-    @Published var hasSplitHalf: Bool = false
     @Published var matchEnded: Bool = false
+
+    // MARK: - Periods (halves or quarters)
+    /// 1-based period the clock is in.
+    @Published private(set) var currentPeriod: Int = 1
+    /// 2 = halves, 4 = quarters.
+    @Published var periodCount: Int = 2
+    /// Minutes per period; 0 = no set length.
+    @Published var periodMinutes: Int = 0
+    /// Match clock value when the current period started.
+    @Published private(set) var periodStartSeconds: Int = 0
+    /// True once the current period's time has run out (cleared when it ends).
+    @Published var periodTimeUp: Bool = false
+
+    /// Kept for older code: true after the first period ends.
+    var hasSplitHalf: Bool { currentPeriod > 1 }
+    var isFinalPeriod: Bool { currentPeriod >= periodCount }
+
+    /// "1st half", "2nd half", "Q3"
+    var periodName: String {
+        if periodCount == 4 { return "Q\(currentPeriod)" }
+        return currentPeriod == 1 ? "1st half" : "2nd half"
+    }
+
+    /// Header label: "1ST HALF", "QUARTER 3"
+    var periodLabel: String {
+        if periodCount == 4 { return "QUARTER \(currentPeriod)" }
+        return currentPeriod == 1 ? "1ST HALF" : "2ND HALF"
+    }
+
+    /// Seconds left in the current period (negative = stoppage time), or nil if no set length.
+    var periodSecondsRemaining: Int? {
+        guard periodMinutes > 0 else { return nil }
+        return periodMinutes * 60 - (elapsedSeconds - periodStartSeconds)
+    }
+
+    /// e.g. "2 × 25 min", "4 × 12 min", "2 halves"
+    var formatDescription: String {
+        let unit = periodCount == 4 ? "quarters" : "halves"
+        return periodMinutes > 0 ? "\(periodCount) × \(periodMinutes) min" : "\(periodCount) \(unit)"
+    }
 
     private var startDate: Date? = nil {
         didSet { startTime = startDate }
@@ -104,15 +143,21 @@ final class MatchSessionStore: ObservableObject {
         persist()
     }
 
-    /// Marks halftime: freezes clock at current time, changes label to 2ND HALF.
-    /// Clock NEVER resets — continues from current time when Resume is tapped.
+    /// Ends the current period (halftime, or end of a quarter). The match clock
+    /// NEVER resets: it continues from its current value when Resume is tapped, and
+    /// the next period's time-left countdown starts from here.
     func splitHalf() {
-        hasSplitHalf = true
-        // Do NOT reset accumulatedSeconds, elapsedSeconds, or elapsedTime
-        // The clock just stays frozen at its current value
-        updateLiveActivity(lastEvent: "Halftime")
+        guard !isFinalPeriod else { return }
+        let ended = periodCount == 4 ? "End of Q\(currentPeriod)" : "Halftime"
+        currentPeriod += 1
+        periodStartSeconds = elapsedSeconds
+        periodTimeUp = false
+        updateLiveActivity(lastEvent: ended)
         persist()
     }
+
+    /// Same as splitHalf(); clearer name for quarters.
+    func endPeriod() { splitHalf() }
 
     /// Legacy name kept for backward compatibility
     func splitHalfAndResume() {
@@ -145,6 +190,12 @@ final class MatchSessionStore: ObservableObject {
         }
         elapsedTime = TimeInterval(elapsedSeconds)
         updatePlayerSecondsIfNeeded()
+
+        // Period time ran out: buzz once and let the coach decide (refs add stoppage time).
+        if isRunning, !periodTimeUp, let left = periodSecondsRemaining, left <= 0 {
+            periodTimeUp = true
+            Haptics.warning()
+        }
 
         // Save the running match every 15 seconds so a crash loses at most ~15s of minutes
         if isRunning, elapsedSeconds - lastPersistSeconds >= 15 {
@@ -179,7 +230,9 @@ final class MatchSessionStore: ObservableObject {
         elapsedTime = 0
         accumulatedSeconds = 0
         elapsedSeconds = 0
-        hasSplitHalf = false
+        currentPeriod = 1
+        periodStartSeconds = 0
+        periodTimeUp = false
         matchEnded = false
         MatchStatePersistence.clear()
         lastPlayerUpdateSeconds = 0
@@ -196,6 +249,8 @@ final class MatchSessionStore: ObservableObject {
 
         if let team {
             fieldSize = team.fieldSize
+            periodCount = team.periodCount == 4 ? 4 : 2
+            periodMinutes = max(0, team.periodMinutes)
 
             // Ensure formation matches team's field size
             if let f = formation, f.playerCount == fieldSize {
@@ -287,7 +342,11 @@ final class MatchSessionStore: ObservableObject {
         isActive = state.isActive
         goalsFor = state.goalsFor
         goalsAgainst = state.goalsAgainst
-        hasSplitHalf = state.hasSplitHalf
+        periodCount = state.periodCount ?? 2
+        periodMinutes = state.periodMinutes ?? 0
+        currentPeriod = state.currentPeriod ?? (state.hasSplitHalf ? 2 : 1)
+        periodStartSeconds = state.periodStartSeconds ?? 0
+        periodTimeUp = false
         matchEnded = state.matchEnded == true
         events = state.events
         fieldSize = state.fieldSize
@@ -539,6 +598,7 @@ final class MatchSessionStore: ObservableObject {
             awayScore: goalsAgainst,
             elapsedSeconds: elapsedSeconds,
             hasSplitHalf: hasSplitHalf,
+            periodLabel: periodLabel,
             teamName: liveActivityTeamName,
             opponentName: liveActivityOpponent,
             lastEvent: lastEvent

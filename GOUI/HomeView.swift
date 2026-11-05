@@ -291,11 +291,6 @@ struct HomeView: View {
                         .tourAnchor(.archive)
 
                     }
-
-                    // -- 6. Last match, top scorers, playing time --
-                    if let team = resolvedTeam {
-                        HomeInsightCards(team: team, teamStore: teamStore)
-                    }
                 }
                 .padding(.horizontal, GoStatsTheme.cardMargin)
                 .padding(.bottom, 40)

@@ -32,6 +32,7 @@ struct MatchView: View {
     @State private var dismissedSuggestionPlayerIDs: Set<UUID> = []
     @State private var lastSuggestionCheckMinute: Int = -10
     @State private var showTour = false
+    @State private var showFormatSheet = false
     @AppStorage(TourFlags.matchDoneKey) private var matchTourDone = false
 
     private var resolvedFormation: Formation {
@@ -47,7 +48,8 @@ struct MatchView: View {
     // State 6: Paused 2H  (isActive, !isRunning, hasSplitHalf, !matchEnded, elapsed>0 or just paused)
     // State 7: Ended      (matchEnded)
 
-    private var isSecondHalf: Bool { store.hasSplitHalf }
+    /// In the last period (2nd half or Q4): End is available and pausing doesn't offer a break.
+    private var isSecondHalf: Bool { store.isFinalPeriod }
     private var showEndMatch: Bool {
         // End Match only in states 5 and 6
         // Also shown after the match is ended, so Cancel on the End sheet (or a restore
@@ -143,20 +145,34 @@ struct MatchView: View {
         .sheet(isPresented: $showLineChangeSheet) {
             LineChangeSheet(store: store)
         }
-        // 1st half pause: Pause or Halftime options
+        // Pause before the final period: just pause, or end the half / quarter
         .confirmationDialog("Clock Paused", isPresented: $showPauseOptions, titleVisibility: .visible) {
             Button("Pause") {
                 // Stay paused, label unchanged
             }
-            Button("Halftime") {
-                store.splitHalf()
+            Button(store.periodCount == 4 ? "End \(store.periodName)" : "Halftime") {
+                store.endPeriod()
             }
             Button("Cancel", role: .cancel) {
                 store.startGame() // resume on cancel
             }
         } message: {
-            Text("Choose Pause to hold the clock, or Halftime to start 2nd half at 00:00 when you resume.")
+            Text(store.periodCount == 4
+                 ? "Choose Pause to hold the clock, or End \(store.periodName) to start the next quarter when you resume."
+                 : "Choose Pause to hold the clock, or Halftime to start the 2nd half when you resume.")
         }
+        .sheet(isPresented: $showFormatSheet) {
+            MatchFormatSheet(store: store, teamStore: teamStore, teamID: teamID)
+        }
+        .overlay(alignment: .top) {
+            if store.periodTimeUp && store.isRunning && !store.matchEnded {
+                periodTimeUpBanner
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .animation(.spring(response: 0.35), value: store.periodTimeUp)
         .confirmationDialog("Reset current match?", isPresented: $showResetConfirm, titleVisibility: .visible) {
             Button("Reset Match", role: .destructive) {
                 if let team = teamStore.teams.first(where: { $0.id == teamID }) {
@@ -225,9 +241,30 @@ struct MatchView: View {
                     .padding(.trailing, 8)
                 }
 
-                Text(store.hasSplitHalf ? "2ND HALF" : "1ST HALF")
-                    .font(.custom("DM Sans", size: 10).weight(.medium)).tracking(1)
-                    .foregroundStyle(GoStatsTheme.scoreMuted)
+                if !store.isActive {
+                    // Before kickoff: tap to choose halves/quarters and length.
+                    Button {
+                        Haptics.light()
+                        showFormatSheet = true
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text(store.formatDescription.uppercased())
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 8, weight: .bold))
+                        }
+                        .font(.custom("DM Sans", size: 10).weight(.semibold)).tracking(1)
+                        .foregroundStyle(GoStatsTheme.scoreText)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(Capsule().fill(Color.white.opacity(0.14)))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Match format, \(store.formatDescription). Change")
+                } else {
+                    Text(store.periodLabel)
+                        .font(.custom("DM Sans", size: 10).weight(.medium)).tracking(1)
+                        .foregroundStyle(GoStatsTheme.scoreMuted)
+                }
             }
 
             HStack(alignment: .center) {
@@ -235,9 +272,10 @@ struct MatchView: View {
                     Text(store.timeString)
                         .font(.custom("DM Mono", size: 26))
                         .foregroundStyle(GoStatsTheme.scoreText)
-                    Text("TIME")
+                    Text(timeCaption)
                         .font(.custom("DM Sans", size: 10).weight(.medium)).tracking(1)
-                        .foregroundStyle(GoStatsTheme.scoreMuted)
+                        .foregroundStyle(timeCaptionIsOver ? GoStatsTheme.accent : GoStatsTheme.scoreMuted)
+                        .monospacedDigit()
                 }
                 Spacer()
                 Text("\(store.goalsFor) - \(store.goalsAgainst)")
@@ -542,6 +580,65 @@ struct MatchView: View {
         if !store.isActive { return "Start Game" }       // State 1
         if store.isRunning { return "Pause" }             // States 2, 5
         return "Resume"                                    // States 3, 4, 6
+    }
+
+    // MARK: - Period time
+
+    /// "TIME", "12:34 LEFT", or "+0:45 STOPPAGE"
+    private var timeCaption: String {
+        guard store.isActive, !store.matchEnded, let left = store.periodSecondsRemaining else { return "TIME" }
+        let m = abs(left) / 60, s = abs(left) % 60
+        let clock = String(format: "%d:%02d", m, s)
+        return left >= 0 ? "\(clock) LEFT" : "+\(clock) STOPPAGE"
+    }
+
+    private var timeCaptionIsOver: Bool {
+        (store.periodSecondsRemaining ?? 1) < 0 && store.isActive && !store.matchEnded
+    }
+
+    private var periodTimeUpBanner: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "timer")
+                .font(.system(size: 18, weight: .semibold))
+            VStack(alignment: .leading, spacing: 2) {
+                Text("\(store.periodName.prefix(1).uppercased() + store.periodName.dropFirst()) time is up")
+                    .font(.system(size: 15, weight: .semibold))
+                Text("Clock keeps running for stoppage.")
+                    .font(.system(size: 12))
+                    .opacity(0.7)
+            }
+            Spacer()
+            Button("Keep") {
+                store.periodTimeUp = false
+            }
+            .font(.system(size: 14, weight: .medium))
+            .opacity(0.8)
+            Button {
+                haptic(.medium)
+                store.pauseGame()
+                if store.isFinalPeriod {
+                    store.endMatchFreeze()
+                    showingEndSheet = true
+                } else {
+                    store.endPeriod()
+                }
+            } label: {
+                Text(store.isFinalPeriod ? "End Match" : (store.periodCount == 4 ? "End \(store.periodName)" : "Halftime"))
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(GoStatsTheme.textPrimary)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(Capsule().fill(Color.white))
+            }
+            .buttonStyle(.plain)
+        }
+        .foregroundStyle(.white)
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(GoStatsTheme.textPrimary)
+                .shadow(color: .black.opacity(0.25), radius: 14, y: 6)
+        )
     }
 
     private func handleStartPause() {

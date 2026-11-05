@@ -68,6 +68,7 @@ final class LiveActivityManager: @unchecked Sendable {
         awayScore: Int,
         elapsedSeconds: Int,
         hasSplitHalf: Bool,
+        periodLabel: String? = nil,
         teamName: String,
         opponentName: String,
         lastEvent: String = ""
@@ -81,7 +82,7 @@ final class LiveActivityManager: @unchecked Sendable {
         let minutes = elapsedSeconds / 60
         let seconds = elapsedSeconds % 60
         let minuteStr = String(format: "%02d:%02d", minutes, seconds)
-        let halfStr = hasSplitHalf ? "2ND HALF" : "1ST HALF"
+        let halfStr = periodLabel ?? (hasSplitHalf ? "2ND HALF" : "1ST HALF")
 
         let state = MatchActivityAttributes.ContentState(
             homeScore: homeScore,
