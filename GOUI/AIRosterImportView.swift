@@ -310,18 +310,6 @@ struct AIRosterImportView: View {
     }
 
     private func callAnthropicVision(base64Data: String, mediaType: String) async throws -> [ImportedPlayer] {
-        let apiKey = UserDefaults.standard.string(forKey: "anthropic_api_key") ?? ""
-        guard !apiKey.isEmpty else {
-            throw NSError(domain: "", code: 0, userInfo: [NSLocalizedDescriptionKey: "Add your Anthropic API key in Settings."])
-        }
-
-        let url = URL(string: "https://api.anthropic.com/v1/messages")!
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "content-type")
-        request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
-        request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
-
         let systemPrompt = "You are a sports roster reader. Extract all players from this image or document. For each player return a JSON array with these exact fields: \"name\" (full name), \"number\" (jersey number as integer or null if not found), \"position\" (position abbreviation like GK, CB, RB, LB, CM, CDM, CAM, RM, LM, ST, CF or null if not found). Return ONLY the JSON array, no other text, no markdown, no backticks."
 
         let sourceType: String
@@ -331,11 +319,7 @@ struct AIRosterImportView: View {
             sourceType = "image"
         }
 
-        let body: [String: Any] = [
-            "model": "claude-sonnet-4-20250514",
-            "max_tokens": 1000,
-            "system": systemPrompt,
-            "messages": [[
+        let messages: [[String: Any]] = [[
                 "role": "user",
                 "content": [
                     [
@@ -352,15 +336,10 @@ struct AIRosterImportView: View {
                     ]
                 ]
             ]]
-        ]
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
-        let (responseData, _) = try await URLSession.shared.data(for: request)
+        let text = try await AIClient.send(feature: .roster, system: systemPrompt, messages: messages, maxTokens: 2000)
 
-        guard let json = try? JSONSerialization.jsonObject(with: responseData) as? [String: Any],
-              let content = json["content"] as? [[String: Any]],
-              let text = content.first?["text"] as? String,
-              let jsonData = text.data(using: .utf8),
+        guard let jsonData = AIClient.stripCodeFences(text).data(using: .utf8),
               let parsed = try? JSONDecoder().decode([RawPlayer].self, from: jsonData)
         else {
             throw NSError(domain: "", code: 0)

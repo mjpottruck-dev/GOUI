@@ -627,7 +627,7 @@ struct HomeView: View {
 
         Task {
             do {
-                let text = try await MatchAIService.generate(systemPrompt: systemPrompt, userMessage: context)
+                let text = try await MatchAIService.generate(systemPrompt: systemPrompt, userMessage: context, feature: .season)
                 await MainActor.run {
                     seasonInsight = text
                     showSeasonInsightBanner = true

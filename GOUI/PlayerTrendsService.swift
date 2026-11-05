@@ -42,36 +42,6 @@ final class PlayerTrendsService: ObservableObject {
     }
 
     private func callAnthropic(prompt: String) async throws -> String {
-        // Check for API key in UserDefaults or bundle
-        let apiKey = UserDefaults.standard.string(forKey: "anthropic_api_key") ?? ""
-        guard !apiKey.isEmpty else {
-            return "Add your Anthropic API key in Settings to enable AI insights."
-        }
-
-        let url = URL(string: "https://api.anthropic.com/v1/messages")!
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "content-type")
-        request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
-        request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
-
-        let body: [String: Any] = [
-            "model": "claude-haiku-4-5-20251001",
-            "max_tokens": 200,
-            "messages": [
-                ["role": "user", "content": prompt]
-            ]
-        ]
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
-
-        let (data, _) = try await URLSession.shared.data(for: request)
-
-        if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-           let content = json["content"] as? [[String: Any]],
-           let text = content.first?["text"] as? String {
-            return text
-        }
-
-        return "Unable to analyze performance right now."
+        try await AIClient.send(feature: .trends, prompt: prompt, maxTokens: 200)
     }
 }

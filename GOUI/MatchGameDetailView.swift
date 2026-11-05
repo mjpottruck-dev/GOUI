@@ -282,7 +282,7 @@ struct MatchGameDetailView: View {
             do {
                 let context = MatchAIService.buildMatchContext(match: match, team: team, players: team.players, includeTimingDetail: true)
                 let systemPrompt = "You are a youth soccer performance analyst. Given this match data, provide one specific tactical insight that would help the coach improve. Focus on patterns like: when goals were scored, shot conversion rate, defensive vulnerabilities, or substitution timing. Be specific and actionable. 2-3 sentences max. Return only the insight text, nothing else."
-                let text = try await MatchAIService.generate(systemPrompt: systemPrompt, userMessage: context)
+                let text = try await MatchAIService.generate(systemPrompt: systemPrompt, userMessage: context, feature: .insight)
                 await MainActor.run {
                     insightText = text
                     insightLoading = false

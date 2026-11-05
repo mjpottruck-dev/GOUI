@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		3A10C00C2F90000100AA0001 /* GoalStatsLiveActivityExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 3A10C0012F90000100AA0001 /* GoalStatsLiveActivityExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		212D86D12F18306900F6E788 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -21,12 +25,34 @@
 			remoteGlobalIDString = 212D86C22F18306900F6E788;
 			remoteInfo = GOUI;
 		};
+		3A10C00D2F90000100AA0001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 212D86BB2F18306900F6E788 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 3A10C0072F90000100AA0001;
+			remoteInfo = GoalStatsLiveActivityExtension;
+		};
 /* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		3A10C00B2F90000100AA0001 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				3A10C00C2F90000100AA0001 /* GoalStatsLiveActivityExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		212D86C32F18306900F6E788 /* GOUI.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GOUI.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		212D86D02F18306900F6E788 /* GOUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = GOUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		212D86DA2F18306900F6E788 /* GOUIUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = GOUIUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		3A10C0012F90000100AA0001 /* GoalStatsLiveActivityExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = GoalStatsLiveActivityExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -37,6 +63,13 @@
 			);
 			target = 212D86C22F18306900F6E788 /* GOUI */;
 		};
+		3A10C0032F90000100AA0001 /* Exceptions for "GoalStatsLiveActivity" folder in "GoalStatsLiveActivityExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 3A10C0072F90000100AA0001 /* GoalStatsLiveActivityExtension */;
+		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -46,6 +79,14 @@
 				21F7FE982F257FD200041256 /* Exceptions for "GOUI" folder in "GOUI" target */,
 			);
 			path = GOUI;
+			sourceTree = "<group>";
+		};
+		3A10C0022F90000100AA0001 /* GoalStatsLiveActivity */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				3A10C0032F90000100AA0001 /* Exceptions for "GoalStatsLiveActivity" folder in "GoalStatsLiveActivityExtension" target */,
+			);
+			path = GoalStatsLiveActivity;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -72,6 +113,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		3A10C0052F90000100AA0001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -79,6 +127,7 @@
 			isa = PBXGroup;
 			children = (
 				212D86C52F18306900F6E788 /* GOUI */,
+				3A10C0022F90000100AA0001 /* GoalStatsLiveActivity */,
 				212D86C42F18306900F6E788 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -89,6 +138,7 @@
 				212D86C32F18306900F6E788 /* GOUI.app */,
 				212D86D02F18306900F6E788 /* GOUITests.xctest */,
 				212D86DA2F18306900F6E788 /* GOUIUITests.xctest */,
+				3A10C0012F90000100AA0001 /* GoalStatsLiveActivityExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -103,10 +153,12 @@
 				212D86BF2F18306900F6E788 /* Sources */,
 				212D86C02F18306900F6E788 /* Frameworks */,
 				212D86C12F18306900F6E788 /* Resources */,
+				3A10C00B2F90000100AA0001 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				3A10C00E2F90000100AA0001 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				212D86C52F18306900F6E788 /* GOUI */,
@@ -158,6 +210,28 @@
 			productReference = 212D86DA2F18306900F6E788 /* GOUIUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
+		3A10C0072F90000100AA0001 /* GoalStatsLiveActivityExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 3A10C00A2F90000100AA0001 /* Build configuration list for PBXNativeTarget "GoalStatsLiveActivityExtension" */;
+			buildPhases = (
+				3A10C0042F90000100AA0001 /* Sources */,
+				3A10C0052F90000100AA0001 /* Frameworks */,
+				3A10C0062F90000100AA0001 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				3A10C0022F90000100AA0001 /* GoalStatsLiveActivity */,
+			);
+			name = GoalStatsLiveActivityExtension;
+			packageProductDependencies = (
+			);
+			productName = GoalStatsLiveActivityExtension;
+			productReference = 3A10C0012F90000100AA0001 /* GoalStatsLiveActivityExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -188,6 +262,9 @@
 						CreatedOnToolsVersion = 16.4;
 						TestTargetID = 212D86C22F18306900F6E788;
 					};
+					3A10C0072F90000100AA0001 = {
+						CreatedOnToolsVersion = 26.0;
+					};
 				};
 			};
 			buildConfigurationList = 212D86BE2F18306900F6E788 /* Build configuration list for PBXProject "GOUI" */;
@@ -207,6 +284,7 @@
 				212D86C22F18306900F6E788 /* GOUI */,
 				212D86CF2F18306900F6E788 /* GOUITests */,
 				212D86D92F18306900F6E788 /* GOUIUITests */,
+				3A10C0072F90000100AA0001 /* GoalStatsLiveActivityExtension */,
 			);
 		};
 /* End PBXProject section */
@@ -227,6 +305,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		212D86D82F18306900F6E788 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		3A10C0062F90000100AA0001 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -257,6 +342,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		3A10C0042F90000100AA0001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -269,6 +361,11 @@
 			isa = PBXTargetDependency;
 			target = 212D86C22F18306900F6E788 /* GOUI */;
 			targetProxy = 212D86DB2F18306900F6E788 /* PBXContainerItemProxy */;
+		};
+		3A10C00E2F90000100AA0001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 3A10C0072F90000100AA0001 /* GoalStatsLiveActivityExtension */;
+			targetProxy = 3A10C00D2F90000100AA0001 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -535,6 +632,60 @@
 			};
 			name = Release;
 		};
+		3A10C0082F90000100AA0001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 4;
+				DEVELOPMENT_TEAM = Q85Y33N6RX;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = GoalStatsLiveActivity/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Goal Stats";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.2;
+				PRODUCT_BUNDLE_IDENTIFIER = com.maxpottruck.GOUI.GoalStatsLiveActivity;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		3A10C0092F90000100AA0001 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 4;
+				DEVELOPMENT_TEAM = Q85Y33N6RX;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = GoalStatsLiveActivity/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Goal Stats";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.2;
+				PRODUCT_BUNDLE_IDENTIFIER = com.maxpottruck.GOUI.GoalStatsLiveActivity;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -570,6 +721,15 @@
 			buildConfigurations = (
 				212D86EB2F18306900F6E788 /* Debug */,
 				212D86EC2F18306900F6E788 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		3A10C00A2F90000100AA0001 /* Build configuration list for PBXNativeTarget "GoalStatsLiveActivityExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				3A10C0082F90000100AA0001 /* Debug */,
+				3A10C0092F90000100AA0001 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

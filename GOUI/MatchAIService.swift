@@ -6,39 +6,9 @@ enum MatchAIService {
 
     // MARK: - API Call
 
-    static func generate(systemPrompt: String, userMessage: String) async throws -> String {
+    static func generate(systemPrompt: String, userMessage: String, feature: AIFeature = .recap) async throws -> String {
         guard ProAccess.isPro else { throw AIError.proRequired } // backstop; UI shows the paywall first
-        let apiKey = UserDefaults.standard.string(forKey: "anthropic_api_key") ?? ""
-        guard !apiKey.isEmpty else {
-            throw AIError.noAPIKey
-        }
-
-        let url = URL(string: "https://api.anthropic.com/v1/messages")!
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "content-type")
-        request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
-        request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
-
-        let body: [String: Any] = [
-            "model": "claude-sonnet-4-20250514",
-            "max_tokens": 500,
-            "system": systemPrompt,
-            "messages": [["role": "user", "content": userMessage]]
-        ]
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
-
-        let (data, _) = try await URLSession.shared.data(for: request)
-
-        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let content = json["content"] as? [[String: Any]],
-              let text = content.first?["text"] as? String,
-              !text.isEmpty
-        else {
-            throw AIError.parseError
-        }
-
-        return text
+        return try await AIClient.send(feature: feature, system: systemPrompt, prompt: userMessage, maxTokens: 500)
     }
 
     // MARK: - Cache
@@ -213,13 +183,11 @@ enum MatchAIService {
     // MARK: - Errors
 
     enum AIError: LocalizedError {
-        case noAPIKey
         case parseError
         case proRequired
 
         var errorDescription: String? {
             switch self {
-            case .noAPIKey: return "Add your Anthropic API key in Settings."
             case .parseError: return "Couldn't generate summary. Check your connection and try again."
             case .proRequired: return "AI recaps are part of GoalStats Pro."
             }

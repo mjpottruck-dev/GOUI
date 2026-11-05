@@ -122,14 +122,18 @@ final class ProStore: ObservableObject {
 
     func refreshEntitlements() async {
         var active: String? = nil
+        var jws: String? = nil
         for await result in Transaction.currentEntitlements {
             guard case .verified(let t) = result,
                   Self.productIDs.contains(t.productID),
                   t.revocationDate == nil else { continue }
             if let expiry = t.expirationDate, expiry < Date() { continue }
             active = t.productID
+            jws = result.jwsRepresentation
         }
         activePlanID = active
+        // Apple-signed proof of the subscription; the AI backend verifies it.
+        UserDefaults.standard.set(jws, forKey: AIClient.transactionKey)
         // Cached so Pro works offline at kickoff; StoreKit re-checks on every launch.
         UserDefaults.standard.set(active != nil, forKey: ProAccess.cacheKey)
         isPro = ProAccess.isPro

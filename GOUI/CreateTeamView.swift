@@ -490,40 +490,18 @@ private struct CreateTeamAIImportView: View {
     }
 
     private func callAPI(base64: String, mediaType: String) async {
-        let apiKey = UserDefaults.standard.string(forKey: "anthropic_api_key") ?? ""
-        guard !apiKey.isEmpty else {
-            await MainActor.run { errorMessage = "Add your Anthropic API key in Settings." }
-            return
-        }
-
-        let url = URL(string: "https://api.anthropic.com/v1/messages")!
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "content-type")
-        request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
-        request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
-
         let sourceType = mediaType == "application/pdf" ? "document" : "image"
-        let body: [String: Any] = [
-            "model": "claude-sonnet-4-20250514",
-            "max_tokens": 1000,
-            "system": "You are a sports roster reader. Extract all players from this image or document. For each player return a JSON array with these exact fields: \"name\" (full name), \"number\" (jersey number as integer or null if not found), \"position\" (position abbreviation like GK, CB, RB, LB, CM, CDM, CAM, RM, LM, ST, CF or null if not found). Return ONLY the JSON array, no other text, no markdown, no backticks.",
-            "messages": [[
-                "role": "user",
-                "content": [
-                    ["type": sourceType, "source": ["type": "base64", "media_type": mediaType, "data": base64]],
-                    ["type": "text", "text": "Extract the roster from this image."]
-                ]
-            ]]
-        ]
-        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        let messages: [[String: Any]] = [[
+            "role": "user",
+            "content": [
+                ["type": sourceType, "source": ["type": "base64", "media_type": mediaType, "data": base64]],
+                ["type": "text", "text": "Extract the roster from this image."]
+            ]
+        ]]
 
         do {
-            let (responseData, _) = try await URLSession.shared.data(for: request)
-            guard let json = try? JSONSerialization.jsonObject(with: responseData) as? [String: Any],
-                  let content = json["content"] as? [[String: Any]],
-                  let text = content.first?["text"] as? String,
-                  let jsonData = text.data(using: .utf8),
+            let text = try await AIClient.send(feature: .roster, system: rosterSystemPrompt, messages: messages, maxTokens: 2000)
+            guard let jsonData = AIClient.stripCodeFences(text).data(using: .utf8),
                   let parsed = try? JSONDecoder().decode([RawPlayerData].self, from: jsonData)
             else {
                 await MainActor.run { errorMessage = "Couldn't read this file. Try a clearer image or a different file." }
@@ -537,10 +515,14 @@ private struct CreateTeamAIImportView: View {
                 importedPlayers = result
                 phase = .review
             }
+        } catch let failure as AIClient.Failure {
+            await MainActor.run { errorMessage = failure.localizedDescription }
         } catch {
             await MainActor.run { errorMessage = "Couldn't read this file. Try a clearer image or a different file." }
         }
     }
+
+    private let rosterSystemPrompt = "You are a sports roster reader. Extract all players from this image or document. For each player return a JSON array with these exact fields: \"name\" (full name), \"number\" (jersey number as integer or null if not found), \"position\" (position abbreviation like GK, CB, RB, LB, CM, CDM, CAM, RM, LM, ST, CF or null if not found). Return ONLY the JSON array, no other text, no markdown, no backticks."
 
     private struct RawPlayerData: Codable {
         let name: String

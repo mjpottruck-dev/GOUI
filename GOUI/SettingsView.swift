@@ -7,7 +7,6 @@ struct SettingsView: View {
     @AppStorage(DebugSettings.skipSplashKey) private var skipSplashEnabled = false
     @AppStorage(SettingsKeys.maxPrepsTeamID) private var maxPrepsTeamID: String = ""
     @AppStorage("substitution_suggestions_enabled") private var subSuggestionsEnabled = true
-    @AppStorage("anthropic_api_key") private var anthropicAPIKey: String = ""
     @AppStorage(Haptics.enabledKey) private var hapticsEnabled = true
     @AppStorage(Haptics.intensityKey) private var hapticsIntensity = 0.8
     @State private var tourResetConfirmed = false
@@ -15,6 +14,8 @@ struct SettingsView: View {
     @Environment(\.openURL) private var openURL
     #if DEBUG
     @AppStorage(ProAccess.debugOverrideKey) private var simulatePro = false
+    @AppStorage(AIClient.debugURLKey) private var aiBackendURL = ""
+    @AppStorage(AIClient.debugDevKey) private var aiDevKey = ""
     #endif
 
     var body: some View {
@@ -173,41 +174,6 @@ struct SettingsView: View {
                             )
                         }
 
-                        // AI Features
-                        VStack(alignment: .leading, spacing: 8) {
-                            GoStatsTheme.sectionHeader("AI FEATURES")
-
-                            VStack(spacing: 0) {
-                                HStack {
-                                    Text("API Key")
-                                        .font(.system(size: 15))
-                                        .foregroundStyle(GoStatsTheme.textPrimary)
-                                    Spacer()
-                                    SecureField("Anthropic API Key", text: $anthropicAPIKey)
-                                        .multilineTextAlignment(.trailing)
-                                        .textInputAutocapitalization(.never)
-                                        .autocorrectionDisabled()
-                                        .font(.system(size: 15))
-                                        .foregroundStyle(GoStatsTheme.textPrimary)
-                                }
-                                .padding(.horizontal, GoStatsTheme.cardPadding)
-                                .padding(.vertical, 14)
-
-                                Rectangle().fill(GoStatsTheme.divider).frame(height: GoStatsTheme.dividerWidth)
-
-                                Text("Required for AI match summaries, game insights, and season reports. Get yours at console.anthropic.com")
-                                    .font(.system(size: 13))
-                                    .foregroundStyle(GoStatsTheme.textMuted)
-                                    .padding(.horizontal, GoStatsTheme.cardPadding)
-                                    .padding(.vertical, 10)
-                            }
-                            .background(
-                                RoundedRectangle(cornerRadius: GoStatsTheme.cardRadius, style: .continuous)
-                                    .fill(Color.white)
-                                    .shadow(color: GoStatsTheme.cardShadowColor, radius: GoStatsTheme.cardShadowRadius, x: 0, y: GoStatsTheme.cardShadowY)
-                            )
-                        }
-
                         // MaxPreps
                         VStack(alignment: .leading, spacing: 8) {
                             GoStatsTheme.sectionHeader("MAXPREPS")
@@ -334,6 +300,36 @@ struct SettingsView: View {
                                     .onChange(of: simulatePro) { _, _ in
                                         Task { await pro.refreshEntitlements() }
                                     }
+
+                                Rectangle().fill(GoStatsTheme.divider).frame(height: GoStatsTheme.dividerWidth)
+
+                                HStack {
+                                    Text("AI Server")
+                                    Spacer()
+                                    TextField("http://localhost:3000", text: $aiBackendURL)
+                                        .multilineTextAlignment(.trailing)
+                                        .textInputAutocapitalization(.never)
+                                        .autocorrectionDisabled()
+                                        .keyboardType(.URL)
+                                        .foregroundStyle(GoStatsTheme.textMuted)
+                                }
+                                .font(.system(size: 15))
+                                .padding(.horizontal, GoStatsTheme.cardPadding)
+                                .padding(.vertical, 14)
+
+                                Rectangle().fill(GoStatsTheme.divider).frame(height: GoStatsTheme.dividerWidth)
+
+                                HStack {
+                                    Text("AI Dev Key")
+                                    Spacer()
+                                    SecureField("for Simulate Pro", text: $aiDevKey)
+                                        .multilineTextAlignment(.trailing)
+                                        .textInputAutocapitalization(.never)
+                                        .autocorrectionDisabled()
+                                }
+                                .font(.system(size: 15))
+                                .padding(.horizontal, GoStatsTheme.cardPadding)
+                                .padding(.vertical, 14)
 
                                 Rectangle().fill(GoStatsTheme.divider).frame(height: GoStatsTheme.dividerWidth)
 
