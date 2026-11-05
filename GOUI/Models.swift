@@ -340,6 +340,15 @@ struct Team: Identifiable, Codable, Hashable {
     var thirdGoalkeeperID: UUID? = nil
 
     var matches: [MatchRecord] = []
+
+    // Sync bookkeeping: IDs removed from this team, so iCloud merges on another
+    // device don't bring them back.
+    var deletedMatchIDs: [UUID] = []
+    var deletedPlayerIDs: [UUID] = []
+
+    /// True for the sample team created on first launch; not uploaded to iCloud
+    /// until it has real matches.
+    var isDemo: Bool = false
 }
 
 extension Team {
@@ -388,17 +397,58 @@ extension Team {
 // Swift's synthesized Codable REQUIRES every non-optional key to be present, even
 // when the property has a default value. So adding any new field (like `venue` or
 // `events` on MatchRecord) makes every file saved by an older build fail to load.
-// These decoders fill in defaults for missing or unreadable keys instead, so a
-// coach's teams and history survive every app update. Encoding stays synthesized.
+// These decoders fill in defaults for missing keys, skip only the individual bad
+// items in a list, and record any repair in `DecodeRepairs` so TeamStore can back
+// the original file up before saving over it. Encoding stays synthesized.
 // Rule for the future: new stored fields get a line here too.
 
+/// Counts values that were present in a saved file but could not be read.
+/// TeamStore resets it before loading and backs the file up if it's non-zero.
+enum DecodeRepairs {
+    static var count = 0
+}
+
+/// Decodes anything, so a bad element in an unkeyed container can be skipped.
+private struct SkippedElement: Decodable {
+    init(from decoder: Decoder) throws {}
+}
+
 extension KeyedDecodingContainer {
-    /// Decodes `key` if it is present and readable, otherwise returns `fallback`.
+    /// Decodes `key` if present and readable. Missing → `fallback` (expected after an
+    /// update adds a field). Present but unreadable → `fallback` and a recorded repair.
     func value<T: Decodable>(_ key: Key, or fallback: @autoclosure () -> T) -> T {
-        if let decoded = try? decodeIfPresent(T.self, forKey: key) {
-            return decoded
+        guard contains(key) else { return fallback() }
+        do {
+            if let decoded = try decodeIfPresent(T.self, forKey: key) {
+                return decoded
+            }
+            return fallback()
+        } catch {
+            DecodeRepairs.count += 1
+            print("⚠️ Could not read \(key.stringValue); using default:", error)
+            return fallback()
         }
-        return fallback()
+    }
+
+    /// Decodes an array element by element, keeping every readable element and
+    /// skipping (and recording) only the unreadable ones.
+    func lossyArray<T: Decodable>(_ key: Key) -> [T] {
+        guard contains(key), (try? decodeNil(forKey: key)) == false else { return [] }
+        guard var list = try? nestedUnkeyedContainer(forKey: key) else {
+            DecodeRepairs.count += 1
+            return []
+        }
+        var result: [T] = []
+        while !list.isAtEnd {
+            if let element = try? list.decode(T.self) {
+                result.append(element)
+            } else {
+                DecodeRepairs.count += 1
+                print("⚠️ Skipped an unreadable item in \(key.stringValue)")
+                if (try? list.decode(SkippedElement.self)) == nil { break }
+            }
+        }
+        return result
     }
 }
 
@@ -406,7 +456,7 @@ extension Season {
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         self.init(
-            id: c.value(.id, or: UUID()),
+            id: try c.decode(UUID.self, forKey: .id),
             name: c.value(.name, or: "Season"),
             startDate: c.value(.startDate, or: Date()),
             endDate: c.value(.endDate, or: Date())
@@ -417,33 +467,39 @@ extension Season {
 extension Player {
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
+        let id: UUID = try c.decode(UUID.self, forKey: .id)
+        let position: Position = c.value(.position, or: Position.cm)
+        let secondaryPosition: Position? = c.value(.secondaryPosition, or: nil)
+        let positionName: String? = c.value(.positionName, or: nil)
+        let isGoalie: Bool? = c.value(.isGoalie, or: nil)
+        let notes: String? = c.value(.notes, or: nil)
         self.init(
-            id: c.value(.id, or: UUID()),
+            id: id,
             name: c.value(.name, or: ""),
             number: c.value(.number, or: 0),
             jersey: c.value(.jersey, or: ""),
-            position: c.value(.position, or: .cm),
-            secondaryPosition: c.value(.secondaryPosition, or: nil),
-            positionName: c.value(.positionName, or: nil),
-            isGoalie: c.value(.isGoalie, or: nil),
-            notes: c.value(.notes, or: nil),
-            createdAt: c.value(.createdAt, or: Date()),
-            updatedAt: c.value(.updatedAt, or: Date()),
-            secondsPlayed: c.value(.secondsPlayed, or: 0),
-            goals: c.value(.goals, or: 0),
-            assists: c.value(.assists, or: 0),
-            shots: c.value(.shots, or: 0),
-            shotsOnTarget: c.value(.shotsOnTarget, or: 0),
-            yellowCards: c.value(.yellowCards, or: 0),
-            redCards: c.value(.redCards, or: 0),
-            saves: c.value(.saves, or: 0),
-            goalsConceded: c.value(.goalsConceded, or: 0),
-            pkFaced: c.value(.pkFaced, or: 0),
-            pkSaved: c.value(.pkSaved, or: 0),
-            pkConceded: c.value(.pkConceded, or: 0),
-            pkGoals: c.value(.pkGoals, or: 0),
-            pkAttempts: c.value(.pkAttempts, or: 0)
+            position: position,
+            secondaryPosition: secondaryPosition,
+            positionName: positionName,
+            isGoalie: isGoalie,
+            notes: notes
         )
+        createdAt = c.value(.createdAt, or: Date.distantPast)
+        updatedAt = c.value(.updatedAt, or: Date.distantPast)
+        secondsPlayed = c.value(.secondsPlayed, or: 0)
+        goals = c.value(.goals, or: 0)
+        assists = c.value(.assists, or: 0)
+        shots = c.value(.shots, or: 0)
+        shotsOnTarget = c.value(.shotsOnTarget, or: 0)
+        yellowCards = c.value(.yellowCards, or: 0)
+        redCards = c.value(.redCards, or: 0)
+        saves = c.value(.saves, or: 0)
+        goalsConceded = c.value(.goalsConceded, or: 0)
+        pkFaced = c.value(.pkFaced, or: 0)
+        pkSaved = c.value(.pkSaved, or: 0)
+        pkConceded = c.value(.pkConceded, or: 0)
+        pkGoals = c.value(.pkGoals, or: 0)
+        pkAttempts = c.value(.pkAttempts, or: 0)
     }
 }
 
@@ -471,41 +527,54 @@ extension PlayerStatLine {
 extension MatchRecord {
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        self.init(
-            id: c.value(.id, or: UUID()),
-            date: c.value(.date, or: Date()),
-            opponent: c.value(.opponent, or: ""),
-            title: c.value(.title, or: ""),
-            notes: c.value(.notes, or: ""),
-            goalsFor: c.value(.goalsFor, or: 0),
-            goalsAgainst: c.value(.goalsAgainst, or: 0),
-            secondsElapsed: c.value(.secondsElapsed, or: 0),
-            fieldSize: c.value(.fieldSize, or: 7),
-            seasonID: c.value(.seasonID, or: nil),
-            venue: c.value(.venue, or: ""),
-            playerSeconds: c.value(.playerSeconds, or: [:]),
-            playerStats: c.value(.playerStats, or: [:]),
-            events: c.value(.events, or: [])
-        )
+        let id: UUID = try c.decode(UUID.self, forKey: .id)
+        let seasonID: UUID? = c.value(.seasonID, or: nil)
+        let playerSeconds: [UUID: Int] = c.value(.playerSeconds, or: [:])
+        let playerStats: [UUID: PlayerStatLine] = c.value(.playerStats, or: [:])
+        let events: [MatchEvent] = c.lossyArray(.events)
+        self.init(id: id)
+        date = c.value(.date, or: Date.distantPast)
+        opponent = c.value(.opponent, or: "")
+        title = c.value(.title, or: "")
+        notes = c.value(.notes, or: "")
+        goalsFor = c.value(.goalsFor, or: 0)
+        goalsAgainst = c.value(.goalsAgainst, or: 0)
+        secondsElapsed = c.value(.secondsElapsed, or: 0)
+        fieldSize = c.value(.fieldSize, or: 7)
+        self.seasonID = seasonID
+        venue = c.value(.venue, or: "")
+        self.playerSeconds = playerSeconds
+        self.playerStats = playerStats
+        self.events = events
     }
 }
 
 extension Team {
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        self.init(
-            id: c.value(.id, or: UUID()),
-            name: c.value(.name, or: "Team"),
-            players: c.value(.players, or: []),
-            createdAt: c.value(.createdAt, or: Date()),
-            updatedAt: c.value(.updatedAt, or: Date()),
-            fieldSize: c.value(.fieldSize, or: 11),
-            startingOnFieldIDs: c.value(.startingOnFieldIDs, or: []),
-            primaryFormation: c.value(.primaryFormation, or: .f433),
-            primaryGoalkeeperID: c.value(.primaryGoalkeeperID, or: nil),
-            secondaryGoalkeeperID: c.value(.secondaryGoalkeeperID, or: nil),
-            thirdGoalkeeperID: c.value(.thirdGoalkeeperID, or: nil),
-            matches: c.value(.matches, or: [])
-        )
+        let id: UUID = try c.decode(UUID.self, forKey: .id)
+        let name: String = c.value(.name, or: "Team")
+        let fieldSize: Int = c.value(.fieldSize, or: 11)
+        let formation: Formation = c.value(.primaryFormation, or: Formation.defaultFormation(for: fieldSize))
+        let primaryGK: UUID? = c.value(.primaryGoalkeeperID, or: nil)
+        let secondaryGK: UUID? = c.value(.secondaryGoalkeeperID, or: nil)
+        let thirdGK: UUID? = c.value(.thirdGoalkeeperID, or: nil)
+        let players: [Player] = c.lossyArray(.players)
+        let matches: [MatchRecord] = c.lossyArray(.matches)
+        self.init(id: id, name: name)
+        self.players = players
+        createdAt = c.value(.createdAt, or: Date.distantPast)
+        // distantPast, not now: a copy with no timestamp must never look newest in a sync.
+        updatedAt = c.value(.updatedAt, or: Date.distantPast)
+        self.fieldSize = fieldSize
+        startingOnFieldIDs = c.value(.startingOnFieldIDs, or: [])
+        primaryFormation = formation
+        primaryGoalkeeperID = primaryGK
+        secondaryGoalkeeperID = secondaryGK
+        thirdGoalkeeperID = thirdGK
+        self.matches = matches
+        deletedMatchIDs = c.value(.deletedMatchIDs, or: [])
+        deletedPlayerIDs = c.value(.deletedPlayerIDs, or: [])
+        isDemo = c.value(.isDemo, or: false)
     }
 }

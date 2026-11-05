@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import Observation
 
@@ -49,6 +50,8 @@ final class TeamStore {
     private var dataLoadFailed = false
     private var syncTask: Task<Void, Never>? = nil
     private var isApplyingSync = false
+    /// A change arrived while a sync was running; run one more sync when it finishes.
+    private var needsResync = false
 
     // MARK: - Init
     init() {
@@ -77,6 +80,16 @@ final class TeamStore {
     func updateTeam(_ team: Team) {
         if let idx = teams.firstIndex(where: { $0.id == team.id }) {
             var updated = team
+            // Record anything removed by this edit so an iCloud merge can't bring it back.
+            let old = teams[idx]
+            let keptPlayers = Set(team.players.map(\.id))
+            let keptMatches = Set(team.matches.map(\.id))
+            for p in old.players where !keptPlayers.contains(p.id) && !updated.deletedPlayerIDs.contains(p.id) {
+                updated.deletedPlayerIDs.append(p.id)
+            }
+            for m in old.matches where !keptMatches.contains(m.id) && !updated.deletedMatchIDs.contains(m.id) {
+                updated.deletedMatchIDs.append(m.id)
+            }
             updated.updatedAt = Date()
             teams[idx] = updated
         }
@@ -109,6 +122,7 @@ final class TeamStore {
     func deleteMatch(teamID: UUID, matchID: UUID) {
         guard let idx = teams.firstIndex(where: { $0.id == teamID }) else { return }
         teams[idx].matches.removeAll { $0.id == matchID }
+        if !teams[idx].deletedMatchIDs.contains(matchID) { teams[idx].deletedMatchIDs.append(matchID) }
         teams[idx].updatedAt = Date()
     }
 
@@ -143,6 +157,7 @@ final class TeamStore {
         guard let idx = teams.firstIndex(where: { $0.id == teamID }) else { return }
         deletedPlayerIDs.append(player.id)
         teams[idx].players.removeAll { $0.id == player.id }
+        if !teams[idx].deletedPlayerIDs.contains(player.id) { teams[idx].deletedPlayerIDs.append(player.id) }
         teams[idx].updatedAt = Date()
     }
 
@@ -182,8 +197,15 @@ final class TeamStore {
             }
 
             let data = try Data(contentsOf: url)
+            DecodeRepairs.count = 0
 
             if let decoded = try? JSONDecoder().decode(AppData.self, from: data) {
+                if DecodeRepairs.count > 0 {
+                    // Some items couldn't be read and were skipped or defaulted. Keep the
+                    // original file before anything is saved over it.
+                    print("⚠️ Repaired \(DecodeRepairs.count) unreadable value(s) in teams.json")
+                    backupUnreadableDataFile(url)
+                }
                 teams = decoded.teams
                 seasons = decoded.seasons
                 activeSeasonID = decoded.activeSeasonID
@@ -194,6 +216,7 @@ final class TeamStore {
             }
 
             if let decoded = try? JSONDecoder().decode([Team].self, from: data) {
+                backupUnreadableDataFile(url) // older format: keep the original too
                 teams = decoded
                 seasons = []
                 activeSeasonID = nil
@@ -255,6 +278,16 @@ final class TeamStore {
         }
     }
 
+    /// A UUID derived from a string, identical on every device.
+    static func stableID(for key: String) -> UUID {
+        let digest = Insecure.MD5.hash(data: Data(key.utf8))
+        var b = Array(digest)
+        b[6] = (b[6] & 0x0F) | 0x30 // version 3 (name-based, MD5)
+        b[8] = (b[8] & 0x3F) | 0x80 // RFC 4122 variant
+        return UUID(uuid: (b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7],
+                           b[8], b[9], b[10], b[11], b[12], b[13], b[14], b[15]))
+    }
+
     private func ensureDefaultSeason() {
         guard seasons.isEmpty else { return }
         let now = Date()
@@ -267,7 +300,8 @@ final class TeamStore {
         let startDate = calendar.date(from: DateComponents(year: year, month: startMonth, day: 1)) ?? now
         let endMonth = isFall ? 12 : 6
         let endDate = calendar.date(from: DateComponents(year: year, month: endMonth, day: 28)) ?? now
-        let season = Season(name: name, startDate: startDate, endDate: endDate)
+        // Same name → same ID on every device, so synced matches stay in their season.
+        let season = Season(id: Self.stableID(for: "season:" + name), name: name, startDate: startDate, endDate: endDate)
         seasons = [season]
         activeSeasonID = season.id
     }
@@ -309,7 +343,9 @@ final class TeamStore {
             thirdGoalkeeperID: goalkeeperDepth.third
         )
 
-        teams = [team]
+        var demo = team
+        demo.isDemo = true
+        teams = [demo]
     }
 
     // MARK: - Migration
@@ -397,9 +433,18 @@ final class TeamStore {
 
     private func scheduleSync() {
         guard cloudSyncEnabled, !dataLoadFailed else { return }
+        // Never cancel a sync that's already talking to iCloud; just run again after it.
+        if syncStatus.isSyncing {
+            needsResync = true
+            return
+        }
         syncTask?.cancel()
         syncTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 300_000_000)
+            do {
+                try await Task.sleep(nanoseconds: 300_000_000) // debounce rapid edits
+            } catch {
+                return // superseded by a newer edit
+            }
             await self?.performSync()
         }
     }
@@ -407,8 +452,9 @@ final class TeamStore {
     @MainActor
     private func performSync() async {
         guard cloudSyncEnabled else { return }
-        if syncStatus.isSyncing { return }
+        if syncStatus.isSyncing { needsResync = true; return }
         syncStatus.isSyncing = true
+        needsResync = false
         syncStatus.lastError = nil
 
         let snapshot = teams
@@ -452,7 +498,7 @@ final class TeamStore {
             deletedPlayerIDs = result.deletedPlayerIDs
             isApplyingSync = false
             if changedDuringSync || !deletedTeamIDs.isEmpty {
-                scheduleSync()
+                needsResync = true
             }
             syncStatus.lastSyncDate = result.lastSyncDate
         } catch {
@@ -461,6 +507,10 @@ final class TeamStore {
         }
 
         syncStatus.isSyncing = false
+        if needsResync {
+            needsResync = false
+            scheduleSync()
+        }
     }
 }
 
@@ -470,6 +520,24 @@ private struct AppData: Codable {
     var activeSeasonID: UUID?
     var deletedTeamIDs: [UUID] = []
     var deletedPlayerIDs: [UUID] = []
+}
+
+extension AppData {
+    // Tolerant like the models in Models.swift: missing keys get defaults, and one
+    // unreadable team or season is skipped instead of failing the whole file.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let teams: [Team] = c.lossyArray(.teams)
+        let seasons: [Season] = c.lossyArray(.seasons)
+        let activeSeasonID: UUID? = c.value(.activeSeasonID, or: nil)
+        self.init(
+            teams: teams,
+            seasons: seasons,
+            activeSeasonID: activeSeasonID,
+            deletedTeamIDs: c.value(.deletedTeamIDs, or: []),
+            deletedPlayerIDs: c.value(.deletedPlayerIDs, or: [])
+        )
+    }
 }
 
 private struct LegacyTeam: Codable {

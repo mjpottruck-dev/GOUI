@@ -60,12 +60,14 @@ struct MatchEvent: Identifiable, Codable, Hashable {
 extension MatchEvent {
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
+        let id: UUID = try c.decode(UUID.self, forKey: .id)
+        let detail: String? = c.value(.detail, or: nil)
         self.init(
-            kind: c.value(.kind, or: .substitution),
+            kind: c.value(.kind, or: MatchActionKind.substitution),
             seconds: c.value(.seconds, or: 0),
             title: c.value(.title, or: ""),
-            detail: c.value(.detail, or: nil)
+            detail: detail
         )
-        id = c.value(.id, or: UUID())
+        self.id = id
     }
 }

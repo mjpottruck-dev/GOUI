@@ -28,20 +28,28 @@ struct SyncResult {
 /// so a new phone or reinstall lost all match history, and a newer cloud copy reset
 /// formation, field size, lineup and goalkeeper order.
 ///
-/// Conflicts: per team, the copy with the newer `updatedAt` wins (last writer wins).
+/// Merging never throws work away:
+/// - Matches and players are combined by ID from both copies, so two phones that each
+///   recorded games keep all of them. Settings (name, formation, lineup) come from the
+///   copy edited most recently; for a player on both, the more recently edited wins.
+/// - Deleted matches and players are remembered on the team (`deletedMatchIDs`,
+///   `deletedPlayerIDs`), and a deleted team is kept in iCloud as a tombstone record
+///   (`deleted = 1`), so nothing deleted on one phone comes back from another.
 ///
-/// CloudKit Dashboard setup (one time): the `TeamDoc` record type is created
-/// automatically in the Development environment on first save. To query it, add a
-/// QUERYABLE index on `recordName` for `TeamDoc`, then deploy the schema to Production
-/// before release.
+/// CloudKit Dashboard setup (one time): the `TeamDoc` record type is created in the
+/// Development environment on the first save. Add a QUERYABLE index on `recordName`
+/// for `TeamDoc`, then deploy the schema to Production before release.
 final class CloudSyncManager {
     enum CloudSyncError: LocalizedError {
         case unavailable(String)
+        case missingIndex
 
         var errorDescription: String? {
             switch self {
             case .unavailable(let reason):
                 return "CloudKit unavailable: \(reason)"
+            case .missingIndex:
+                return "iCloud setup incomplete: add a Queryable index on recordName for TeamDoc in the CloudKit Dashboard."
             }
         }
     }
@@ -57,55 +65,99 @@ final class CloudSyncManager {
         self.database = container.privateCloudDatabase
     }
 
+    private struct RemoteState {
+        var teams: [UUID: Team] = [:]
+        var tombstones: Set<UUID> = []
+    }
+
     /// `localMatches` is kept for the existing call site; matches now travel inside each team.
     func sync(payload: SyncPayload, localMatches: [UUID: [MatchRecord]]) async throws -> SyncResult {
         try await ensureCloudKitAvailable()
 
-        let deleted = Set(payload.deletedTeamIDs)
+        let locallyDeleted = Set(payload.deletedTeamIDs)
+        let remote = try await fetchRemote()
 
-        // 1. Read what the cloud has.
-        let remoteTeams = try await fetchRemoteTeams()
-        let remoteByID = Dictionary(remoteTeams.map { ($0.id, $0) }, uniquingKeysWith: { a, b in
-            a.updatedAt >= b.updatedAt ? a : b
-        })
-        let localByID = Dictionary(payload.teams.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
-
-        // 2. Merge: newer copy of each team wins; deleted teams are dropped.
         var merged: [Team] = []
         var toUpload: [Team] = []
-        for id in Set(localByID.keys).union(remoteByID.keys) where !deleted.contains(id) {
-            switch (localByID[id], remoteByID[id]) {
-            case let (local?, remote?):
-                if remote.updatedAt > local.updatedAt {
-                    merged.append(remote)
-                } else {
-                    merged.append(local)
-                    if local.updatedAt > remote.updatedAt { toUpload.append(local) }
-                }
-            case let (local?, nil):
+        var seen = Set<UUID>()
+
+        // Local order first, so the coach's team order never changes.
+        for local in payload.teams {
+            guard seen.insert(local.id).inserted else { continue }
+            if locallyDeleted.contains(local.id) || remote.tombstones.contains(local.id) { continue }
+            if let theirs = remote.teams[local.id] {
+                let combined = Self.merge(local, theirs)
+                merged.append(combined)
+                if combined != theirs { toUpload.append(combined) }
+            } else {
                 merged.append(local)
-                toUpload.append(local)
-            case let (nil, remote?):
-                merged.append(remote)
-            case (nil, nil):
-                break
+                // The untouched sample team stays on this phone only.
+                if !(local.isDemo && local.matches.isEmpty) { toUpload.append(local) }
             }
         }
-
-        // 3. Push local changes and deletions.
-        let records = try toUpload.map(makeRecord)
-        let deleteIDs = payload.deletedTeamIDs.map(Self.recordID)
-        if !records.isEmpty || !deleteIDs.isEmpty {
-            try await save(records: records, deleting: deleteIDs)
+        // Then teams that only exist in iCloud (e.g. a new phone).
+        for (id, theirs) in remote.teams.sorted(by: { $0.value.name < $1.value.name })
+        where !seen.contains(id) && !locallyDeleted.contains(id) {
+            merged.append(theirs)
         }
-        cleanUpTempFiles(for: toUpload)
+
+        var records = try toUpload.map(makeRecord)
+        defer { cleanUpTempFiles(for: toUpload) }
+        // Deleted teams become tombstones rather than vanishing, so other phones
+        // learn about the deletion instead of re-uploading the team.
+        records += payload.deletedTeamIDs.map(makeTombstone)
+        if !records.isEmpty {
+            try await save(records: records)
+        }
 
         return SyncResult(
-            teams: merged.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending },
+            teams: merged,
             deletedTeamIDs: [],
             deletedPlayerIDs: [],
             lastSyncDate: Date()
         )
+    }
+
+    // MARK: - Merge
+
+    /// Combines two copies of the same team without losing matches or players.
+    static func merge(_ a: Team, _ b: Team) -> Team {
+        // The more recently edited copy supplies the team's own settings.
+        let newer = b.updatedAt > a.updatedAt ? b : a
+        let older = b.updatedAt > a.updatedAt ? a : b
+        var result = newer
+
+        let deletedMatches = Set(a.deletedMatchIDs).union(b.deletedMatchIDs)
+        let deletedPlayers = Set(a.deletedPlayerIDs).union(b.deletedPlayerIDs)
+        // Sorted so the same merge always produces an identical team (no needless uploads).
+        result.deletedMatchIDs = deletedMatches.sorted { $0.uuidString < $1.uuidString }
+        result.deletedPlayerIDs = deletedPlayers.sorted { $0.uuidString < $1.uuidString }
+
+        // Players: union by ID; the more recently edited version of each wins.
+        var players: [Player] = []
+        var playerIndex: [UUID: Int] = [:]
+        for p in newer.players + older.players where !deletedPlayers.contains(p.id) {
+            if let i = playerIndex[p.id] {
+                if p.updatedAt > players[i].updatedAt { players[i] = p }
+            } else {
+                playerIndex[p.id] = players.count
+                players.append(p)
+            }
+        }
+        result.players = players
+
+        // Matches: union by ID, newest first.
+        var matchByID: [UUID: MatchRecord] = [:]
+        for m in older.matches + newer.matches where !deletedMatches.contains(m.id) {
+            matchByID[m.id] = m // newer copy's version overwrites
+        }
+        result.matches = matchByID.values.sorted {
+            $0.date != $1.date ? $0.date > $1.date : $0.id.uuidString < $1.id.uuidString
+        }
+
+        result.isDemo = a.isDemo && b.isDemo
+        result.updatedAt = max(a.updatedAt, b.updatedAt)
+        return result
     }
 
     // MARK: - CloudKit
@@ -129,52 +181,67 @@ final class CloudSyncManager {
     }
 
     /// Fetches every TeamDoc, following query cursors so large libraries aren't truncated.
-    private func fetchRemoteTeams() async throws -> [Team] {
+    private func fetchRemote() async throws -> RemoteState {
         let query = CKQuery(recordType: Self.recordType, predicate: NSPredicate(value: true))
-        var teams: [Team] = []
-
-        let first = try await database.records(matching: query)
-        teams += decodeTeams(from: first.matchResults)
-        var cursor = first.queryCursor
-        while let next = cursor {
-            let page = try await database.records(continuingMatchFrom: next)
-            teams += decodeTeams(from: page.matchResults)
-            cursor = page.queryCursor
+        var state = RemoteState()
+        do {
+            let first = try await database.records(matching: query)
+            absorb(first.matchResults, into: &state)
+            var cursor = first.queryCursor
+            while let next = cursor {
+                let page = try await database.records(continuingMatchFrom: next)
+                absorb(page.matchResults, into: &state)
+                cursor = page.queryCursor
+            }
+        } catch let error as CKError where error.code == .unknownItem {
+            // Record type doesn't exist yet (nothing has ever been uploaded). Carry on so
+            // this sync uploads and creates it.
+            return RemoteState()
+        } catch let error as CKError where error.code == .invalidArguments {
+            // Usually "recordName is not marked queryable". Don't upload blind: we'd
+            // overwrite cloud copies we couldn't read.
+            print("❌ CloudKit query failed:", error)
+            throw CloudSyncError.missingIndex
         }
-        return teams
+        return state
     }
 
-    private func decodeTeams(from results: [(CKRecord.ID, Result<CKRecord, Error>)]) -> [Team] {
-        results.compactMap { _, result in
-            guard case .success(let record) = result,
-                  let asset = record["payload"] as? CKAsset,
+    private func absorb(_ results: [(CKRecord.ID, Result<CKRecord, Error>)], into state: inout RemoteState) {
+        for (_, result) in results {
+            guard case .success(let record) = result else { continue }
+            let name = record.recordID.recordName
+            if (record["deleted"] as? Int64) == 1 {
+                if let id = UUID(uuidString: String(name.dropFirst(Self.recordPrefix.count))) {
+                    state.tombstones.insert(id)
+                }
+                continue
+            }
+            guard let asset = record["payload"] as? CKAsset,
                   let url = asset.fileURL,
-                  let data = try? Data(contentsOf: url) else { return nil }
+                  let data = try? Data(contentsOf: url) else { continue }
             do {
-                return try JSONDecoder().decode(Team.self, from: data)
+                let team = try JSONDecoder().decode(Team.self, from: data)
+                if let existing = state.teams[team.id] {
+                    state.teams[team.id] = Self.merge(existing, team)
+                } else {
+                    state.teams[team.id] = team
+                }
             } catch {
-                print("⚠️ Skipping unreadable cloud team \(record.recordID.recordName):", error)
-                return nil
+                print("⚠️ Skipping unreadable cloud team \(name):", error)
             }
         }
+        for id in state.tombstones { state.teams[id] = nil }
     }
 
-    private func save(records: [CKRecord], deleting ids: [CKRecord.ID]) async throws {
-        let (saveResults, deleteResults) = try await database.modifyRecords(
+    private func save(records: [CKRecord]) async throws {
+        let (saveResults, _) = try await database.modifyRecords(
             saving: records,
-            deleting: ids,
+            deleting: [],
             savePolicy: .allKeys,
             atomically: false
         )
         for (_, result) in saveResults {
             if case .failure(let error) = result { throw error }
-        }
-        for (_, result) in deleteResults {
-            if case .failure(let error) = result {
-                // Already gone is fine.
-                if let ck = error as? CKError, ck.code == .unknownItem { continue }
-                throw error
-            }
         }
     }
 
@@ -199,6 +266,15 @@ final class CloudSyncManager {
         record["name"] = team.name as CKRecordValue
         record["updatedAt"] = team.updatedAt as CKRecordValue
         record["payload"] = CKAsset(fileURL: url)
+        return record
+    }
+
+    private func makeTombstone(_ teamID: UUID) -> CKRecord {
+        let record = CKRecord(recordType: Self.recordType, recordID: Self.recordID(teamID))
+        record["deleted"] = 1 as Int64 as CKRecordValue
+        record["updatedAt"] = Date() as CKRecordValue
+        record["payload"] = nil // drop the team's data from iCloud
+        record["name"] = nil
         return record
     }
 
