@@ -78,7 +78,8 @@ struct SettingsView: View {
                             )
                         }
 
-                        // Cloud Sync
+                        // Cloud Sync — debug builds only until multi-device sync is finished (v1.1).
+                        #if DEBUG
                         VStack(alignment: .leading, spacing: 8) {
                             GoStatsTheme.sectionHeader("CLOUD SYNC")
 
@@ -119,6 +120,7 @@ struct SettingsView: View {
                                     .shadow(color: GoStatsTheme.cardShadowColor, radius: GoStatsTheme.cardShadowRadius, x: 0, y: GoStatsTheme.cardShadowY)
                             )
                         }
+                        #endif
 
                         // Match Intelligence
                         VStack(alignment: .leading, spacing: 8) {

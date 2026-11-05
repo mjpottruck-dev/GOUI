@@ -62,7 +62,12 @@ enum MaxPrepsExport {
         stats: [UUID: PlayerStatLine],
         seconds: [UUID: Int]
     ) -> [[String]] {
-        let keepers = sortedPlayers(players.filter { $0.position == .gk && (seconds[$0.id] ?? 0) > 0 })
+        // Anyone who kept goal: listed keepers who played, plus anyone with keeper stats.
+        let keepers = sortedPlayers(players.filter { p in
+            let line = stats[p.id] ?? PlayerStatLine()
+            let keeperStats = line.saves + line.goalsConceded + line.pkFaced > 0
+            return keeperStats || (p.position == .gk && (seconds[p.id] ?? 0) > 0)
+        })
         return keepers.map { player in
             let line = stats[player.id] ?? PlayerStatLine()
             let minutes = (seconds[player.id] ?? 0) / 60

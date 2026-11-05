@@ -68,6 +68,9 @@ final class CloudSyncManager {
     private struct RemoteState {
         var teams: [UUID: Team] = [:]
         var tombstones: Set<UUID> = []
+        /// Teams whose cloud copy exists but couldn't be fully read. Never uploaded
+        /// over, so matches recorded elsewhere aren't lost from iCloud.
+        var unreadable: Set<UUID> = []
     }
 
     /// `localMatches` is kept for the existing call site; matches now travel inside each team.
@@ -88,7 +91,9 @@ final class CloudSyncManager {
             if let theirs = remote.teams[local.id] {
                 let combined = Self.merge(local, theirs)
                 merged.append(combined)
-                if combined != theirs { toUpload.append(combined) }
+                if combined != theirs && !remote.unreadable.contains(local.id) { toUpload.append(combined) }
+            } else if remote.unreadable.contains(local.id) {
+                merged.append(local) // cloud copy exists but couldn't be read: don't overwrite it
             } else {
                 merged.append(local)
                 // The untouched sample team stays on this phone only.
@@ -101,8 +106,8 @@ final class CloudSyncManager {
             merged.append(theirs)
         }
 
-        var records = try toUpload.map(makeRecord)
         defer { cleanUpTempFiles(for: toUpload) }
+        var records = try toUpload.map(makeRecord)
         // Deleted teams become tombstones rather than vanishing, so other phones
         // learn about the deletion instead of re-uploading the team.
         records += payload.deletedTeamIDs.map(makeTombstone)
@@ -207,20 +212,30 @@ final class CloudSyncManager {
     }
 
     private func absorb(_ results: [(CKRecord.ID, Result<CKRecord, Error>)], into state: inout RemoteState) {
-        for (_, result) in results {
-            guard case .success(let record) = result else { continue }
-            let name = record.recordID.recordName
+        for (recordID, result) in results {
+            let name = recordID.recordName
+            let teamID = UUID(uuidString: String(name.dropFirst(Self.recordPrefix.count)))
+            guard case .success(let record) = result else {
+                if let teamID { state.unreadable.insert(teamID) }
+                continue
+            }
             if (record["deleted"] as? Int64) == 1 {
-                if let id = UUID(uuidString: String(name.dropFirst(Self.recordPrefix.count))) {
-                    state.tombstones.insert(id)
-                }
+                if let teamID { state.tombstones.insert(teamID) }
                 continue
             }
             guard let asset = record["payload"] as? CKAsset,
                   let url = asset.fileURL,
-                  let data = try? Data(contentsOf: url) else { continue }
+                  let data = try? Data(contentsOf: url) else {
+                if let teamID { state.unreadable.insert(teamID) }
+                continue
+            }
             do {
+                let repairsBefore = DecodeRepairs.count
                 let team = try JSONDecoder().decode(Team.self, from: data)
+                if DecodeRepairs.count != repairsBefore {
+                    // Partly readable: use what we can locally, but never upload over it.
+                    state.unreadable.insert(team.id)
+                }
                 if let existing = state.teams[team.id] {
                     state.teams[team.id] = Self.merge(existing, team)
                 } else {
@@ -228,6 +243,7 @@ final class CloudSyncManager {
                 }
             } catch {
                 print("⚠️ Skipping unreadable cloud team \(name):", error)
+                if let teamID { state.unreadable.insert(teamID) }
             }
         }
         for id in state.tombstones { state.teams[id] = nil }

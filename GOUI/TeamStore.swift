@@ -31,7 +31,16 @@ final class TeamStore {
         didSet { save() }
     }
 
-    var cloudSyncEnabled: Bool = UserDefaults.standard.bool(forKey: SettingsKeys.cloudSyncEnabled) {
+    /// iCloud sync is off in App Store builds for v1. It works for one phone, but
+    /// several multi-phone edge cases (simultaneous syncs, stale edit screens,
+    /// production schema setup) are still open. Debug builds keep it for testing.
+    #if DEBUG
+    static let syncAvailable = true
+    #else
+    static let syncAvailable = false
+    #endif
+
+    var cloudSyncEnabled: Bool = TeamStore.syncAvailable && UserDefaults.standard.bool(forKey: SettingsKeys.cloudSyncEnabled) {
         didSet {
             UserDefaults.standard.set(cloudSyncEnabled, forKey: SettingsKeys.cloudSyncEnabled)
             if cloudSyncEnabled {
@@ -82,6 +91,10 @@ final class TeamStore {
             var updated = team
             // Record anything removed by this edit so an iCloud merge can't bring it back.
             let old = teams[idx]
+            // Editors often build a fresh Team, which would erase sync bookkeeping.
+            updated.deletedPlayerIDs = Array(Set(old.deletedPlayerIDs).union(updated.deletedPlayerIDs))
+            updated.deletedMatchIDs = Array(Set(old.deletedMatchIDs).union(updated.deletedMatchIDs))
+            updated.isDemo = old.isDemo && team.name == old.name // renaming makes it a real team
             let keptPlayers = Set(team.players.map(\.id))
             let keptMatches = Set(team.matches.map(\.id))
             for p in old.players where !keptPlayers.contains(p.id) && !updated.deletedPlayerIDs.contains(p.id) {
@@ -228,6 +241,7 @@ final class TeamStore {
             }
 
             if let legacy = try? JSONDecoder().decode([LegacyTeam].self, from: data) {
+                backupUnreadableDataFile(url) // older format: keep the original too
                 teams = legacy.map { $0.toTeam() }
                 seasons = []
                 activeSeasonID = nil
@@ -432,7 +446,7 @@ final class TeamStore {
     }
 
     private func scheduleSync() {
-        guard cloudSyncEnabled, !dataLoadFailed else { return }
+        guard Self.syncAvailable, cloudSyncEnabled, !dataLoadFailed else { return }
         // Never cancel a sync that's already talking to iCloud; just run again after it.
         if syncStatus.isSyncing {
             needsResync = true
