@@ -43,7 +43,11 @@ struct TourAnchorKey: PreferenceKey {
 extension View {
     /// Marks this view as something the guided tour can highlight.
     func tourAnchor(_ target: TourTarget) -> some View {
-        anchorPreference(key: TourAnchorKey.self, value: .bounds) { [target: $0] }
+        // transform (not set) so anchors on views inside this one are kept too,
+        // e.g. the Share button inside the Season Record card.
+        transformAnchorPreference(key: TourAnchorKey.self, value: .bounds) { all, anchor in
+            all[target] = anchor
+        }
     }
 
     /// Shows the guided tour over this screen while `isActive` is true.
@@ -117,6 +121,9 @@ private struct TourOverlay: View {
                 .allowsHitTesting(true)
             }
             .animation(.spring(response: 0.35, dampingFraction: 0.85), value: index)
+            // While the tour is up, VoiceOver stays on the tour, not the buttons behind it.
+            .accessibilityElement(children: .contain)
+            .accessibilityAddTraits(.isModal)
         } else {
             Color.clear.onAppear { onFinish() }
         }

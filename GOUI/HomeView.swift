@@ -169,7 +169,9 @@ struct HomeView: View {
                         }
                     }
                     .modifier(CardStyle())
-                    .tourAnchor(.seasonRecord)
+                    // Anchored on a background layer, not the card itself, so it can't
+                    // hide the Share button's anchor inside the card.
+                    .background(Color.clear.tourAnchor(.seasonRecord))
 
                     // -- Season Insight Banner --
                     if showSeasonInsightBanner, let insight = seasonInsight, let team = resolvedTeam {

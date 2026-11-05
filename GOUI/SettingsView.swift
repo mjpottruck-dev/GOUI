@@ -84,6 +84,7 @@ struct SettingsView: View {
                                         Image(systemName: "questionmark.circle")
                                             .foregroundStyle(GoStatsTheme.textMuted)
                                     }
+                                    .contentShape(Rectangle()) // whole row is tappable
                                 }
                                 .buttonStyle(.plain)
                                 .padding(.horizontal, GoStatsTheme.cardPadding)
