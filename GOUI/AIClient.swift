@@ -9,8 +9,8 @@ enum AIFeature: String {
 /// Anthropic key and checks the coach's Pro subscription. The app never
 /// carries an API key.
 enum AIClient {
-    /// TODO before release: set to your hosted backend (e.g. the Render/Railway URL).
-    static let productionBaseURL = URL(string: "https://api.goalstats.app")!
+    /// Hosted GoalStats API (Render service "goalstats-api").
+    static let productionBaseURL = URL(string: "https://goalstats-api-v8zi.onrender.com")!
 
     /// Debug builds: Settings > Debug can point at a local server.
     static let debugURLKey = "ai_backend_url"
