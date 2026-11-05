@@ -13,6 +13,8 @@ struct GoStatsRootView: View {
     @State private var incomingRosterURL: URL? = nil
     @StateObject private var voiceService = VoiceEventService()
     @Environment(\.scenePhase) private var scenePhase
+    @AppStorage(OnboardingView.completedKey) private var onboardingCompleted = false
+    @State private var showOnboarding = false
 
     var body: some View {
         ZStack {
@@ -69,7 +71,22 @@ struct GoStatsRootView: View {
         }
         .task {
             restoreInProgressMatchIfNeeded()
+            decideOnboarding()
             await runSplashSequenceIfNeeded()
+        }
+        .fullScreenCover(isPresented: Binding(
+            get: { showOnboarding && !showSplash },
+            set: { showOnboarding = $0 }
+        )) {
+            OnboardingView(teamStore: teamStore) { newTeamID in
+                if let newTeamID { selectedTeamID = newTeamID }
+                onboardingCompleted = true
+                showOnboarding = false
+            }
+        }
+        .onChange(of: onboardingCompleted) { _, done in
+            // Debug "Show onboarding again" flips this back to false.
+            if !done { showOnboarding = true }
         }
         .onOpenURL { url in
             // A cold launch from the Live Activity mic link can arrive before .task runs.
@@ -99,6 +116,21 @@ struct GoStatsRootView: View {
                 sessionStore.refreshElapsedFromClock()
                 sessionStore.persist()
             }
+        }
+    }
+
+    /// New coaches (only the untouched sample team) get the welcome flow. Anyone who
+    /// already has a real team or saved matches skips it.
+    @MainActor
+    private func decideOnboarding() {
+        guard !onboardingCompleted else { return }
+        let hasRealData = teamStore.teams.contains { team in
+            !team.matches.isEmpty || !(team.isDemo || team.name == "Demo Eleven")
+        }
+        if hasRealData || sessionStore.isActive {
+            onboardingCompleted = true
+        } else {
+            showOnboarding = true
         }
     }
 

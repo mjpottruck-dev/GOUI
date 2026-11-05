@@ -59,7 +59,7 @@ public struct LiquidGlassButton: View {
 
     public var body: some View {
         Button {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            Haptics.light()
             action()
         } label: {
             LiquidGlassContainer(cornerRadius: GoStatsTheme.cardRadius, material: .thinMaterial, contentPadding: 12) {

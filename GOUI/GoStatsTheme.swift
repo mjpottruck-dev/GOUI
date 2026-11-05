@@ -83,9 +83,7 @@ public enum GoStatsTheme {
 
     // MARK: - Haptics
     public static func hapticTap() {
-        let gen = UIImpactFeedbackGenerator(style: .light)
-        gen.prepare()
-        gen.impactOccurred()
+        Haptics.light() // respects Settings → Haptics
     }
 
     // MARK: - Font Names

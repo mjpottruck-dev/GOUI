@@ -31,6 +31,8 @@ struct MatchView: View {
     @State private var suggestionBanner: SubSuggestionBanner? = nil
     @State private var dismissedSuggestionPlayerIDs: Set<UUID> = []
     @State private var lastSuggestionCheckMinute: Int = -10
+    @State private var showTour = false
+    @AppStorage(TourFlags.matchDoneKey) private var matchTourDone = false
 
     private var resolvedFormation: Formation {
         store.formation ?? Formation.allCases.first!
@@ -59,10 +61,10 @@ struct MatchView: View {
 
             ScrollView {
                 VStack(spacing: 16) {
-                    scoreCard
-                    controlRow
-                    quickEventsTeam
-                    quickEventsKeeper
+                    scoreCard.tourAnchor(.matchClock)
+                    controlRow.tourAnchor(.matchControls)
+                    quickEventsTeam.tourAnchor(.teamEvents)
+                    quickEventsKeeper.tourAnchor(.keeperEvents)
                     fieldCard
                     MatchTimelineView(events: store.events)
                     Spacer(minLength: 140)
@@ -94,6 +96,16 @@ struct MatchView: View {
                         .padding(.bottom, 90)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
+            }
+        }
+        .appTour(steps: AppTours.match, isActive: $showTour) {
+            matchTourDone = true
+        }
+        .onAppear {
+            // First time on the match screen: explain it (before the clock starts).
+            guard !matchTourDone, !store.isRunning else { return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                if !matchTourDone { withAnimation { showTour = true } }
             }
         }
         .navigationTitle("Match")
@@ -586,8 +598,7 @@ struct MatchView: View {
     // MARK: - Haptics
 
     private func haptic(_ style: UIImpactFeedbackGenerator.FeedbackStyle) {
-        guard showHaptics else { return }
-        UIImpactFeedbackGenerator(style: style).impactOccurred()
+        Haptics.impact(style) // respects Settings → Haptics
     }
 
     // MARK: - Substitution Suggestions

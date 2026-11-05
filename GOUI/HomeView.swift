@@ -16,6 +16,10 @@ struct HomeView: View {
     @State private var seasonInsight: String? = nil
     @State private var showSeasonInsightBanner = false
     @State private var showSeasonReport = false
+    @State private var showSettings = false
+    @State private var showTour = false
+    @AppStorage(TourFlags.homeDoneKey) private var homeTourDone = false
+    @AppStorage(OnboardingView.completedKey) private var onboardingDone = false
 
     // MARK: - Resolved helpers
 
@@ -70,14 +74,28 @@ struct HomeView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: GoStatsTheme.cardGap) {
 
-                    // -- 1. App logo icon (long-press to create team) --
-                    Image(systemName: "soccerball")
-                        .font(.system(size: 28, weight: .regular))
-                        .foregroundStyle(GoStatsTheme.textPrimary)
-                        .padding(.top, 14)
-                        .onLongPressGesture {
-                            showCreateTeam = true
+                    // -- 1. App logo icon (long-press to create team) + Settings --
+                    HStack {
+                        Image(systemName: "soccerball")
+                            .font(.system(size: 28, weight: .regular))
+                            .foregroundStyle(GoStatsTheme.textPrimary)
+                            .onLongPressGesture {
+                                showCreateTeam = true
+                            }
+                        Spacer()
+                        Button {
+                            Haptics.light()
+                            showSettings = true
+                        } label: {
+                            Image(systemName: "gearshape")
+                                .font(.system(size: 20, weight: .medium))
+                                .foregroundStyle(GoStatsTheme.textPrimary)
+                                .frame(width: 40, height: 40)
+                                .background(Circle().fill(Color.white))
                         }
+                        .accessibilityLabel("Settings")
+                    }
+                    .padding(.top, 14)
 
                     // -- 2. Team pill selector --
                     TeamPillSelector(
@@ -86,6 +104,7 @@ struct HomeView: View {
                         onCreateTeam: { showCreateTeam = true }
                     )
                     .padding(.horizontal, -GoStatsTheme.cardMargin)
+                    .tourAnchor(.teamPills)
 
                     // -- 3. Hero card: Season Record --
                     VStack(spacing: 16) {
@@ -103,6 +122,7 @@ struct HomeView: View {
                                     .foregroundStyle(GoStatsTheme.textMuted)
                             }
                             .disabled(resolvedTeam == nil)
+                            .tourAnchor(.shareRoster)
                         }
 
                         HStack(spacing: 0) {
@@ -149,6 +169,7 @@ struct HomeView: View {
                         }
                     }
                     .modifier(CardStyle())
+                    .tourAnchor(.seasonRecord)
 
                     // -- Season Insight Banner --
                     if showSeasonInsightBanner, let insight = seasonInsight, let team = resolvedTeam {
@@ -215,6 +236,7 @@ struct HomeView: View {
                     }
                     .buttonStyle(.plain)
                     .disabled(teamStore.teams.isEmpty)
+                    .tourAnchor(.startMatch)
 
                     // -- 5. Navigation rows --
                     VStack(spacing: 10) {
@@ -228,6 +250,7 @@ struct HomeView: View {
                             navRow(title: "View Roster", icon: "person.3")
                         }
                         .buttonStyle(.plain)
+                        .tourAnchor(.roster)
 
                         NavigationLink {
                             if let tid = resolvedTeamID {
@@ -239,6 +262,7 @@ struct HomeView: View {
                             navRow(title: "Season Stats", icon: "chart.bar")
                         }
                         .buttonStyle(.plain)
+                        .tourAnchor(.seasonStats)
 
                         NavigationLink {
                             if let team = resolvedTeam {
@@ -250,6 +274,7 @@ struct HomeView: View {
                             navRow(title: "Player Stats", icon: "person.text.rectangle")
                         }
                         .buttonStyle(.plain)
+                        .tourAnchor(.playerStats)
 
                         NavigationLink {
                             if let tid = resolvedTeamID {
@@ -261,7 +286,13 @@ struct HomeView: View {
                             navRow(title: "Match Archive", icon: "clock.arrow.circlepath")
                         }
                         .buttonStyle(.plain)
+                        .tourAnchor(.archive)
 
+                    }
+
+                    // -- 6. Last match, top scorers, playing time --
+                    if let team = resolvedTeam {
+                        HomeInsightCards(team: team, teamStore: teamStore)
                     }
                 }
                 .padding(.horizontal, GoStatsTheme.cardMargin)
@@ -276,8 +307,14 @@ struct HomeView: View {
                     .transition(.opacity)
             }
         }
+        .appTour(steps: AppTours.home, isActive: $showTour) {
+            homeTourDone = true
+        }
         .navigationTitle("")
         .navigationBarHidden(true)
+        .sheet(isPresented: $showSettings) {
+            SettingsView(teamStore: teamStore)
+        }
         .sheet(isPresented: $showCreateTeam) {
             CreateTeamView(teamStore: teamStore) { newTeamID in
                 selectedTeamID = newTeamID
@@ -289,6 +326,12 @@ struct HomeView: View {
             }
             sharingService.startListening()
             loadSeasonInsight()
+            startTourIfNeeded()
+        }
+        .onChange(of: onboardingDone) { _, _ in startTourIfNeeded() }
+        .onChange(of: showSettings) { _, open in
+            // "Replay App Tour" in Settings takes effect when Settings closes.
+            if !open { startTourIfNeeded() }
         }
         .onDisappear {
             sharingService.stopListening()
@@ -340,6 +383,18 @@ struct HomeView: View {
             case .peerFound, .sending, .sent, .failed, .cancelled, .idle,
                  .receivingInvite, .received:
                 rippleActive = false
+            }
+        }
+    }
+
+    // MARK: - Guided tour
+
+    private func startTourIfNeeded() {
+        guard onboardingDone, !homeTourDone, !showTour, !teamStore.teams.isEmpty else { return }
+        // Let the screen settle (and any sheet finish closing) before spotlighting.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
+            if !homeTourDone && !showSettings {
+                withAnimation { showTour = true }
             }
         }
     }

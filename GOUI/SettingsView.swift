@@ -8,6 +8,9 @@ struct SettingsView: View {
     @AppStorage(SettingsKeys.maxPrepsTeamID) private var maxPrepsTeamID: String = ""
     @AppStorage("substitution_suggestions_enabled") private var subSuggestionsEnabled = true
     @AppStorage("anthropic_api_key") private var anthropicAPIKey: String = ""
+    @AppStorage(Haptics.enabledKey) private var hapticsEnabled = true
+    @AppStorage(Haptics.intensityKey) private var hapticsIntensity = 0.8
+    @State private var tourResetConfirmed = false
 
     var body: some View {
         NavigationStack {
@@ -16,6 +19,83 @@ struct SettingsView: View {
 
                 ScrollView {
                     VStack(spacing: 20) {
+                        // Haptics
+                        VStack(alignment: .leading, spacing: 8) {
+                            GoStatsTheme.sectionHeader("HAPTICS")
+
+                            VStack(spacing: 0) {
+                                Toggle("Vibration on taps", isOn: $hapticsEnabled)
+                                    .font(.system(size: 15))
+                                    .padding(.horizontal, GoStatsTheme.cardPadding)
+                                    .padding(.vertical, 14)
+                                    .onChange(of: hapticsEnabled) { _, on in
+                                        if on { Haptics.medium() }
+                                    }
+
+                                if hapticsEnabled {
+                                    Rectangle().fill(GoStatsTheme.divider).frame(height: GoStatsTheme.dividerWidth)
+
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        Text("Strength")
+                                            .font(.system(size: 15))
+                                            .foregroundStyle(GoStatsTheme.textPrimary)
+                                        HStack(spacing: 10) {
+                                            Image(systemName: "iphone.radiowaves.left.and.right")
+                                                .font(.system(size: 12))
+                                                .foregroundStyle(GoStatsTheme.textMuted)
+                                            Slider(value: $hapticsIntensity, in: 0.2...1.0) { editing in
+                                                if !editing { Haptics.medium() } // feel the new strength
+                                            }
+                                            .tint(GoStatsTheme.textPrimary)
+                                            Image(systemName: "iphone.radiowaves.left.and.right")
+                                                .font(.system(size: 17))
+                                                .foregroundStyle(GoStatsTheme.textPrimary)
+                                        }
+                                    }
+                                    .padding(.horizontal, GoStatsTheme.cardPadding)
+                                    .padding(.vertical, 12)
+                                }
+                            }
+                            .background(
+                                RoundedRectangle(cornerRadius: GoStatsTheme.cardRadius, style: .continuous)
+                                    .fill(Color.white)
+                                    .shadow(color: GoStatsTheme.cardShadowColor, radius: GoStatsTheme.cardShadowRadius, x: 0, y: GoStatsTheme.cardShadowY)
+                            )
+                        }
+
+                        // Help
+                        VStack(alignment: .leading, spacing: 8) {
+                            GoStatsTheme.sectionHeader("HELP")
+
+                            VStack(spacing: 0) {
+                                Button {
+                                    TourFlags.resetAll()
+                                    tourResetConfirmed = true
+                                    Haptics.light()
+                                } label: {
+                                    HStack {
+                                        Text("Replay App Tour")
+                                            .font(.system(size: 15))
+                                            .foregroundStyle(GoStatsTheme.textPrimary)
+                                        Spacer()
+                                        Text(tourResetConfirmed ? "Shows on next visit" : "")
+                                            .font(.system(size: 13))
+                                            .foregroundStyle(GoStatsTheme.textMuted)
+                                        Image(systemName: "questionmark.circle")
+                                            .foregroundStyle(GoStatsTheme.textMuted)
+                                    }
+                                }
+                                .buttonStyle(.plain)
+                                .padding(.horizontal, GoStatsTheme.cardPadding)
+                                .padding(.vertical, 14)
+                            }
+                            .background(
+                                RoundedRectangle(cornerRadius: GoStatsTheme.cardRadius, style: .continuous)
+                                    .fill(Color.white)
+                                    .shadow(color: GoStatsTheme.cardShadowColor, radius: GoStatsTheme.cardShadowRadius, x: 0, y: GoStatsTheme.cardShadowY)
+                            )
+                        }
+
                         // AI Features
                         VStack(alignment: .leading, spacing: 8) {
                             GoStatsTheme.sectionHeader("AI FEATURES")
@@ -168,6 +248,17 @@ struct SettingsView: View {
                                     .onChange(of: skipSplashEnabled) { _, newValue in
                                         DebugSettings.setSkipSplashEnabled(newValue)
                                     }
+
+                                Rectangle().fill(GoStatsTheme.divider).frame(height: GoStatsTheme.dividerWidth)
+
+                                Button("Show Onboarding Again") {
+                                    TourFlags.resetAll()
+                                    UserDefaults.standard.set(false, forKey: OnboardingView.completedKey)
+                                }
+                                .font(.system(size: 15))
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, GoStatsTheme.cardPadding)
+                                .padding(.vertical, 14)
                                 #endif
                             }
                             .background(
