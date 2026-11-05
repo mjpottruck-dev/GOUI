@@ -48,7 +48,9 @@ struct MatchView: View {
     private var isSecondHalf: Bool { store.hasSplitHalf }
     private var showEndMatch: Bool {
         // End Match only in states 5 and 6
-        store.isActive && isSecondHalf && !store.matchEnded
+        // Also shown after the match is ended, so Cancel on the End sheet (or a restore
+        // after a crash) never leaves the coach with no way to save the match.
+        store.isActive && (isSecondHalf || store.matchEnded)
     }
 
     var body: some View {

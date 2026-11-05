@@ -125,8 +125,11 @@ final class MatchSessionStore: ObservableObject {
         stopTimer()
         isRunning = false
         matchEnded = true
-        MatchStatePersistence.clear()
         startDate = nil
+        // Keep the saved state until the coach taps Save or Discard on the End sheet
+        // (both call resetForNewMatch, which clears it). Clearing here would lose the
+        // whole game if the app died while the End sheet was open.
+        persist()
         LiveActivityManager.shared.endActivity()
     }
 
@@ -261,7 +264,7 @@ final class MatchSessionStore: ObservableObject {
     /// Writes the in-progress match to disk. Called after every event, sub, undo,
     /// clock change, every 15s while running, and when the app goes to the background.
     func persist() {
-        guard isActive, !matchEnded else { return }
+        guard isActive else { return }
         lastPersistSeconds = elapsedSeconds
         MatchStatePersistence.save(from: self, teamName: liveActivityTeamName, opponent: liveActivityOpponent)
     }
@@ -274,15 +277,16 @@ final class MatchSessionStore: ObservableObject {
     }
 
     /// Restores a match saved by `persist()`. If the clock was running when the app
-    /// died, the time it was closed is added back (capped at 2 hours) and the clock
-    /// keeps running, crediting those minutes to the players who were on the field.
+    /// died and it was closed for 15 minutes or less, that time is added back and the
+    /// clock keeps running, crediting those minutes to the players who were on the field.
+    /// A longer gap (e.g. reopened the next day) restores paused, with no minutes added.
     func restoreState(_ state: MatchStatePersistence.PersistedState) {
         stopTimer()
         isActive = state.isActive
         goalsFor = state.goalsFor
         goalsAgainst = state.goalsAgainst
         hasSplitHalf = state.hasSplitHalf
-        matchEnded = false
+        matchEnded = state.matchEnded == true
         events = state.events
         fieldSize = state.fieldSize
         currentTeamID = state.currentTeamID
@@ -297,10 +301,15 @@ final class MatchSessionStore: ObservableObject {
         if let savedFormation = state.formation { formation = savedFormation }
         if let depth = state.goalkeeperDepthIDs { goalkeeperDepthIDs = depth }
 
-        let wasRunning = state.wasRunning == true && state.isActive
+        var wasRunning = state.wasRunning == true && state.isActive && !matchEnded
         var gap = 0
         if wasRunning, let savedAt = state.savedAt {
-            gap = min(max(0, Int(Date().timeIntervalSince(savedAt))), 2 * 60 * 60)
+            gap = max(0, Int(Date().timeIntervalSince(savedAt)))
+            if gap > 15 * 60 {
+                // Too long to be a quick crash-and-reopen: don't invent minutes.
+                gap = 0
+                wasRunning = false
+            }
         }
 
         accumulatedSeconds = state.elapsedSeconds + gap
@@ -319,6 +328,12 @@ final class MatchSessionStore: ObservableObject {
             isRunning = true
             startDate = Date()
             startTimer()
+            // Replace any frozen lock-screen activity left by the killed launch.
+            LiveActivityManager.shared.startActivity(
+                teamName: liveActivityTeamName.isEmpty ? "Home" : liveActivityTeamName,
+                opponentName: liveActivityOpponent.isEmpty ? "Opponent" : liveActivityOpponent
+            )
+            updateLiveActivity()
         } else {
             lastPlayerUpdateSeconds = elapsedSeconds
             isRunning = false
@@ -354,7 +369,7 @@ final class MatchSessionStore: ObservableObject {
         events = snap.events
         // Restore stats from the snapshot but keep minutes played as they are now:
         // undoing an event must not erase time the players actually spent on the field.
-        let currentSeconds = Dictionary(uniqueKeysWithValues: players.map { ($0.id, $0.secondsPlayed) })
+        let currentSeconds = Dictionary(players.map { ($0.id, $0.secondsPlayed) }, uniquingKeysWith: { a, _ in a })
         players = snap.players.map { p in
             var restored = p
             restored.secondsPlayed = currentSeconds[p.id] ?? p.secondsPlayed
@@ -541,7 +556,9 @@ final class MatchSessionStore: ObservableObject {
                 }
             }
         }
-        return onFieldPlayers.first(where: { $0.position == .gk }) ?? players.first(where: { $0.position == .gk })
+        // Only a keeper who is actually on the field. (Falling back to a benched GK
+        // credited saves and goals against to a player who wasn't playing.)
+        return onFieldPlayers.first(where: { $0.position == .gk })
     }
 
     private func lineupGoalkeeper() -> Player? {

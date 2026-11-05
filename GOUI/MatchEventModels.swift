@@ -13,6 +13,7 @@ enum MatchActionKind: String, CaseIterable, Identifiable, Codable {
     case conceded = "Conceded"
     case pkConceded = "PK Conceded"
     case pkMade = "PK Made"
+    case substitution = "Substitution"
 
     var id: String { rawValue }
 }

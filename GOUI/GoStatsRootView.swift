@@ -72,6 +72,8 @@ struct GoStatsRootView: View {
             await runSplashSequenceIfNeeded()
         }
         .onOpenURL { url in
+            // A cold launch from the Live Activity mic link can arrive before .task runs.
+            restoreInProgressMatchIfNeeded()
             // Handle goalstats://voice deep link from Live Activity mic button
             if url.scheme == "goalstats" && url.host == "voice" {
                 handleVoiceDeepLink()
@@ -138,7 +140,9 @@ struct GoStatsRootView: View {
                 let name = sessionStore.displayName(for: player)
                 sessionStore.updateLiveActivity(lastEvent: "\u{2713} Card \u{2014} \(name)")
             case .substitution(let playerOn, let playerOff):
-                // Perform sub
+                // Perform sub (credit time up to now and allow undo, like a manual sub)
+                sessionStore.refreshElapsedFromClock()
+                sessionStore.pushUndo()
                 if let index = sessionStore.onFieldLineupIDs.firstIndex(of: playerOff.id) {
                     sessionStore.onFieldLineupIDs[index] = playerOn.id
                 }

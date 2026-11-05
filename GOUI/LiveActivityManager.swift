@@ -112,11 +112,20 @@ final class LiveActivityManager: @unchecked Sendable {
         _hasActiveActivity = false
         lock.unlock()
 
-        guard let activity else { return }
+        // Also end any activity left on the lock screen by a previous launch
+        // (e.g. the app was killed mid-match). Snapshot synchronously so an
+        // activity started right after this call is not caught.
+        var toEnd = Activity<MatchActivityAttributes>.activities
+        if let activity, !toEnd.contains(where: { $0.id == activity.id }) {
+            toEnd.append(activity)
+        }
+        guard !toEnd.isEmpty else { return }
 
         Task {
-            await activity.end(nil, dismissalPolicy: .immediate)
-            print("[LiveActivity] Ended activity")
+            for item in toEnd {
+                await item.end(nil, dismissalPolicy: .immediate)
+            }
+            print("[LiveActivity] Ended \(toEnd.count) activity(ies)")
         }
         #endif
     }

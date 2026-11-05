@@ -42,6 +42,11 @@ final class TeamStore {
     var syncStatus = SyncStatus()
 
     private let syncManager = CloudSyncManager()
+
+    /// Set when teams.json exists but couldn't be read (e.g. file protection before the
+    /// phone's first unlock). While set, nothing is written or synced, so the real file
+    /// is never overwritten with an empty or demo roster. Cleared on the next launch.
+    private var dataLoadFailed = false
     private var syncTask: Task<Void, Never>? = nil
     private var isApplyingSync = false
 
@@ -148,6 +153,7 @@ final class TeamStore {
     }
 
     private func save() {
+        guard !dataLoadFailed else { return }
         do {
             let encoder = JSONEncoder()
             let data = try encoder.encode(
@@ -218,7 +224,9 @@ final class TeamStore {
             deletedPlayerIDs = []
 
         } catch {
+            // The file exists but couldn't be read: don't treat that as "no data".
             print("❌ TeamStore load failed:", error)
+            dataLoadFailed = true
             backupUnreadableDataFile(fileURL)
             teams = []
             seasons = []
@@ -388,7 +396,7 @@ final class TeamStore {
     }
 
     private func scheduleSync() {
-        guard cloudSyncEnabled else { return }
+        guard cloudSyncEnabled, !dataLoadFailed else { return }
         syncTask?.cancel()
         syncTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: 300_000_000)

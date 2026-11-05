@@ -326,8 +326,9 @@ struct LineChangeSheet: View {
         let onNames = assignments.map { store.displayName(for: $0.player) }.joined(separator: ", ")
 
         let detail = "OFF: \(offNames) | ON: \(onNames)"
-        let event = MatchEvent(kind: .goal, seconds: store.secondsElapsed, title: "Line Change (\(offArray.count) subs)", detail: detail)
+        let event = MatchEvent(kind: .substitution, seconds: store.secondsElapsed, title: "Line Change (\(offArray.count) subs)", detail: detail)
         store.events.insert(event, at: 0)
+        store.persist()
 
         // Store the assignment for correction tracking
         LineChangeTracker.shared.recordLineChange(
