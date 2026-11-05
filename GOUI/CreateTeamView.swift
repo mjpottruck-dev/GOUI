@@ -174,7 +174,7 @@ struct CreateTeamView: View {
                                 .buttonStyle(.plain)
 
                                 Button {
-                                    showAIImport = true
+                                    if Paywall.require(.rosterImport) { showAIImport = true }
                                 } label: {
                                     HStack(spacing: 6) {
                                         Image(systemName: "sparkles")

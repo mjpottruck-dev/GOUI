@@ -306,6 +306,7 @@ struct MatchDetailView: View {
     }
 
     private func exportMaxPreps() {
+        guard Paywall.require(.exports) else { return }
         let roster = team.players.filter { match.playerSeconds.keys.contains($0.id) }
         let matchName = match.title.isEmpty ? match.opponent : match.title
         let safeName = MaxPrepsExport.sanitizedFilename(matchName.isEmpty ? "Match" : matchName)

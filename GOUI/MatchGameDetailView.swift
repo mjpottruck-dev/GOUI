@@ -275,6 +275,7 @@ struct MatchGameDetailView: View {
     }
 
     private func generateInsight() {
+        guard Paywall.require(.aiRecaps) else { return }
         insightLoading = true
         insightError = nil
         Task {

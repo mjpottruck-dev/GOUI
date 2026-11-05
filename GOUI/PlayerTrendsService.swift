@@ -8,6 +8,7 @@ final class PlayerTrendsService: ObservableObject {
     private var cache: [UUID: String] = [:]
 
     func fetchInsight(for player: Player, team: Team) async {
+        guard ProAccess.isPro else { return } // AI player trends are Pro
         if let cached = cache[player.id] {
             insight = cached
             return

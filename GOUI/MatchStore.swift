@@ -390,11 +390,13 @@ final class MatchSessionStore: ObservableObject {
             startDate = Date()
             startTimer()
             // Replace any frozen lock-screen activity left by the killed launch.
+            if ProAccess.isPro {
             LiveActivityManager.shared.startActivity(
                 teamName: liveActivityTeamName.isEmpty ? "Home" : liveActivityTeamName,
                 opponentName: liveActivityOpponent.isEmpty ? "Opponent" : liveActivityOpponent
             )
             updateLiveActivity()
+            }
         } else {
             lastPlayerUpdateSeconds = elapsedSeconds
             isRunning = false

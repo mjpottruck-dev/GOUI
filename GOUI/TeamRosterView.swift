@@ -67,7 +67,7 @@ struct TeamRosterView: View {
                         }
 
                         Button {
-                            showAIImport = true
+                            if Paywall.require(.rosterImport) { showAIImport = true }
                         } label: {
                             Label("Import Roster via AI", systemImage: "square.and.arrow.down")
                         }

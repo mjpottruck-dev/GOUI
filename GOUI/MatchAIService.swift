@@ -7,6 +7,7 @@ enum MatchAIService {
     // MARK: - API Call
 
     static func generate(systemPrompt: String, userMessage: String) async throws -> String {
+        guard ProAccess.isPro else { throw AIError.proRequired } // backstop; UI shows the paywall first
         let apiKey = UserDefaults.standard.string(forKey: "anthropic_api_key") ?? ""
         guard !apiKey.isEmpty else {
             throw AIError.noAPIKey
@@ -214,11 +215,13 @@ enum MatchAIService {
     enum AIError: LocalizedError {
         case noAPIKey
         case parseError
+        case proRequired
 
         var errorDescription: String? {
             switch self {
             case .noAPIKey: return "Add your Anthropic API key in Settings."
             case .parseError: return "Couldn't generate summary. Check your connection and try again."
+            case .proRequired: return "AI recaps are part of GoalStats Pro."
             }
         }
     }

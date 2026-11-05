@@ -152,6 +152,7 @@ struct GoStatsRootView: View {
 
     private func handleVoiceDeepLink() {
         guard sessionStore.isActive, !sessionStore.matchEnded else { return }
+        guard Paywall.require(.voice) else { return }
 
         voiceService.startListening(players: sessionStore.players) { [self] command in
             switch command {

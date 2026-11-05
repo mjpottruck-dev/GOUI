@@ -80,7 +80,7 @@ struct HomeView: View {
                             .font(.system(size: 28, weight: .regular))
                             .foregroundStyle(GoStatsTheme.textPrimary)
                             .onLongPressGesture {
-                                showCreateTeam = true
+                                requestCreateTeam()
                             }
                         Spacer()
                         Button {
@@ -101,7 +101,7 @@ struct HomeView: View {
                     TeamPillSelector(
                         teams: teamStore.teams,
                         selectedTeamID: $selectedTeamID,
-                        onCreateTeam: { showCreateTeam = true }
+                        onCreateTeam: { requestCreateTeam() }
                     )
                     .padding(.horizontal, -GoStatsTheme.cardMargin)
                     .tourAnchor(.teamPills)
@@ -384,6 +384,15 @@ struct HomeView: View {
         }
     }
 
+    // MARK: - Teams (free: 1 real team)
+
+    private func requestCreateTeam() {
+        let realTeams = teamStore.teams.filter { !$0.isDemo }
+        if realTeams.isEmpty || Paywall.require(.unlimitedTeams) {
+            showCreateTeam = true
+        }
+    }
+
     // MARK: - Guided tour
 
     private func startTourIfNeeded() {
@@ -603,6 +612,9 @@ struct HomeView: View {
             showSeasonInsightBanner = true
             return
         }
+
+        // AI season insights are Pro
+        guard ProAccess.isPro else { return }
 
         // Check if we crossed a 3-match boundary
         guard currentCount >= 3, currentCount % 3 == 0, currentCount != cachedCount else {

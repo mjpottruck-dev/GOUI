@@ -11,6 +11,11 @@ struct SettingsView: View {
     @AppStorage(Haptics.enabledKey) private var hapticsEnabled = true
     @AppStorage(Haptics.intensityKey) private var hapticsIntensity = 0.8
     @State private var tourResetConfirmed = false
+    @ObservedObject private var pro = ProStore.shared
+    @Environment(\.openURL) private var openURL
+    #if DEBUG
+    @AppStorage(ProAccess.debugOverrideKey) private var simulatePro = false
+    #endif
 
     var body: some View {
         NavigationStack {
@@ -19,6 +24,77 @@ struct SettingsView: View {
 
                 ScrollView {
                     VStack(spacing: 20) {
+                        // GoalStats Pro
+                        VStack(alignment: .leading, spacing: 8) {
+                            GoStatsTheme.sectionHeader("GOALSTATS PRO")
+
+                            VStack(spacing: 0) {
+                                if pro.isPro {
+                                    HStack {
+                                        Image(systemName: "checkmark.seal.fill")
+                                            .foregroundStyle(GoStatsTheme.positive)
+                                        Text(proPlanText)
+                                            .font(.system(size: 15, weight: .medium))
+                                            .foregroundStyle(GoStatsTheme.textPrimary)
+                                        Spacer()
+                                    }
+                                    .padding(.horizontal, GoStatsTheme.cardPadding)
+                                    .padding(.vertical, 14)
+
+                                    Rectangle().fill(GoStatsTheme.divider).frame(height: GoStatsTheme.dividerWidth)
+
+                                    Button {
+                                        openURL(URL(string: "https://apps.apple.com/account/subscriptions")!)
+                                    } label: {
+                                        settingsRow("Manage Subscription", icon: "creditcard")
+                                    }
+                                    .buttonStyle(.plain)
+                                } else {
+                                    Button {
+                                        Paywall.show()
+                                    } label: {
+                                        HStack(spacing: 12) {
+                                            Image(systemName: "sparkles")
+                                                .font(.system(size: 15, weight: .semibold))
+                                                .foregroundStyle(.white)
+                                                .frame(width: 32, height: 32)
+                                                .background(Circle().fill(GoStatsTheme.accent))
+                                            VStack(alignment: .leading, spacing: 2) {
+                                                Text("Upgrade to Pro")
+                                                    .font(.system(size: 15, weight: .semibold))
+                                                    .foregroundStyle(GoStatsTheme.textPrimary)
+                                                Text("AI recaps, voice logging, unlimited teams and more")
+                                                    .font(.system(size: 12))
+                                                    .foregroundStyle(GoStatsTheme.textMuted)
+                                            }
+                                            Spacer()
+                                            Image(systemName: "chevron.right")
+                                                .font(.system(size: 13, weight: .semibold))
+                                                .foregroundStyle(GoStatsTheme.textMuted)
+                                        }
+                                        .contentShape(Rectangle())
+                                    }
+                                    .buttonStyle(.plain)
+                                    .padding(.horizontal, GoStatsTheme.cardPadding)
+                                    .padding(.vertical, 12)
+
+                                    Rectangle().fill(GoStatsTheme.divider).frame(height: GoStatsTheme.dividerWidth)
+
+                                    Button {
+                                        Task { await pro.restore() }
+                                    } label: {
+                                        settingsRow("Restore Purchases", icon: "arrow.clockwise")
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                            .background(
+                                RoundedRectangle(cornerRadius: GoStatsTheme.cardRadius, style: .continuous)
+                                    .fill(Color.white)
+                                    .shadow(color: GoStatsTheme.cardShadowColor, radius: GoStatsTheme.cardShadowRadius, x: 0, y: GoStatsTheme.cardShadowY)
+                            )
+                        }
+
                         // Haptics
                         VStack(alignment: .leading, spacing: 8) {
                             GoStatsTheme.sectionHeader("HAPTICS")
@@ -252,6 +328,15 @@ struct SettingsView: View {
 
                                 Rectangle().fill(GoStatsTheme.divider).frame(height: GoStatsTheme.dividerWidth)
 
+                                Toggle("Simulate Pro", isOn: $simulatePro)
+                                    .padding(.horizontal, GoStatsTheme.cardPadding)
+                                    .padding(.vertical, 14)
+                                    .onChange(of: simulatePro) { _, _ in
+                                        Task { await pro.refreshEntitlements() }
+                                    }
+
+                                Rectangle().fill(GoStatsTheme.divider).frame(height: GoStatsTheme.dividerWidth)
+
                                 Button("Show Onboarding Again") {
                                     TourFlags.resetAll()
                                     UserDefaults.standard.set(false, forKey: OnboardingView.completedKey)
@@ -278,4 +363,27 @@ struct SettingsView: View {
             .navigationTitle("Settings")
         }
     }
+
+    private var proPlanText: String {
+        switch pro.activePlanID {
+        case ProStore.yearlyID: return "Pro active · Yearly"
+        case ProStore.monthlyID: return "Pro active · Monthly"
+        default: return "Pro active"
+        }
+    }
+
+    private func settingsRow(_ title: String, icon: String) -> some View {
+        HStack {
+            Text(title)
+                .font(.system(size: 15))
+                .foregroundStyle(GoStatsTheme.textPrimary)
+            Spacer()
+            Image(systemName: icon)
+                .foregroundStyle(GoStatsTheme.textMuted)
+        }
+        .contentShape(Rectangle())
+        .padding(.horizontal, GoStatsTheme.cardPadding)
+        .padding(.vertical, 14)
+    }
+
 }

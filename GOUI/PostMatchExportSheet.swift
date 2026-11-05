@@ -121,6 +121,7 @@ struct PostMatchExportSheet: View {
 
                         // Export Stats PDF
                         Button {
+                            guard Paywall.require(.exports) else { return }
                             let url = GameStatsPDFGenerator.generatePDF(
                                 teamName: team.name,
                                 opponent: match.opponent,
@@ -224,6 +225,7 @@ struct PostMatchExportSheet: View {
     // MARK: - AI Summary
 
     private func generateSummary() {
+        guard Paywall.require(.aiRecaps) else { return }
         summaryLoading = true
         summaryError = nil
         Task {
@@ -253,6 +255,7 @@ struct PostMatchExportSheet: View {
     // MARK: - MaxPreps TXT
 
     private func exportMaxPrepsTXT() {
+        guard Paywall.require(.exports) else { return }
         let teamRows = MaxPrepsExport.teamRows(
             players: players,
             stats: match.playerStats,

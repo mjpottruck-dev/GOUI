@@ -224,7 +224,7 @@ struct MatchView: View {
                     Button {
                         if voiceService.isListening {
                             voiceService.stopListening()
-                        } else {
+                        } else if Paywall.require(.voice) {
                             voiceService.startListening(players: store.players) { command in
                                 handleVoiceCommand(command)
                             }
@@ -307,7 +307,8 @@ struct MatchView: View {
             }
 
             controlButton(icon: "rectangle.2.swap", label: nil) {
-                haptic(.light); showLineChangeSheet = true
+                haptic(.light)
+                if Paywall.require(.smartSubs) { showLineChangeSheet = true }
             }
 
             if showEndMatch {
@@ -658,8 +659,8 @@ struct MatchView: View {
             // Resume or Start (States 1, 3, 4, 6 -> start clock)
             store.startGame()
 
-            // Start Live Activity on first start if not already active
-            if !LiveActivityManager.shared.isActive {
+            // Start Live Activity on first start if not already active (Pro)
+            if ProAccess.isPro && !LiveActivityManager.shared.isActive {
                 let teamName = store.liveActivityTeamName.isEmpty
                     ? (teamStore.teams.first(where: { $0.id == teamID })?.name ?? "Home")
                     : store.liveActivityTeamName
@@ -701,6 +702,7 @@ struct MatchView: View {
     // MARK: - Substitution Suggestions
 
     private func checkForSubSuggestions(minute: Int) {
+        guard ProAccess.isPro else { return } // smart sub nudges are Pro
         guard suggestionBanner == nil else { return }
 
         let winning = store.goalsFor > store.goalsAgainst
