@@ -125,7 +125,9 @@ private struct TourOverlay: View {
             .accessibilityElement(children: .contain)
             .accessibilityAddTraits(.isModal)
         } else {
-            Color.clear.onAppear { onFinish() }
+            // Target not on screen (yet). Show nothing, and don't mark the tour as
+            // done: finishing here could skip a tour the coach never saw.
+            Color.clear.allowsHitTesting(false)
         }
     }
 
